@@ -1,303 +1,286 @@
 import { useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 
 const GOLD = '#816EBB'
 
-// ── Config genres ──────────────────────────────────────────────────────────────
-const GENRE_CONFIG = {
-  'Seinen':          { icon: '👺', color: '#816EBB', desc: 'Manga pour adultes'       },
-  'Shonen':          { icon: '⚡', color: '#f59e0b', desc: 'Action & aventure'        },
-  'Shojo':           { icon: '🌸', color: '#ec4899', desc: 'Romance & émotions'       },
-  'Action':          { icon: '⚔️', color: '#ef4444', desc: 'Combat & batailles'       },
-  'Fantasy':         { icon: '🧙', color: '#f59e0b', desc: 'Magie & mondes'           },
-  'Aventure':        { icon: '🧭', color: '#22c55e', desc: 'Exploration & quêtes'     },
-  'Comédie':         { icon: '😊', color: '#6366f1', desc: 'Humour & légèreté'        },
-  'Drame':           { icon: '🎭', color: '#a78bfa', desc: 'Émotions & profondeur'    },
-  'Romance':         { icon: '💝', color: '#ec4899', desc: 'Amour & relations'        },
-  'Horreur':         { icon: '💀', color: '#f97316', desc: 'Peur & suspense'          },
-  'Science-fiction': { icon: '🚀', color: '#22c55e', desc: 'Futur & technologie'      },
-  'Mystère':         { icon: '🔍', color: '#a78bfa', desc: 'Énigmes & suspense'       },
-  'Slice of Life':   { icon: '☕', color: '#d97706', desc: 'Vie quotidienne'          },
-  'Psychologique':   { icon: '🧠', color: '#8b5cf6', desc: "Explore l'esprit humain"  },
-  'Historique':      { icon: '📜', color: '#d97706', desc: 'Voyage dans le temps'     },
-  'Sport':           { icon: '🏆', color: '#22c55e', desc: 'Dépasse tes limites'      },
-  'Thriller':        { icon: '🔪', color: '#ef4444', desc: 'Suspense & tension'       },
-  'Isekai':          { icon: '🌀', color: '#6366f1', desc: 'Autre monde'              },
-  'Autre':           { icon: '📦', color: '#6b7280', desc: 'Autres genres'            },
+// ── Mapping catégories Google Books → labels français + icône + couleur ───────
+const CATEGORY_MAP = [
+  { keys: ['comics','graphic novel','manga','bande dessinee','bd'],    label: 'Manga / BD',           icon: '📖', color: '#816EBB' },
+  { keys: ['seinen'],                                                    label: 'Seinen',               icon: '👺', color: '#a78bfa' },
+  { keys: ['shonen','shounen'],                                          label: 'Shōnen',               icon: '⚡', color: '#f59e0b' },
+  { keys: ['shojo','shoujo'],                                            label: 'Shōjo',                icon: '🌸', color: '#ec4899' },
+  { keys: ['isekai'],                                                    label: 'Isekai',               icon: '🌀', color: '#6366f1' },
+  { keys: ['slice of life'],                                             label: 'Slice of Life',        icon: '☕', color: '#d97706' },
+  { keys: ['action & adventure','action and adventure'],                 label: 'Action & Aventure',    icon: '⚔️', color: '#ef4444' },
+  { keys: ['action'],                                                    label: 'Action',               icon: '💥', color: '#ef4444' },
+  { keys: ['adventure','aventure'],                                      label: 'Aventure',             icon: '🧭', color: '#22c55e' },
+  { keys: ['fantasy','fantaisie','fantastique'],                         label: 'Fantasy',              icon: '🧙', color: '#f59e0b' },
+  { keys: ['science fiction','sci-fi','science-fiction'],                label: 'Science-fiction',      icon: '🚀', color: '#22c55e' },
+  { keys: ['horror','horreur'],                                          label: 'Horreur',              icon: '💀', color: '#f97316' },
+  { keys: ['romance','romantique'],                                      label: 'Romance',              icon: '💝', color: '#ec4899' },
+  { keys: ['mystery','mystere','mystère','thriller'],                    label: 'Mystère',              icon: '🔍', color: '#a78bfa' },
+  { keys: ['psychological','psychologique'],                             label: 'Psychologique',        icon: '🧠', color: '#8b5cf6' },
+  { keys: ['historical','historique'],                                   label: 'Historique',           icon: '📜', color: '#d97706' },
+  { keys: ['sport'],                                                     label: 'Sport',                icon: '🏆', color: '#22c55e' },
+  { keys: ['comedy','comedie','comédie','humor','humour'],               label: 'Comédie',              icon: '😊', color: '#6366f1' },
+  { keys: ['drama','drame'],                                             label: 'Drame',                icon: '🎭', color: '#a78bfa' },
+  { keys: ['juvenile fiction','young adult','children'],                 label: 'Jeunesse',             icon: '⭐', color: '#f59e0b' },
+  { keys: ['biography','biographie','autobiography'],                    label: 'Biographie',           icon: '👤', color: '#6b7280' },
+  { keys: ['fiction'],                                                   label: 'Fiction',              icon: '📚', color: '#818cf8' },
+  { keys: ['nonfiction','non-fiction','documentaire'],                   label: 'Documentaire',         icon: '📰', color: '#6b7280' },
+]
+
+function normalizeCategory(raw) {
+  if (!raw) return null
+  const c = raw.toLowerCase().trim()
+  for (const entry of CATEGORY_MAP) {
+    if (entry.keys.some(k => c.includes(k))) return entry
+  }
+  // Retourne la catégorie brute avec une config générique
+  return {
+    label: raw.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+    icon: '📦',
+    color: '#6b7280',
+  }
 }
 
-const DISCOVER_GENRES = ['Psychologique', 'Historique', 'Sport', 'Thriller', 'Isekai', 'Shojo', 'Horreur', 'Science-fiction']
-
-// ── Mapping catégorie → genre français ────────────────────────────────────────
-function mapCategory(cat) {
-  if (!cat) return null
-  const c = cat.toLowerCase()
-  if (c.includes('seinen'))                                      return 'Seinen'
-  if (c.includes('shonen') || c.includes('shounen'))            return 'Shonen'
-  if (c.includes('shojo')  || c.includes('shoujo'))             return 'Shojo'
-  if (c.includes('isekai'))                                      return 'Isekai'
-  if (c.includes('slice of life') || c.includes('slice-of-life')) return 'Slice of Life'
-  if (c.includes('psychological') || c.includes('psychologique')) return 'Psychologique'
-  if (c.includes('historical') || c.includes('historique'))     return 'Historique'
-  if (c.includes('sport'))                                       return 'Sport'
-  if (c.includes('thriller'))                                    return 'Thriller'
-  if (c.includes('horror') || c.includes('horreur'))            return 'Horreur'
-  if (c.includes('romance') || c.includes('romantique'))        return 'Romance'
-  if (c.includes('comedy') || c.includes('comédie') || c.includes('comedie')) return 'Comédie'
-  if (c.includes('drama') || c.includes('drame'))               return 'Drame'
-  if (c.includes('action'))                                      return 'Action'
-  if (c.includes('fantasy') || c.includes('fantaisie') || c.includes('fantastique')) return 'Fantasy'
-  if (c.includes('adventure') || c.includes('aventure'))        return 'Aventure'
-  if (c.includes('science fiction') || c.includes('sci-fi') || c.includes('science-fiction')) return 'Science-fiction'
-  if (c.includes('mystery') || c.includes('mystère') || c.includes('mystere')) return 'Mystère'
-  return null
-}
-
-// ── Calcul des données genres ─────────────────────────────────────────────────
+// ── Calcul genres depuis les livres ──────────────────────────────────────────
 function computeGenres(books) {
-  const map = {} // genreName → { books: [], enCours: [] }
+  const map = {}
 
   books.forEach(book => {
-    const cats = book.categories?.filter(g => g && g.length > 2) || []
-    const mapped = [...new Set(cats.map(mapCategory).filter(Boolean))]
-    const genres = mapped.length > 0 ? mapped : ['Autre']
+    const cats = (book.categories || []).filter(g => g && g.length > 2)
+    const normalized = cats.length
+      ? [...new Map(cats.map(c => { const n = normalizeCategory(c); return [n.label, n] }).filter(([l]) => l)).values()]
+      : [{ label: 'Non classé', icon: '📦', color: '#6b7280' }]
 
-    genres.forEach(g => {
-      if (!map[g]) map[g] = { books: [], enCours: [] }
-      if (!map[g].books.find(b => b.id === book.id)) {
-        map[g].books.push(book)
+    normalized.forEach(cfg => {
+      if (!map[cfg.label]) map[cfg.label] = { cfg, books: [], enCours: [] }
+      if (!map[cfg.label].books.find(b => b.id === book.id)) {
+        map[cfg.label].books.push(book)
         const s = book.statuses?.length ? book.statuses : [book.status]
-        if (s.includes('en_cours')) map[g].enCours.push(book)
+        if (s.includes('en_cours')) map[cfg.label].enCours.push(book)
       }
     })
   })
 
   const total = Math.max(books.length, 1)
   return Object.entries(map)
-    .map(([name, data]) => ({
-      name,
+    .map(([label, data]) => ({
+      label,
+      cfg: data.cfg,
       books: data.books,
       count: data.books.length,
       series: data.enCours.length,
       pct: data.books.length / total,
-      config: GENRE_CONFIG[name] || GENRE_CONFIG['Autre'],
-      cover: data.books.find(b => b.cover || b.cover_url)?.cover || data.books.find(b => b.cover || b.cover_url)?.cover_url || null,
+      cover: data.books.find(b => b.cover || b.cover_url)?.cover
+          || data.books.find(b => b.cover_url)?.cover_url
+          || null,
     }))
     .sort((a, b) => b.count - a.count)
 }
 
-// ── Composants UI ─────────────────────────────────────────────────────────────
-function StatCard({ icon, value, label, color }) {
-  return (
-    <div style={{
-      flex: 1, background: 'rgba(255,255,255,0.03)',
-      border: '1px solid rgba(129,110,187,0.12)',
-      borderRadius: 14, padding: '14px 10px',
-      display: 'flex', flexDirection: 'column', gap: 4,
-    }}>
-      <span style={{ fontSize: 18 }}>{icon}</span>
-      <span style={{ fontSize: 22, fontWeight: 800, color: color || '#EDE9F8', lineHeight: 1 }}>{value}</span>
-      <span style={{ fontSize: 9, color: 'rgba(237,233,248,0.4)', lineHeight: 1.3 }}>{label}</span>
-    </div>
-  )
-}
-
-function FavGenreChip({ genre, pct, onClick }) {
-  const cfg = genre.config
-  return (
+// ── Modal livres du genre ─────────────────────────────────────────────────────
+function GenreModal({ genre, onClose, onBookSelect }) {
+  return createPortal(
     <div
-      onClick={onClick}
-      style={{
-        flexShrink: 0, width: 100,
-        background: 'rgba(255,255,255,0.04)',
-        border: `1px solid ${cfg.color}33`,
-        borderRadius: 14, padding: '14px 10px',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-        cursor: 'pointer', transition: 'all 0.18s',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.background = `${cfg.color}18`; e.currentTarget.style.borderColor = `${cfg.color}66` }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = `${cfg.color}33` }}
+      style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(7,5,15,0.8)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <span style={{ fontSize: 28 }}>{cfg.icon}</span>
-      <span style={{ fontSize: 12, fontWeight: 700, color: '#EDE9F8' }}>{genre.name}</span>
-      <span style={{ fontSize: 11, color: cfg.color, fontWeight: 600 }}>{Math.round(pct * 100)}%</span>
-      {/* Barre */}
-      <div style={{ width: '100%', height: 3, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${Math.round(pct * 100)}%`, background: cfg.color, borderRadius: 2 }} />
+      <div style={{ width: '100%', maxWidth: 640, background: 'linear-gradient(180deg,#1E1535,#0C0A15)', border: '1px solid rgba(129,110,187,0.2)', borderBottom: 'none', borderRadius: '20px 20px 0 0', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        {/* Drag handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(129,110,187,0.3)' }} />
+        </div>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px 14px', borderBottom: '1px solid rgba(129,110,187,0.1)' }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: `${genre.cfg.color}22`, border: `1.5px solid ${genre.cfg.color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
+            {genre.cfg.icon}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#EDE9F8' }}>{genre.label}</div>
+            <div style={{ fontSize: 12, color: 'rgba(237,233,248,0.4)' }}>{genre.count} livre{genre.count !== 1 ? 's' : ''}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 10, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(237,233,248,0.6)', fontSize: 18 }}>
+            ×
+          </button>
+        </div>
+
+        {/* Liste livres */}
+        <div style={{ overflowY: 'auto', padding: '12px 20px 32px', flex: 1 }}>
+          {genre.books.map((book, i) => {
+            const cover  = book.cover || book.cover_url
+            const title  = book.title || 'Sans titre'
+            const author = (Array.isArray(book.authors) ? book.authors[0] : book.authors) || ''
+            const s      = book.statuses?.length ? book.statuses : [book.status]
+            const statusColor = s.includes('lu') || s.includes('prefere') ? '#4ade80'
+              : s.includes('en_cours') ? '#a78bfa' : '#fb923c'
+            const statusLabel = s.includes('lu') || s.includes('prefere') ? 'Lu'
+              : s.includes('en_cours') ? 'En cours' : 'WishList'
+
+            return (
+              <div
+                key={book.id || i}
+                onClick={() => { onBookSelect(book); onClose() }}
+                style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 0', borderBottom: '1px solid rgba(129,110,187,0.06)', cursor: 'pointer' }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.75'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >
+                <div style={{ width: 44, height: 62, borderRadius: '3px 7px 7px 3px', overflow: 'hidden', flexShrink: 0, background: 'linear-gradient(145deg,#2D1B69,#1A0F3A)', boxShadow: '-2px 3px 8px rgba(0,0,0,0.5)' }}>
+                  {cover && <img src={cover} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#EDE9F8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(237,233,248,0.4)', marginTop: 2 }}>{author}</div>
+                  {book.rating > 0 && (
+                    <div style={{ fontSize: 10, color: '#fbbf24', marginTop: 3 }}>{'★'.repeat(book.rating)}{'☆'.repeat(5 - book.rating)}</div>
+                  )}
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 600, color: statusColor, padding: '3px 8px', borderRadius: 8, background: `${statusColor}18`, border: `1px solid ${statusColor}33`, flexShrink: 0 }}>
+                  {statusLabel}
+                </span>
+              </div>
+            )
+          })}
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
-function GenreCard({ genre, totalBooks, onClick }) {
-  const cfg = genre.config
-  const pct = Math.round(genre.pct * 100)
-
+// ── Carte genre grille ────────────────────────────────────────────────────────
+function GenreCard({ genre, onClick }) {
   return (
     <div
       onClick={onClick}
-      style={{
-        position: 'relative', borderRadius: 16, overflow: 'hidden',
-        background: '#110D1E',
-        border: '1px solid rgba(129,110,187,0.1)',
-        cursor: 'pointer', transition: 'transform 0.18s, border-color 0.18s',
-        minHeight: 110,
-      }}
-      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = `${cfg.color}55` }}
+      style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', background: '#110D1E', border: '1px solid rgba(129,110,187,0.1)', cursor: 'pointer', transition: 'transform 0.18s, border-color 0.18s', minHeight: 110 }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = `${genre.cfg.color}66` }}
       onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = 'rgba(129,110,187,0.1)' }}
     >
-      {/* Cover en arrière-plan */}
+      {/* Cover flou en fond */}
       {genre.cover && (
-        <img
-          src={genre.cover}
-          alt=""
-          style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', opacity: 0.18, filter: 'blur(2px)',
-            pointerEvents: 'none',
-          }}
-        />
+        <img src={genre.cover} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.15, filter: 'blur(3px)', pointerEvents: 'none' }} />
       )}
-      {/* Overlay gradient */}
-      <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, rgba(12,10,21,0.85) 0%, ${cfg.color}22 100%)`, pointerEvents: 'none' }} />
+      {/* Gradient overlay */}
+      <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, rgba(12,10,21,0.9) 0%, ${genre.cfg.color}18 100%)`, pointerEvents: 'none' }} />
 
       {/* Contenu */}
       <div style={{ position: 'relative', padding: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              width: 38, height: 38, borderRadius: 10,
-              background: `${cfg.color}22`,
-              border: `1.5px solid ${cfg.color}55`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 18, flexShrink: 0,
-            }}>
-              {cfg.icon}
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: `${genre.cfg.color}22`, border: `1.5px solid ${genre.cfg.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+              {genre.cfg.icon}
             </div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#EDE9F8' }}>{genre.name}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#EDE9F8' }}>{genre.label}</div>
               <div style={{ fontSize: 10, color: 'rgba(237,233,248,0.4)' }}>{genre.count} livre{genre.count !== 1 ? 's' : ''}</div>
-              {genre.series > 0 && (
-                <div style={{ fontSize: 10, color: 'rgba(237,233,248,0.35)' }}>{genre.series} série{genre.series !== 1 ? 's' : ''}</div>
-              )}
+              {genre.series > 0 && <div style={{ fontSize: 10, color: 'rgba(237,233,248,0.3)' }}>{genre.series} série{genre.series !== 1 ? 's' : ''}</div>}
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: cfg.color }}>{pct}%</span>
-            <span style={{ fontSize: 14, color: 'rgba(237,233,248,0.3)' }}>›</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: genre.cfg.color }}>{Math.round(genre.pct * 100)}%</span>
+            <span style={{ fontSize: 14, color: 'rgba(237,233,248,0.25)' }}>›</span>
           </div>
         </div>
-
-        {/* Barre de progression */}
         <div style={{ height: 3, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
-          <div style={{
-            height: '100%',
-            width: `${pct}%`,
-            background: cfg.color,
-            borderRadius: 2,
-            boxShadow: `0 0 8px ${cfg.color}88`,
-          }} />
+          <div style={{ height: '100%', width: `${Math.round(genre.pct * 100)}%`, background: genre.cfg.color, borderRadius: 2, boxShadow: `0 0 6px ${genre.cfg.color}88` }} />
         </div>
       </div>
     </div>
   )
 }
 
-function DiscoverCard({ name, onClick, userCount }) {
-  const cfg = GENRE_CONFIG[name] || GENRE_CONFIG['Autre']
+// ── Chip genre favori ─────────────────────────────────────────────────────────
+function FavChip({ genre, onClick }) {
   return (
     <div
       onClick={onClick}
-      style={{
-        flexShrink: 0, width: 150, height: 110,
-        borderRadius: 14, overflow: 'hidden',
-        background: `linear-gradient(135deg, #110D1E, ${cfg.color}33)`,
-        border: `1px solid ${cfg.color}33`,
-        cursor: 'pointer', position: 'relative',
-        transition: 'all 0.18s',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = `${cfg.color}88` }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = `${cfg.color}33` }}
+      style={{ flexShrink: 0, width: 95, background: 'rgba(255,255,255,0.04)', border: `1px solid ${genre.cfg.color}33`, borderRadius: 14, padding: '14px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', transition: 'all 0.18s' }}
+      onMouseEnter={e => { e.currentTarget.style.background = `${genre.cfg.color}14`; e.currentTarget.style.borderColor = `${genre.cfg.color}66` }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = `${genre.cfg.color}33` }}
     >
-      <div style={{ padding: '14px' }}>
-        <div style={{ fontSize: 22, marginBottom: 4 }}>{cfg.icon}</div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#EDE9F8', marginBottom: 2 }}>{name} ›</div>
-        <div style={{ fontSize: 10, color: 'rgba(237,233,248,0.5)', marginBottom: 6 }}>{cfg.desc}</div>
-        {userCount > 0 && (
-          <div style={{ fontSize: 9, color: cfg.color, fontWeight: 600 }}>{userCount} livre{userCount > 1 ? 's' : ''}</div>
-        )}
+      <span style={{ fontSize: 26 }}>{genre.cfg.icon}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: '#EDE9F8', textAlign: 'center', lineHeight: 1.2 }}>{genre.label}</span>
+      <span style={{ fontSize: 11, color: genre.cfg.color, fontWeight: 700 }}>{Math.round(genre.pct * 100)}%</span>
+      <div style={{ width: '100%', height: 3, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${Math.round(genre.pct * 100)}%`, background: genre.cfg.color, borderRadius: 2 }} />
       </div>
     </div>
   )
 }
 
-// ── Composant principal ───────────────────────────────────────────────────────
+// ── Page principale ───────────────────────────────────────────────────────────
 export default function GenresPage({ books, onBookSelect, isMobile }) {
-  const [sortBy, setSortBy] = useState('count')
-  const [showSortMenu, setShowSortMenu] = useState(false)
+  const [selected, setSelected]   = useState(null)
+  const [sortBy,   setSortBy]     = useState('count')
+  const [showSort, setShowSort]   = useState(false)
 
   const genres = useMemo(() => computeGenres(books), [books])
 
   const sorted = useMemo(() => {
     const list = [...genres]
-    if (sortBy === 'alpha')  list.sort((a, b) => a.name.localeCompare(b.name))
+    if (sortBy === 'alpha')  list.sort((a, b) => a.label.localeCompare(b.label))
     if (sortBy === 'rating') {
       list.sort((a, b) => {
-        const avgA = a.books.filter(b => b.rating > 0).reduce((s, b) => s + b.rating, 0) / (a.books.filter(b => b.rating > 0).length || 1)
-        const avgB = b.books.filter(b => b.rating > 0).reduce((s, b) => s + b.rating, 0) / (b.books.filter(b => b.rating > 0).length || 1)
-        return avgB - avgA
+        const avg = arr => arr.filter(b => b.rating > 0).reduce((s, b) => s + b.rating, 0) / (arr.filter(b => b.rating > 0).length || 1)
+        return avg(b.books) - avg(a.books)
       })
     }
     return list
   }, [genres, sortBy])
 
-  const topGenres   = genres.slice(0, 6)
-  const totalBooks  = books.length
-  const totalRead   = books.filter(b => { const s = b.statuses?.length ? b.statuses : [b.status]; return s.includes('lu') || s.includes('prefere') }).length
+  const topGenres  = genres.slice(0, 6)
+  const totalRead  = books.filter(b => { const s = b.statuses?.length ? b.statuses : [b.status]; return s.includes('lu') || s.includes('prefere') }).length
   const totalSeries = books.filter(b => { const s = b.statuses?.length ? b.statuses : [b.status]; return s.includes('en_cours') }).length
-  const ratedBooks  = books.filter(b => b.rating > 0)
-  const avgRating   = ratedBooks.length ? (ratedBooks.reduce((s, b) => s + b.rating, 0) / ratedBooks.length).toFixed(1) : '--'
-
-  const discoverList = DISCOVER_GENRES.map(name => ({
-    name,
-    count: genres.find(g => g.name === name)?.count || 0,
-  }))
-
-  const pad = isMobile ? '16px' : '20px'
+  const ratedBooks = books.filter(b => b.rating > 0)
+  const avgRating  = ratedBooks.length ? (ratedBooks.reduce((s, b) => s + b.rating, 0) / ratedBooks.length).toFixed(1) : '--'
+  const pad        = isMobile ? '16px' : '20px'
 
   if (books.length === 0) return (
     <div style={{ padding: '80px 20px', textAlign: 'center' }}>
       <div style={{ fontSize: 40, marginBottom: 16 }}>🎭</div>
-      <p style={{ color: 'rgba(237,233,248,0.3)', fontSize: 14, margin: 0 }}>
-        Ajoute des livres pour voir tes genres ici
-      </p>
+      <p style={{ color: 'rgba(237,233,248,0.3)', fontSize: 14, margin: 0 }}>Ajoute des livres pour voir tes genres ici</p>
     </div>
   )
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', paddingBottom: 80 }}>
 
+      {selected && (
+        <GenreModal
+          genre={selected}
+          onClose={() => setSelected(null)}
+          onBookSelect={onBookSelect}
+        />
+      )}
+
       {/* ── HEADER ── */}
-      <div style={{ padding: `20px ${pad} 0`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(129,110,187,0.15)', border: '1px solid rgba(129,110,187,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
-            📚
-          </div>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#EDE9F8' }}>Genres</div>
-            <div style={{ fontSize: 11, color: 'rgba(237,233,248,0.4)' }}>Explore tous les univers</div>
-          </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: `20px ${pad} 16px` }}>
+        <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(129,110,187,0.15)', border: '1px solid rgba(129,110,187,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
+          📚
         </div>
-        <button style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(129,110,187,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 16, color: '#EDE9F8' }}>
-          🔍
-        </button>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#EDE9F8' }}>Genres</div>
+          <div style={{ fontSize: 11, color: 'rgba(237,233,248,0.4)' }}>Explore tous les univers</div>
+        </div>
       </div>
 
       {/* ── STAT CARDS ── */}
-      <div style={{ display: 'flex', gap: 10, padding: `0 ${pad}`, marginBottom: 20 }}>
-        <StatCard icon="📚" value={genres.length}  label="Genres disponibles"    color={GOLD} />
-        <StatCard icon="📖" value={totalRead}       label="Livres lus tous genres" color="#22c55e" />
-        <StatCard icon="⭐" value={avgRating}       label="Note moyenne globale"  color="#f59e0b" />
-        <StatCard icon="🔥" value={totalSeries}     label="Séries suivies"        color="#ef4444" />
+      <div style={{ display: 'flex', gap: 10, padding: `0 ${pad}`, marginBottom: 22 }}>
+        {[
+          { icon: '📚', val: genres.length,  label: 'Genres',        color: GOLD       },
+          { icon: '📖', val: totalRead,       label: 'Livres lus',   color: '#22c55e'  },
+          { icon: '⭐', val: avgRating,       label: 'Note moy.',    color: '#f59e0b'  },
+          { icon: '🔥', val: totalSeries,     label: 'En cours',     color: '#ef4444'  },
+        ].map(s => (
+          <div key={s.label} style={{ flex: 1, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 14, padding: '12px 8px', textAlign: 'center' }}>
+            <div style={{ fontSize: 16, marginBottom: 3 }}>{s.icon}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.val}</div>
+            <div style={{ fontSize: 9, color: 'rgba(237,233,248,0.4)', marginTop: 3 }}>{s.label}</div>
+          </div>
+        ))}
       </div>
 
       {/* ── MES GENRES PRÉFÉRÉS ── */}
@@ -305,19 +288,14 @@ export default function GenresPage({ books, onBookSelect, isMobile }) {
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `0 ${pad}`, marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 16 }}>💜</span>
+              <span>💜</span>
               <span style={{ fontSize: 14, fontWeight: 700, color: '#EDE9F8' }}>Mes genres préférés</span>
             </div>
-            <span style={{ fontSize: 11, color: GOLD, fontWeight: 600, cursor: 'pointer' }}>Gérer mes genres ›</span>
+            <span style={{ fontSize: 11, color: GOLD, fontWeight: 600 }}>Gérer mes genres ›</span>
           </div>
           <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingLeft: pad, paddingRight: pad, paddingBottom: 8, scrollbarWidth: 'none' }}>
-            {topGenres.map(genre => (
-              <FavGenreChip
-                key={genre.name}
-                genre={genre}
-                pct={genre.pct}
-                onClick={() => {}}
-              />
+            {topGenres.map(g => (
+              <FavChip key={g.label} genre={g} onClick={() => setSelected(g)} />
             ))}
           </div>
         </div>
@@ -326,21 +304,17 @@ export default function GenresPage({ books, onBookSelect, isMobile }) {
       {/* ── TOUS LES GENRES ── */}
       <div style={{ padding: `0 ${pad}`, marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#EDE9F8' }}>Tous les genres</span>
-          <div style={{ display: 'flex', gap: 8, position: 'relative' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#EDE9F8' }}>Tous les genres</span>
+          <div style={{ position: 'relative' }}>
             <button
-              onClick={() => setShowSortMenu(v => !v)}
+              onClick={() => setShowSort(v => !v)}
               style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(129,110,187,0.15)', borderRadius: 8, padding: '6px 10px', color: 'rgba(237,233,248,0.7)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
               ↑↓ Trier ▾
             </button>
-            {showSortMenu && (
+            {showSort && (
               <div style={{ position: 'absolute', top: 36, right: 0, background: '#1E1535', border: '1px solid rgba(129,110,187,0.2)', borderRadius: 10, padding: '6px', zIndex: 50, minWidth: 130 }}>
-                {[
-                  { id: 'count', label: 'Par nombre' },
-                  { id: 'alpha', label: 'Alphabétique' },
-                  { id: 'rating', label: 'Par note' },
-                ].map(opt => (
-                  <button key={opt.id} onClick={() => { setSortBy(opt.id); setShowSortMenu(false) }}
+                {[{ id: 'count', label: 'Par nombre' }, { id: 'alpha', label: 'Alphabétique' }, { id: 'rating', label: 'Par note' }].map(opt => (
+                  <button key={opt.id} onClick={() => { setSortBy(opt.id); setShowSort(false) }}
                     style={{ display: 'block', width: '100%', padding: '8px 12px', background: sortBy === opt.id ? 'rgba(129,110,187,0.15)' : 'none', border: 'none', borderRadius: 7, color: sortBy === opt.id ? GOLD : 'rgba(237,233,248,0.6)', fontSize: 12, fontWeight: sortBy === opt.id ? 700 : 400, cursor: 'pointer', textAlign: 'left' }}>
                     {opt.label}
                   </button>
@@ -349,28 +323,9 @@ export default function GenresPage({ books, onBookSelect, isMobile }) {
             )}
           </div>
         </div>
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          {sorted.map(genre => (
-            <GenreCard
-              key={genre.name}
-              genre={genre}
-              totalBooks={totalBooks}
-              onClick={() => {}}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* ── DÉCOUVRIR DE NOUVEAUX GENRES ── */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `0 ${pad}`, marginBottom: 14 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#EDE9F8' }}>Découvrir de nouveaux genres</span>
-          <span style={{ fontSize: 11, color: GOLD, fontWeight: 600, cursor: 'pointer' }}>Voir tous les genres</span>
-        </div>
-        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingLeft: pad, paddingRight: pad, paddingBottom: 8, scrollbarWidth: 'none' }}>
-          {discoverList.map(({ name, count }) => (
-            <DiscoverCard key={name} name={name} userCount={count} onClick={() => {}} />
+          {sorted.map(g => (
+            <GenreCard key={g.label} genre={g} onClick={() => setSelected(g)} />
           ))}
         </div>
       </div>
