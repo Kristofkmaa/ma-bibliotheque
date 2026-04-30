@@ -152,21 +152,22 @@ function GenreModal({ genre, onClose, onBookSelect }) {
 
 // ── Carte genre grille ────────────────────────────────────────────────────────
 function GenreCard({ genre, onClick }) {
-  const covers = genre.books
-    .map(b => b.cover || b.cover_url)
-    .filter(Boolean)
-    .slice(0, 3)
-
   return (
     <div
       onClick={onClick}
-      style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', cursor: 'pointer', transition: 'transform 0.18s, border-color 0.18s', minHeight: 110 }}
+      style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', background: '#110D1E', border: '1px solid rgba(129,110,187,0.1)', cursor: 'pointer', transition: 'transform 0.18s, border-color 0.18s', minHeight: 110 }}
       onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = `${genre.cfg.color}66` }}
       onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = 'rgba(129,110,187,0.1)' }}
     >
+      {/* Cover flou en fond */}
+      {genre.cover && (
+        <img src={genre.cover} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.35, filter: 'blur(1px)', pointerEvents: 'none' }} />
+      )}
+      {/* Gradient overlay */}
+      <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, rgba(12,10,21,0.85) 0%, ${genre.cfg.color}18 100%)`, pointerEvents: 'none' }} />
+
       {/* Contenu */}
-      <div style={{ padding: '14px' }}>
-        {/* Top row: icon + label + covers */}
+      <div style={{ position: 'relative', padding: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 38, height: 38, borderRadius: 10, background: `${genre.cfg.color}22`, border: `1.5px solid ${genre.cfg.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
@@ -175,40 +176,16 @@ function GenreCard({ genre, onClick }) {
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#EDE9F8' }}>{genre.label}</div>
               <div style={{ fontSize: 10, color: 'rgba(237,233,248,0.4)' }}>{genre.count} livre{genre.count !== 1 ? 's' : ''}</div>
-              {genre.series > 0 && <div style={{ fontSize: 10, color: 'rgba(237,233,248,0.3)' }}>{genre.series} en cours</div>}
+              {genre.series > 0 && <div style={{ fontSize: 10, color: 'rgba(237,233,248,0.3)' }}>{genre.series} série{genre.series !== 1 ? 's' : ''}</div>}
             </div>
           </div>
-
-          {/* Mini covers stack */}
-          {covers.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'row-reverse', alignItems: 'center', flexShrink: 0 }}>
-              {covers.map((src, i) => (
-                <img
-                  key={i}
-                  src={src}
-                  alt=""
-                  style={{
-                    width: 30, height: 44,
-                    objectFit: 'cover',
-                    borderRadius: 5,
-                    border: '1.5px solid rgba(12,10,21,0.9)',
-                    marginLeft: i === 0 ? 0 : -10,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-                    zIndex: covers.length - i,
-                    position: 'relative',
-                  }}
-                />
-              ))}
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: genre.cfg.color }}>{Math.round(genre.pct * 100)}%</span>
+            <span style={{ fontSize: 14, color: 'rgba(237,233,248,0.25)' }}>›</span>
+          </div>
         </div>
-
-        {/* Progress bar */}
         <div style={{ height: 3, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${Math.round(genre.pct * 100)}%`, background: genre.cfg.color, borderRadius: 2, boxShadow: `0 0 6px ${genre.cfg.color}88` }} />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: genre.cfg.color }}>{Math.round(genre.pct * 100)}%</span>
         </div>
       </div>
     </div>
