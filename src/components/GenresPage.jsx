@@ -1,33 +1,40 @@
 import { useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import {
+  IconBookOpen, IconShield, IconLightning, IconFlower, IconSpiral, IconCoffee,
+  IconSword, IconBurst, IconCompass, IconWand, IconRocket, IconSkull, IconHeart,
+  IconSearch, IconBrain, IconScroll, IconTrophy, IconSmile, IconMask, IconStar,
+  IconUser, IconBook, IconNewspaper, IconBox, IconTrendingUp, IconFlame,
+  IconSortArrows,
+} from './Icons'
 
 const GOLD = '#816EBB'
 
 // ── Mapping catégories Google Books → labels français + icône + couleur ───────
 const CATEGORY_MAP = [
-  { keys: ['comics','graphic novel','manga','bande dessinee','bd'],    label: 'Manga / BD',           icon: '📖', color: '#816EBB' },
-  { keys: ['seinen'],                                                    label: 'Seinen',               icon: '👺', color: '#a78bfa' },
-  { keys: ['shonen','shounen'],                                          label: 'Shōnen',               icon: '⚡', color: '#f59e0b' },
-  { keys: ['shojo','shoujo'],                                            label: 'Shōjo',                icon: '🌸', color: '#ec4899' },
-  { keys: ['isekai'],                                                    label: 'Isekai',               icon: '🌀', color: '#6366f1' },
-  { keys: ['slice of life'],                                             label: 'Slice of Life',        icon: '☕', color: '#d97706' },
-  { keys: ['action & adventure','action and adventure'],                 label: 'Action & Aventure',    icon: '⚔️', color: '#ef4444' },
-  { keys: ['action'],                                                    label: 'Action',               icon: '💥', color: '#ef4444' },
-  { keys: ['adventure','aventure'],                                      label: 'Aventure',             icon: '🧭', color: '#22c55e' },
-  { keys: ['fantasy','fantaisie','fantastique'],                         label: 'Fantasy',              icon: '🧙', color: '#f59e0b' },
-  { keys: ['science fiction','sci-fi','science-fiction'],                label: 'Science-fiction',      icon: '🚀', color: '#22c55e' },
-  { keys: ['horror','horreur'],                                          label: 'Horreur',              icon: '💀', color: '#f97316' },
-  { keys: ['romance','romantique'],                                      label: 'Romance',              icon: '💝', color: '#ec4899' },
-  { keys: ['mystery','mystere','mystère','thriller'],                    label: 'Mystère',              icon: '🔍', color: '#a78bfa' },
-  { keys: ['psychological','psychologique'],                             label: 'Psychologique',        icon: '🧠', color: '#8b5cf6' },
-  { keys: ['historical','historique'],                                   label: 'Historique',           icon: '📜', color: '#d97706' },
-  { keys: ['sport'],                                                     label: 'Sport',                icon: '🏆', color: '#22c55e' },
-  { keys: ['comedy','comedie','comédie','humor','humour'],               label: 'Comédie',              icon: '😊', color: '#6366f1' },
-  { keys: ['drama','drame'],                                             label: 'Drame',                icon: '🎭', color: '#a78bfa' },
-  { keys: ['juvenile fiction','young adult','children'],                 label: 'Jeunesse',             icon: '⭐', color: '#f59e0b' },
-  { keys: ['biography','biographie','autobiography'],                    label: 'Biographie',           icon: '👤', color: '#6b7280' },
-  { keys: ['fiction'],                                                   label: 'Fiction',              icon: '📚', color: '#818cf8' },
-  { keys: ['nonfiction','non-fiction','documentaire'],                   label: 'Documentaire',         icon: '📰', color: '#6b7280' },
+  { keys: ['comics','graphic novel','manga','bande dessinee','bd'],    label: 'Manga / BD',           Icon: IconBookOpen,  color: '#816EBB' },
+  { keys: ['seinen'],                                                    label: 'Seinen',               Icon: IconShield,    color: '#a78bfa' },
+  { keys: ['shonen','shounen'],                                          label: 'Shōnen',               Icon: IconLightning, color: '#f59e0b' },
+  { keys: ['shojo','shoujo'],                                            label: 'Shōjo',                Icon: IconFlower,    color: '#ec4899' },
+  { keys: ['isekai'],                                                    label: 'Isekai',               Icon: IconSpiral,    color: '#6366f1' },
+  { keys: ['slice of life'],                                             label: 'Slice of Life',        Icon: IconCoffee,    color: '#d97706' },
+  { keys: ['action & adventure','action and adventure'],                 label: 'Action & Aventure',    Icon: IconSword,     color: '#ef4444' },
+  { keys: ['action'],                                                    label: 'Action',               Icon: IconBurst,     color: '#ef4444' },
+  { keys: ['adventure','aventure'],                                      label: 'Aventure',             Icon: IconCompass,   color: '#22c55e' },
+  { keys: ['fantasy','fantaisie','fantastique'],                         label: 'Fantasy',              Icon: IconWand,      color: '#f59e0b' },
+  { keys: ['science fiction','sci-fi','science-fiction'],                label: 'Science-fiction',      Icon: IconRocket,    color: '#22c55e' },
+  { keys: ['horror','horreur'],                                          label: 'Horreur',              Icon: IconSkull,     color: '#f97316' },
+  { keys: ['romance','romantique'],                                      label: 'Romance',              Icon: IconHeart,     color: '#ec4899' },
+  { keys: ['mystery','mystere','mystère','thriller'],                    label: 'Mystère',              Icon: IconSearch,    color: '#a78bfa' },
+  { keys: ['psychological','psychologique'],                             label: 'Psychologique',        Icon: IconBrain,     color: '#8b5cf6' },
+  { keys: ['historical','historique'],                                   label: 'Historique',           Icon: IconScroll,    color: '#d97706' },
+  { keys: ['sport'],                                                     label: 'Sport',                Icon: IconTrophy,    color: '#22c55e' },
+  { keys: ['comedy','comedie','comédie','humor','humour'],               label: 'Comédie',              Icon: IconSmile,     color: '#6366f1' },
+  { keys: ['drama','drame'],                                             label: 'Drame',                Icon: IconMask,      color: '#a78bfa' },
+  { keys: ['juvenile fiction','young adult','children'],                 label: 'Jeunesse',             Icon: IconStar,      color: '#f59e0b' },
+  { keys: ['biography','biographie','autobiography'],                    label: 'Biographie',           Icon: IconUser,      color: '#6b7280' },
+  { keys: ['fiction'],                                                   label: 'Fiction',              Icon: IconBook,      color: '#818cf8' },
+  { keys: ['nonfiction','non-fiction','documentaire'],                   label: 'Documentaire',         Icon: IconNewspaper, color: '#6b7280' },
 ]
 
 function normalizeCategory(raw) {
@@ -36,10 +43,9 @@ function normalizeCategory(raw) {
   for (const entry of CATEGORY_MAP) {
     if (entry.keys.some(k => c.includes(k))) return entry
   }
-  // Retourne la catégorie brute avec une config générique
   return {
     label: raw.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-    icon: '📦',
+    Icon: IconBox,
     color: '#6b7280',
   }
 }
@@ -95,8 +101,8 @@ function GenreModal({ genre, onClose, onBookSelect }) {
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px 14px', borderBottom: '1px solid rgba(129,110,187,0.1)' }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: `${genre.cfg.color}22`, border: `1.5px solid ${genre.cfg.color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
-            {genre.cfg.icon}
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: `${genre.cfg.color}22`, border: `1.5px solid ${genre.cfg.color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <genre.cfg.Icon size={22} color={genre.cfg.color} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: '#EDE9F8' }}>{genre.label}</div>
@@ -170,8 +176,8 @@ function GenreCard({ genre, onClick }) {
       <div style={{ position: 'relative', padding: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: `${genre.cfg.color}22`, border: `1.5px solid ${genre.cfg.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
-              {genre.cfg.icon}
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: `${genre.cfg.color}22`, border: `1.5px solid ${genre.cfg.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <genre.cfg.Icon size={18} color={genre.cfg.color} />
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#EDE9F8' }}>{genre.label}</div>
@@ -201,7 +207,7 @@ function FavChip({ genre, onClick }) {
       onMouseEnter={e => { e.currentTarget.style.background = `${genre.cfg.color}14`; e.currentTarget.style.borderColor = `${genre.cfg.color}66` }}
       onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = `${genre.cfg.color}33` }}
     >
-      <span style={{ fontSize: 26 }}>{genre.cfg.icon}</span>
+      <genre.cfg.Icon size={26} color={genre.cfg.color} />
       <span style={{ fontSize: 11, fontWeight: 700, color: '#EDE9F8', textAlign: 'center', lineHeight: 1.2 }}>{genre.label}</span>
       <span style={{ fontSize: 11, color: genre.cfg.color, fontWeight: 700 }}>{Math.round(genre.pct * 100)}%</span>
       <div style={{ width: '100%', height: 3, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
@@ -240,7 +246,7 @@ export default function GenresPage({ books, onBookSelect, isMobile }) {
 
   if (books.length === 0) return (
     <div style={{ padding: '80px 20px', textAlign: 'center' }}>
-      <div style={{ fontSize: 40, marginBottom: 16 }}>🎭</div>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}><IconMask size={40} color="rgba(237,233,248,0.15)" /></div>
       <p style={{ color: 'rgba(237,233,248,0.3)', fontSize: 14, margin: 0 }}>Ajoute des livres pour voir tes genres ici</p>
     </div>
   )
@@ -258,8 +264,8 @@ export default function GenresPage({ books, onBookSelect, isMobile }) {
 
       {/* ── HEADER ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: `20px ${pad} 16px` }}>
-        <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(129,110,187,0.15)', border: '1px solid rgba(129,110,187,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
-          📚
+        <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(129,110,187,0.15)', border: '1px solid rgba(129,110,187,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <IconBook size={20} color={GOLD} />
         </div>
         <div>
           <div style={{ fontSize: 20, fontWeight: 800, color: '#EDE9F8' }}>Genres</div>
@@ -270,13 +276,13 @@ export default function GenresPage({ books, onBookSelect, isMobile }) {
       {/* ── STAT CARDS ── */}
       <div style={{ display: 'flex', gap: 10, padding: `0 ${pad}`, marginBottom: 22 }}>
         {[
-          { icon: '📚', val: genres.length,  label: 'Genres',        color: GOLD       },
-          { icon: '📖', val: totalRead,       label: 'Livres lus',   color: '#22c55e'  },
-          { icon: '⭐', val: avgRating,       label: 'Note moy.',    color: '#f59e0b'  },
-          { icon: '🔥', val: totalSeries,     label: 'En cours',     color: '#ef4444'  },
+          { Icon: IconBook,        val: genres.length,  label: 'Genres',       color: GOLD       },
+          { Icon: IconBookOpen,    val: totalRead,       label: 'Livres lus',  color: '#22c55e'  },
+          { Icon: IconStar,        val: avgRating,       label: 'Note moy.',   color: '#f59e0b'  },
+          { Icon: IconFlame,       val: totalSeries,     label: 'En cours',    color: '#ef4444'  },
         ].map(s => (
           <div key={s.label} style={{ flex: 1, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 14, padding: '12px 8px', textAlign: 'center' }}>
-            <div style={{ fontSize: 16, marginBottom: 3 }}>{s.icon}</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 3 }}><s.Icon size={16} color={s.color} /></div>
             <div style={{ fontSize: 18, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.val}</div>
             <div style={{ fontSize: 9, color: 'rgba(237,233,248,0.4)', marginTop: 3 }}>{s.label}</div>
           </div>
@@ -288,7 +294,7 @@ export default function GenresPage({ books, onBookSelect, isMobile }) {
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `0 ${pad}`, marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>💜</span>
+              <IconHeart size={15} color={GOLD} filled />
               <span style={{ fontSize: 14, fontWeight: 700, color: '#EDE9F8' }}>Mes genres préférés</span>
             </div>
             <span style={{ fontSize: 11, color: GOLD, fontWeight: 600 }}>Gérer mes genres ›</span>
@@ -309,7 +315,7 @@ export default function GenresPage({ books, onBookSelect, isMobile }) {
             <button
               onClick={() => setShowSort(v => !v)}
               style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(129,110,187,0.15)', borderRadius: 8, padding: '6px 10px', color: 'rgba(237,233,248,0.7)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-              ↑↓ Trier ▾
+              <IconSortArrows size={12} color="rgba(237,233,248,0.7)" /> Trier
             </button>
             {showSort && (
               <div style={{ position: 'absolute', top: 36, right: 0, background: '#1E1535', border: '1px solid rgba(129,110,187,0.2)', borderRadius: 10, padding: '6px', zIndex: 50, minWidth: 130 }}>

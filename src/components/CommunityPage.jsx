@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { fetchPublicBooks } from '../hooks/useProfile'
-import { IconUsers, IconSearch } from './Icons'
+import { IconUsers, IconSearch, IconBookOpen, IconThumbUp, IconThumbDown, IconSparkle } from './Icons'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 const GOLD = '#816EBB'
@@ -27,9 +27,9 @@ function actionLabel(action) {
 }
 
 function ratingInfo(rating) {
-  if (rating === 5) return { emoji: '🤩', label: "J'adore !", color: '#fbbf24' }
-  if (rating === 3) return { emoji: '👍', label: "J'aime", color: '#4ade80' }
-  if (rating === 1) return { emoji: '👎', label: "Pas pour moi", color: '#f87171' }
+  if (rating === 5) return { Icon: IconSparkle,   label: "J'adore !",    color: '#fbbf24' }
+  if (rating === 3) return { Icon: IconThumbUp,   label: "J'aime",       color: '#4ade80' }
+  if (rating === 1) return { Icon: IconThumbDown, label: "Pas pour moi", color: '#f87171' }
   return null
 }
 
@@ -95,7 +95,7 @@ function ActivityCard({ item }) {
             <img src={cover} alt={item.book_title} style={{ width: 56, height: 84, objectFit: 'cover', borderRadius: '3px 8px 8px 3px', boxShadow: '-3px 4px 14px rgba(0,0,0,0.6)', display: 'block' }} />
           ) : (
             <div style={{ width: 56, height: 84, borderRadius: '3px 8px 8px 3px', background: 'linear-gradient(145deg,#2D1B69,#1A0F3A)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '-3px 4px 14px rgba(0,0,0,0.6)' }}>
-              <span style={{ fontSize: 22 }}>📖</span>
+              <IconBookOpen size={22} color="rgba(237,233,248,0.3)" />
             </div>
           )}
         </div>
@@ -112,7 +112,7 @@ function ActivityCard({ item }) {
           {/* Note */}
           {ri && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-              <span style={{ fontSize: 20 }}>{ri.emoji}</span>
+              <ri.Icon size={18} color={ri.color} />
               <span style={{ fontSize: 12, fontWeight: 600, color: ri.color }}>{ri.label}</span>
             </div>
           )}

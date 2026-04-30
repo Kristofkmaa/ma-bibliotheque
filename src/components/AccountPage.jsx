@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useProfile } from '../hooks/useProfile'
 import { supabase } from '../lib/supabase'
-import { IconGlobe, IconShare, IconCheck, IconEdit, IconX, IconUser } from './Icons'
+import { IconGlobe, IconShare, IconCheck, IconEdit, IconX, IconUser, IconBookOpen, IconCheckCircle, IconStar, IconUsers, IconClock, IconFlame, IconTrendingUp, IconCalendar, IconTrophy, IconBook, IconCrown, IconPencil, IconArrowDown, IconMoreH } from './Icons'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 const GOLD  = '#816EBB'
@@ -244,7 +244,7 @@ function SocialPanel({ initialTab, followers, followingProfiles, isFollowing, fo
         <div style={{ overflowY: 'auto', padding: '8px 20px 32px', flex: 1 }}>
           {list.length === 0 ? (
             <div style={{ padding: '48px 0', textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>👥</div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><IconUsers size={32} color="rgba(237,233,248,0.15)" /></div>
               <div style={{ fontSize: 13, color: 'rgba(237,233,248,0.25)' }}>
                 {tab === 'following' ? 'Tu ne suis personne encore' : 'Personne ne te suit encore'}
               </div>
@@ -304,11 +304,11 @@ function StarRow({ rating }) {
 }
 
 const BADGES_DEF = [
-  { id: 'premiers_pas',  name: 'Premiers pas',  desc: '5 livres lus',       icon: '📚', color: '#816EBB', bg: 'rgba(101,87,160,0.3)',  check: (r) => r >= 5  },
-  { id: 'regulier',      name: 'Régulier',       desc: '7 jours de suite',   icon: '✅', color: '#22c55e', bg: 'rgba(34,197,94,0.25)',  check: ()  => false   },
-  { id: 'devoreur',      name: 'Dévoreur',       desc: '20 livres lus',      icon: '⭐', color: '#f59e0b', bg: 'rgba(245,158,11,0.25)', check: (r) => r >= 20 },
-  { id: 'marathonien',   name: 'Marathonien',    desc: '10h de lecture',     icon: '⏱️', color: '#6366f1', bg: 'rgba(99,102,241,0.25)', check: ()  => false   },
-  { id: 'collectionneur',name: 'Collectionneur', desc: '15 livres possédés', icon: '👑', color: '#ef4444', bg: 'rgba(239,68,68,0.25)',  check: (r, b) => b >= 15 },
+  { id: 'premiers_pas',  name: 'Premiers pas',  desc: '5 livres lus',       Icon: IconBook,         color: '#816EBB', bg: 'rgba(101,87,160,0.3)',  check: (r) => r >= 5  },
+  { id: 'regulier',      name: 'Régulier',       desc: '7 jours de suite',   Icon: IconCheckCircle,  color: '#22c55e', bg: 'rgba(34,197,94,0.25)',  check: ()  => false   },
+  { id: 'devoreur',      name: 'Dévoreur',       desc: '20 livres lus',      Icon: IconStar,         color: '#f59e0b', bg: 'rgba(245,158,11,0.25)', check: (r) => r >= 20 },
+  { id: 'marathonien',   name: 'Marathonien',    desc: '10h de lecture',     Icon: IconClock,        color: '#6366f1', bg: 'rgba(99,102,241,0.25)', check: ()  => false   },
+  { id: 'collectionneur',name: 'Collectionneur', desc: '15 livres possédés', Icon: IconCrown,        color: '#ef4444', bg: 'rgba(239,68,68,0.25)',  check: (r, b) => b >= 15 },
 ]
 
 function BadgeChip({ badge, earned }) {
@@ -319,10 +319,9 @@ function BadgeChip({ badge, earned }) {
         background: earned ? badge.bg : 'rgba(255,255,255,0.04)',
         border: `2px solid ${earned ? badge.color : 'rgba(255,255,255,0.08)'}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 26,
         boxShadow: earned ? `0 0 16px ${badge.color}44` : 'none',
       }}>
-        {badge.icon}
+        <badge.Icon size={26} color={earned ? badge.color : 'rgba(255,255,255,0.2)'} />
       </div>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: 10, fontWeight: 600, color: '#EDE9F8', whiteSpace: 'nowrap' }}>{badge.name}</div>
@@ -586,12 +585,12 @@ export default function AccountPage({ user, books, followers, followingProfiles,
         {!editMode && (
           <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 8 }} onClick={e => e.stopPropagation()}>
             <button onClick={copyLink}
-              style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#EDE9F8', fontSize: 16 }}>
-              ↓
+              style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <IconShare size={15} color="#EDE9F8" />
             </button>
             <button onClick={() => setEditMode(true)}
-              style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#EDE9F8', fontSize: 16 }}>
-              ···
+              style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <IconMoreH size={15} color="#EDE9F8" />
             </button>
           </div>
         )}
@@ -680,8 +679,8 @@ export default function AccountPage({ user, books, followers, followingProfiles,
           </>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: GOLD, letterSpacing: '0.03em', marginBottom: 2 }}>
-              ✏️ Mode édition
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: GOLD, letterSpacing: '0.03em', marginBottom: 2 }}>
+              <IconPencil size={13} color={GOLD} /> Mode édition
             </div>
 
             <Field label="Pseudo (@)"
@@ -734,16 +733,16 @@ export default function AccountPage({ user, books, followers, followingProfiles,
         <>
           <div style={{ display: 'flex', padding: `16px ${pad}`, gap: 4, borderBottom: '1px solid rgba(129,110,187,0.08)' }}>
             {[
-              { val: bookCount,              label: 'Livres',  prefix: '📖' },
-              { val: readCount,              label: 'Lus',     prefix: '✅' },
-              { val: favCount,               label: 'Favoris', prefix: '⭐' },
-              { val: followers.length,       label: 'Abonné',  prefix: '👥', onClick: () => setSocialPanel('followers') },
+              { val: bookCount,        label: 'Livres',  StatIcon: IconBookOpen,    onClick: null },
+              { val: readCount,        label: 'Lus',     StatIcon: IconCheckCircle, onClick: null },
+              { val: favCount,         label: 'Favoris', StatIcon: IconStar,        onClick: null },
+              { val: followers.length, label: 'Abonnés', StatIcon: IconUsers,       onClick: () => setSocialPanel('followers') },
             ].map((s, i) => (
               <button
                 key={i}
                 onClick={s.onClick}
                 style={{ flex: 1, background: 'none', border: 'none', cursor: s.onClick ? 'pointer' : 'default', padding: '6px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                <div style={{ fontSize: 12, color: 'rgba(237,233,248,0.4)' }}>{s.prefix}</div>
+                <div style={{ display: 'flex', justifyContent: 'center' }}><s.StatIcon size={12} color="rgba(237,233,248,0.4)" /></div>
                 <div style={{ fontSize: 17, fontWeight: 800, color: '#EDE9F8', lineHeight: 1.1 }}>{s.val}</div>
                 <div style={{ fontSize: 10, color: 'rgba(237,233,248,0.35)' }}>{s.label}</div>
               </button>
@@ -767,7 +766,7 @@ export default function AccountPage({ user, books, followers, followingProfiles,
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 16 }}>📈</span>
+                <IconTrendingUp size={16} color={GOLD} />
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#EDE9F8' }}>Progression {CURRENT_YEAR}</div>
                   <div style={{ fontSize: 11, color: 'rgba(237,233,248,0.4)' }}>Ton objectif de lecture annuel</div>
@@ -797,7 +796,7 @@ export default function AccountPage({ user, books, followers, followingProfiles,
               <div style={{ fontSize: 11, color: 'rgba(237,233,248,0.4)' }}>
                 {remaining > 0
                   ? `• encore ${remaining} à lire  •  ~${perMonth}/mois pour atteindre ton objectif`
-                  : '🎉 Objectif atteint !'}
+                  : 'Objectif atteint !'}
               </div>
               <div style={{ fontSize: 12, fontWeight: 700, color: pct >= 1 ? '#4ade80' : GOLD }}>
                 {Math.round(pct * 100)} %
@@ -809,15 +808,15 @@ export default function AccountPage({ user, books, followers, followingProfiles,
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, padding: `0 ${pad}` }}>
             {/* Temps de lecture */}
             <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 14, padding: '14px 10px' }}>
-              <div style={{ fontSize: 18, marginBottom: 4 }}>⏰</div>
+              <div style={{ marginBottom: 4 }}><IconClock size={18} color="#a78bfa" /></div>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#EDE9F8', lineHeight: 1 }}>{readingTime}</div>
               <div style={{ fontSize: 9, color: 'rgba(237,233,248,0.4)', marginTop: 4, lineHeight: 1.3 }}>Temps de lecture</div>
-              {readCount > 0 && <div style={{ fontSize: 9, color: '#4ade80', marginTop: 4, fontWeight: 600 }}>↗ estimé</div>}
+              {readCount > 0 && <div style={{ fontSize: 9, color: '#4ade80', marginTop: 4, fontWeight: 600 }}>estimé</div>}
             </div>
 
             {/* Note moyenne */}
             <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 14, padding: '14px 10px' }}>
-              <div style={{ fontSize: 18, marginBottom: 4 }}>⭐</div>
+              <div style={{ marginBottom: 4 }}><IconStar size={18} color="#fbbf24" /></div>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#EDE9F8', lineHeight: 1 }}>{avgRating > 0 ? avgRating : '--'}</div>
               <div style={{ fontSize: 9, color: 'rgba(237,233,248,0.4)', marginTop: 4, lineHeight: 1.3 }}>Note moyenne</div>
               {avgRating > 0 && <StarRow rating={parseFloat(avgRating)} />}
@@ -825,7 +824,7 @@ export default function AccountPage({ user, books, followers, followingProfiles,
 
             {/* Séries suivies */}
             <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 14, padding: '14px 10px' }}>
-              <div style={{ fontSize: 18, marginBottom: 4 }}>🔥</div>
+              <div style={{ marginBottom: 4 }}><IconFlame size={18} color="#f97316" /></div>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#EDE9F8', lineHeight: 1 }}>{enCours}</div>
               <div style={{ fontSize: 9, color: 'rgba(237,233,248,0.4)', marginTop: 4, lineHeight: 1.3 }}>Séries suivies</div>
               {enCours > 0 && <div style={{ fontSize: 9, color: '#f97316', marginTop: 4, fontWeight: 600 }}>En cours</div>}
@@ -836,7 +835,7 @@ export default function AccountPage({ user, books, followers, followingProfiles,
           <div style={{ margin: `14px ${pad}`, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 16, padding: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span style={{ fontSize: 15 }}>📅</span>
+                <IconCalendar size={15} color={GOLD} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#EDE9F8' }}>Lecture par mois</span>
               </div>
               <span style={{ fontSize: 11, color: GOLD, fontWeight: 600 }}>{CURRENT_YEAR}</span>
@@ -848,7 +847,7 @@ export default function AccountPage({ user, books, followers, followingProfiles,
           <div style={{ margin: `0 ${pad} 14px` }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span style={{ fontSize: 15 }}>🏆</span>
+                <IconTrophy size={15} color="#fbbf24" />
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#EDE9F8' }}>Badges obtenus</span>
               </div>
               <span style={{ fontSize: 11, color: GOLD, fontWeight: 600 }}>Voir tous →</span>

@@ -1,14 +1,15 @@
 import { useState, useMemo, memo } from 'react'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { IconPlay, IconHome, IconList, IconCheck, IconHeart } from './Icons'
 
 const GOLD = '#816EBB'
 
 const STATUS_CONFIG = {
-  en_cours: { label: 'En cours',     color: '#a78bfa', bg: 'rgba(167,139,250,0.12)', icon: '▶' },
-  possede:  { label: 'Possédés',     color: '#818cf8', bg: 'rgba(129,140,248,0.12)', icon: '🏠' },
-  souhaite: { label: 'WishList',     color: '#fb923c', bg: 'rgba(251,146,60,0.12)',  icon: '📋' },
-  lu:       { label: 'Déjà lu',      color: '#4ade80', bg: 'rgba(74,222,128,0.12)',  icon: '✓' },
-  prefere:  { label: 'Favoris',      color: '#f472b6', bg: 'rgba(244,114,182,0.12)', icon: '♥' },
+  en_cours: { label: 'En cours',     color: '#a78bfa', bg: 'rgba(167,139,250,0.12)', Icon: IconPlay  },
+  possede:  { label: 'Possédés',     color: '#818cf8', bg: 'rgba(129,140,248,0.12)', Icon: IconHome  },
+  souhaite: { label: 'WishList',     color: '#fb923c', bg: 'rgba(251,146,60,0.12)',  Icon: IconList  },
+  lu:       { label: 'Déjà lu',      color: '#4ade80', bg: 'rgba(74,222,128,0.12)',  Icon: IconCheck },
+  prefere:  { label: 'Favoris',      color: '#f472b6', bg: 'rgba(244,114,182,0.12)', Icon: IconHeart },
 }
 
 const STATUS_ORDER = ['en_cours', 'possede', 'souhaite', 'lu', 'prefere']
@@ -91,8 +92,8 @@ function StatusSection({ status, books, onBookClick, onSeeAll }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: cfg.bg, border: `1px solid ${cfg.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
-            {cfg.icon}
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: cfg.bg, border: `1px solid ${cfg.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <cfg.Icon size={13} color={cfg.color} />
           </div>
           <span style={{ fontSize: 14, fontWeight: 700, color: '#EDE9F8' }}>{cfg.label}</span>
           <span style={{ fontSize: 11, color: 'rgba(237,233,248,0.3)', fontWeight: 400 }}>{books.length}</span>

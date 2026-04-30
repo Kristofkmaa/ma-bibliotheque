@@ -3,6 +3,8 @@ import { motion } from 'framer-motion'
 import { IconX, IconTrash, IconSave, IconCheck, IconHome, IconPlay, IconHeart, IconList } from './Icons'
 import { useIsMobile } from '../hooks/useIsMobile'
 
+import { IconThumbDown, IconThumbUp, IconSparkle } from './Icons'
+
 // prefere géré via le bouton Favoris dans l'onglet Notes
 const STATUS_OPTIONS = [
   { value: 'en_cours', label: 'En cours', Icon: IconPlay,  color: '#a78bfa' },
@@ -14,9 +16,9 @@ const STATUS_OPTIONS = [
 // ── Notation j'aime / j'aime pas / j'adore ───────────────────────────────────
 // rating: 1 = j'aime pas, 3 = j'aime, 5 = j'adore, null = non noté
 const REACTIONS = [
-  { value: 1, emoji: '👎', label: "J'aime pas", color: '#f87171', bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.3)' },
-  { value: 3, emoji: '👍', label: "J'aime",     color: '#818cf8', bg: 'rgba(129,140,248,0.12)',  border: 'rgba(129,140,248,0.3)'  },
-  { value: 5, emoji: '🤩', label: "J'adore",    color: '#fbbf24', bg: 'rgba(251,191,36,0.12)',  border: 'rgba(251,191,36,0.3)'  },
+  { value: 1, Icon: IconThumbDown, label: "J'aime pas", color: '#f87171', bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.3)' },
+  { value: 3, Icon: IconThumbUp,   label: "J'aime",     color: '#818cf8', bg: 'rgba(129,140,248,0.12)', border: 'rgba(129,140,248,0.3)' },
+  { value: 5, Icon: IconSparkle,   label: "J'adore",    color: '#fbbf24', bg: 'rgba(251,191,36,0.12)',  border: 'rgba(251,191,36,0.3)'  },
 ]
 
 function ReactionRating({ value, onChange }) {
@@ -39,7 +41,7 @@ function ReactionRating({ value, onChange }) {
               transform: active ? 'scale(1.05)' : 'scale(1)',
             }}
           >
-            <span style={{ fontSize: '18px', lineHeight: 1 }}>{r.emoji}</span>
+            <r.Icon size={18} color={active ? r.color : 'rgba(237,233,248,0.4)'} />
             {r.label}
           </button>
         )
@@ -315,7 +317,7 @@ export default function BookModal({ book, onClose, onSave, onRemove, isInLibrary
                     transform: statuses.includes('prefere') ? 'scale(1.03)' : 'scale(1)',
                   }}
                 >
-                  <span style={{ fontSize: '20px', lineHeight: 1 }}>{statuses.includes('prefere') ? '❤️' : '🤍'}</span>
+                  <IconHeart size={20} filled={statuses.includes('prefere')} color={statuses.includes('prefere') ? '#f472b6' : 'rgba(237,233,248,0.4)'} />
                   {statuses.includes('prefere') ? 'Dans mes favoris' : 'Ajouter aux favoris'}
                 </button>
               </div>
@@ -354,7 +356,7 @@ export default function BookModal({ book, onClose, onSave, onRemove, isInLibrary
                 >
                   {/* Petite coche si actif */}
                   {active
-                    ? <span style={{ fontSize: '10px', lineHeight: 1 }}>✓</span>
+                    ? <IconCheck size={11} color={color} />
                     : <Icon size={11} color="rgba(237,233,248,0.3)" />
                   }
                   {label}

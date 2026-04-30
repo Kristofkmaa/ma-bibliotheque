@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { IconChevronRight } from './Icons'
+import { IconChevronRight, IconTarget, IconBookOpen, IconClock, IconStar, IconFlame, IconCalendar, IconMask, IconBarChart, IconBook, IconPencil, IconArrowLeft, IconArrowUp } from './Icons'
 
 const CURRENT_YEAR  = new Date().getFullYear()
 const CURRENT_MONTH = new Date().getMonth() // 0-11
@@ -230,16 +230,16 @@ export default function YearProgress({ books, onBookSelect, onBack }) {
       }}>
         {onBack && (
           <button onClick={onBack}
-            style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 10, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#EDE9F8', fontSize: 18, flexShrink: 0 }}>
-            ←
+            style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 10, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <IconArrowLeft size={18} color="#EDE9F8" />
           </button>
         )}
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#EDE9F8' }}>Progression {CURRENT_YEAR}</div>
           <div style={{ fontSize: 11, color: 'rgba(237,233,248,0.4)' }}>Ton objectif de lecture annuel</div>
         </div>
-        <button style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 10, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#EDE9F8', fontSize: 16 }}>
-          ↑
+        <button style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 10, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+          <IconArrowUp size={16} color="#EDE9F8" />
         </button>
       </div>
 
@@ -253,7 +253,7 @@ export default function YearProgress({ books, onBookSelect, onBack }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 16 }}>🎯</span>
+              <IconTarget size={16} color="#fbbf24" />
               <span style={{ fontSize: 13, color: 'rgba(237,233,248,0.7)' }}>Objectif annuel</span>
             </div>
             {editingGoal ? (
@@ -274,7 +274,7 @@ export default function YearProgress({ books, onBookSelect, onBack }) {
                 background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.25)',
                 borderRadius: 8, padding: '5px 12px', color: '#fbbf24', fontSize: 14, fontWeight: 700, cursor: 'pointer',
               }}>
-                {goal} <span style={{ fontSize: 11, opacity: 0.7 }}>livres ✏️</span>
+                {goal} <span style={{ fontSize: 11, opacity: 0.7, display: 'inline-flex', alignItems: 'center', gap: 3 }}>livres <IconPencil size={10} color="#fbbf24" /></span>
               </button>
             )}
           </div>
@@ -299,7 +299,7 @@ export default function YearProgress({ books, onBookSelect, onBack }) {
                   · <strong style={{ color: '#fbbf24' }}>~{perMonth}/mois</strong> pour finir l'année
                 </span>
               )}
-              {remaining === 0 && <span style={{ marginLeft: 8, color: '#4ade80' }}>🎉 Objectif atteint !</span>}
+              {remaining === 0 && <span style={{ marginLeft: 8, color: '#4ade80' }}>Objectif atteint !</span>}
             </div>
             <div style={{ fontSize: 13, fontWeight: 800, color: pct >= 1 ? '#4ade80' : '#fbbf24' }}>{Math.round(pct * 100)}%</div>
           </div>
@@ -310,34 +310,33 @@ export default function YearProgress({ books, onBookSelect, onBack }) {
           {/* Livres lus */}
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 14, padding: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <span style={{ fontSize: 20 }}>📖</span>
+              <IconBookOpen size={20} color="#a78bfa" />
               <span style={{ fontSize: 22, fontWeight: 800, color: '#EDE9F8' }}>{readCount}</span>
             </div>
             <div style={{ fontSize: 11, color: 'rgba(237,233,248,0.45)' }}>Livres lus</div>
-            {readCount >= 5 && <div style={{ fontSize: 10, color: '#fbbf24', marginTop: 3, fontWeight: 600 }}>🎉 Bravo !</div>}
+            {readCount >= 5 && <div style={{ fontSize: 10, color: '#fbbf24', marginTop: 3, fontWeight: 600 }}>Bravo !</div>}
           </div>
 
           {/* Temps de lecture */}
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 14, padding: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <span style={{ fontSize: 20 }}>⏰</span>
+              <IconClock size={20} color="#a78bfa" />
               <span style={{ fontSize: 22, fontWeight: 800, color: '#EDE9F8' }}>{readingH > 0 ? `${readingH}h` : `${readingM}m`}</span>
             </div>
             <div style={{ fontSize: 11, color: 'rgba(237,233,248,0.45)' }}>Temps de lecture</div>
-            {readCount > 0 && <div style={{ fontSize: 10, color: '#4ade80', marginTop: 3, fontWeight: 600 }}>↗ estimé</div>}
+            {readCount > 0 && <div style={{ fontSize: 10, color: '#4ade80', marginTop: 3, fontWeight: 600 }}>estimé</div>}
           </div>
 
           {/* Note moyenne */}
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 14, padding: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <span style={{ fontSize: 20 }}>⭐</span>
+              <IconStar size={20} color="#fbbf24" />
               <span style={{ fontSize: 22, fontWeight: 800, color: '#EDE9F8' }}>{avgRating > 0 ? avgRating : '--'}</span>
             </div>
             <div style={{ fontSize: 11, color: 'rgba(237,233,248,0.45)' }}>Note moyenne</div>
             {avgRating > 0 && (
               <div style={{ marginTop: 3 }}>
                 <StarRow rating={parseFloat(avgRating)} size={10} />
-                <div style={{ fontSize: 10, color: '#fbbf24', marginTop: 2, fontWeight: 600 }}>⭐ Super !</div>
               </div>
             )}
           </div>
@@ -345,11 +344,11 @@ export default function YearProgress({ books, onBookSelect, onBack }) {
           {/* Séries */}
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 14, padding: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <span style={{ fontSize: 20 }}>🔥</span>
+              <IconFlame size={20} color="#f97316" />
               <span style={{ fontSize: 22, fontWeight: 800, color: '#EDE9F8' }}>{enCoursBooks.length}</span>
             </div>
             <div style={{ fontSize: 11, color: 'rgba(237,233,248,0.45)' }}>Séries suivies</div>
-            {enCoursBooks.length > 0 && <div style={{ fontSize: 10, color: '#f97316', marginTop: 3, fontWeight: 600 }}>🔥 En cours</div>}
+            {enCoursBooks.length > 0 && <div style={{ fontSize: 10, color: '#f97316', marginTop: 3, fontWeight: 600 }}>En cours</div>}
           </div>
         </div>
 
@@ -357,7 +356,7 @@ export default function YearProgress({ books, onBookSelect, onBack }) {
         <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 16, padding: '16px', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span style={{ fontSize: 15 }}>📅</span>
+              <IconCalendar size={15} color={GOLD} />
               <span style={{ fontSize: 13, fontWeight: 700, color: '#EDE9F8' }}>Progression par mois</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(129,110,187,0.15)', borderRadius: 8, padding: '4px 10px' }}>
@@ -373,7 +372,7 @@ export default function YearProgress({ books, onBookSelect, onBack }) {
           {/* Genres préférés */}
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 16, padding: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-              <span style={{ fontSize: 14 }}>🎭</span>
+              <IconMask size={14} color={GOLD} />
               <span style={{ fontSize: 12, fontWeight: 700, color: '#EDE9F8' }}>Genres préférés</span>
             </div>
             {genreData.length > 0 ? (
@@ -407,7 +406,7 @@ export default function YearProgress({ books, onBookSelect, onBack }) {
           {/* Répartition */}
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', borderRadius: 16, padding: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-              <span style={{ fontSize: 14 }}>📊</span>
+              <IconBarChart size={14} color={GOLD} />
               <span style={{ fontSize: 12, fontWeight: 700, color: '#EDE9F8' }}>Répartition</span>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -436,7 +435,7 @@ export default function YearProgress({ books, onBookSelect, onBack }) {
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span style={{ fontSize: 15 }}>📚</span>
+                <IconBook size={15} color={GOLD} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#EDE9F8' }}>Derniers livres lus</span>
               </div>
               <span style={{ fontSize: 11, color: GOLD, fontWeight: 600, cursor: 'pointer' }}>Voir tout</span>
@@ -454,7 +453,7 @@ export default function YearProgress({ books, onBookSelect, onBack }) {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span style={{ fontSize: 15 }}>🔥</span>
+                <IconFlame size={15} color="#f97316" />
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#EDE9F8' }}>Série en cours</span>
               </div>
               <span style={{ fontSize: 11, color: GOLD, fontWeight: 600, cursor: 'pointer' }}>Voir tout</span>
