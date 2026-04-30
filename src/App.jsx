@@ -14,6 +14,7 @@ import YearProgress from './components/YearProgress'
 import AIRecommendations from './components/AIRecommendations'
 import CommunityPage from './components/CommunityPage'
 import AccountPage from './components/AccountPage'
+import GenresPage from './components/GenresPage'
 import LoginPage from './components/LoginPage'
 import NotificationBell from './components/NotificationBell'
 import { IconBook } from './components/Icons'
@@ -379,7 +380,7 @@ export default function App() {
 
         {/* Genres */}
         {activeView === 'genres' && (
-          <GenresView books={books} onBookSelect={handleBookSelect} isMobile={isMobile} />
+          <GenresPage books={books} onBookSelect={handleBookSelect} isMobile={isMobile} />
         )}
 
         {/* Suggestions IA */}
