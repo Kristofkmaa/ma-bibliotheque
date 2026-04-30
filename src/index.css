@@ -1,0 +1,180 @@
+@import "tailwindcss";
+
+:root {
+  --wood-dark: #1E1535;
+  --wood-mid: #6557A0;
+  --wood-light: #816EBB;
+  --wood-highlight: #816EBB;
+  --parchment: #EDE9F8;
+  --ink: #0C0A15;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  width: 100%;
+}
+
+body {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  width: 100%;
+  max-width: 100vw;
+  font-family: 'Inter', sans-serif;
+  background-color: #0C0A15;
+  background-image:
+    radial-gradient(ellipse at 15% 40%, rgba(129,110,187,0.12) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 20%, rgba(101,87,160,0.09) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 90%, rgba(129,110,187,0.07) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 60%, rgba(101,87,160,0.06) 0%, transparent 40%);
+  background-attachment: fixed;
+  color: var(--parchment);
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  text-align: left;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Perspective 3D ── */
+.perspective-1000 { perspective: 1000px; }
+.perspective-2000 { perspective: 2000px; }
+.transform-style-3d { transform-style: preserve-3d; }
+.backface-hidden { backface-visibility: hidden; }
+.rotate-y-180 { transform: rotateY(180deg); }
+
+/* ── Étagère en bois ── */
+.shelf {
+  background: linear-gradient(
+    180deg,
+    #3D2E6B 0%,
+    #2A1F4A 35%,
+    #1E1535 70%,
+    #110D1E 100%
+  );
+  box-shadow:
+    0 2px 20px rgba(129,110,187,0.5),
+    0 6px 32px rgba(0,0,0,0.7);
+  border-top: 2px solid rgba(160,130,220,0.85);
+  position: relative;
+}
+
+
+/* ── Tranche de livre ── */
+.book-spine {
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), filter 0.2s ease;
+  transform-origin: bottom center;
+  flex-shrink: 0;
+}
+
+.book-spine:hover {
+  transform: translateY(-14px) scale(1.04);
+  filter: brightness(1.2);
+  z-index: 10;
+}
+
+.book-spine-inner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Texte vertical sur la tranche ── */
+.spine-text {
+  writing-mode: vertical-lr;
+  text-orientation: mixed;
+  font-family: 'Playfair Display', serif;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  padding: 8px 4px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 100%;
+}
+
+/* ── Animation ouverture de livre ── */
+.book-wrapper {
+  perspective: 2000px;
+}
+
+.book-cover-anim {
+  transform-style: preserve-3d;
+  transition: transform 0.9s cubic-bezier(0.645, 0.045, 0.355, 1.000);
+  transform-origin: left center;
+}
+
+.book-cover-anim.open {
+  transform: rotateY(-170deg);
+}
+
+.book-face-front,
+.book-face-back {
+  backface-visibility: hidden;
+  position: absolute;
+  inset: 0;
+}
+
+.book-face-back {
+  transform: rotateY(180deg);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: var(--wood-mid); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--wood-light); }
+
+/* ── Animations ── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #110D1E 25%, #1E1535 50%, #110D1E 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Badge catégorie */
+.badge-lu { background: #2d5a27; color: #a8e6a3; }
+.badge-possede { background: #1a3a5c; color: #93c5fd; }
+.badge-souhaite { background: #5c3a1a; color: #fcd38d; }
+
+/* ── react-pageflip : masque le fond app pendant l'animation ── */
+
+/* Conteneur global du flipbook */
+.stf__parent {
+  background: transparent !important;
+}
+
+/* Le verso de chaque page (face cachée pendant le flip) = couleur parchemin */
+.stf__block {
+  background: #f0e4cc !important;
+  border-radius: 2px;
+}
+
+/* Ombre portée propre */
+.stf__parent .stf__shadow {
+  background: rgba(0,0,0,0.35) !important;
+}
+
+/* S'assure que les pages ont toujours un fond opaque */
+.stf__item {
+  background: #f5ede0;
+  overflow: hidden;
+}
