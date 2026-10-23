@@ -101,7 +101,7 @@ function MarketplaceSection({ book }) {
 }
 
 // ── Modal principal ───────────────────────────────────────────────────────────
-export default function BookModal({ book, onClose, onSave, onRemove, isInLibrary }) {
+export default function BookModal({ book, onClose, onSave, onRemove, isInLibrary, initialTab = 'couverture' }) {
   const initStatuses = () => {
     if (book.statuses?.length) return book.statuses
     if (book.status) return [book.status]
@@ -111,7 +111,7 @@ export default function BookModal({ book, onClose, onSave, onRemove, isInLibrary
   const [rating,     setRating]    = useState(book.rating || 0)
   const [notes,      setNotes]     = useState(book.notes || '')
   const [saving,     setSaving]    = useState(false)
-  const [activeTab,  setActiveTab] = useState('couverture')
+  const [activeTab,  setActiveTab] = useState(initialTab)
   const isMobile = useIsMobile()
 
   const cover    = book.cover || book.cover_url

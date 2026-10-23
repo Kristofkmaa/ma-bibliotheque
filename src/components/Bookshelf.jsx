@@ -1,6 +1,8 @@
 import { useState, useMemo, memo } from 'react'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { IconPlay, IconHome, IconList, IconCheck, IconHeart } from './Icons'
+import ExLibrisShelf from './ExLibrisShelf'
+import { SORTS, sortBooks } from '../lib/exlibris'
 
 const GOLD = '#816EBB'
 
@@ -24,8 +26,7 @@ const getPrimaryStatus = (book) => {
   return STATUS_ORDER.find(st => s.includes(st)) || s[0]
 }
 
-const sortAlpha = arr =>
-  [...arr].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'fr', { sensitivity: 'base' }))
+const readSort = () => { try { return localStorage.getItem('biblio-sort') || 'title' } catch { return 'title' } }
 
 // ── Carte livre flat ──────────────────────────────────────────────────────────
 const BookCard = memo(function BookCard({ book, onBookClick, showStatus = false }) {
@@ -38,7 +39,7 @@ const BookCard = memo(function BookCard({ book, onBookClick, showStatus = false 
 
   return (
     <div
-      onClick={() => onBookClick(book)}
+      onClick={e => onBookClick(book, e.currentTarget.firstChild)}
       style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', borderRadius: 14, overflow: 'hidden', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(129,110,187,0.1)', transition: 'all 0.18s' }}
       onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = 'rgba(129,110,187,0.3)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
       onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = 'rgba(129,110,187,0.1)'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
@@ -212,7 +213,15 @@ function FilterChips({ current, counts, onFilterChange }) {
 // ── Composant principal ───────────────────────────────────────────────────────
 export default function Bookshelf({ books, onBookClick, filter = 'all', onFilterChange }) {
   const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState(readSort)
   const isMobile = useIsMobile()
+  const changeSort = (v) => { setSortBy(v); try { localStorage.setItem('biblio-sort', v) } catch { /* stockage indisponible */ } }
+
+  // Les livres physiquement chez toi : tout sauf ce qui n'est que sur la WishList
+  const shelfBooks = useMemo(() =>
+    sortBooks(books.filter(b => STATUS_ORDER.some(s => s !== 'souhaite' && hasStatus(b, s))), sortBy),
+    [books, sortBy]
+  )
 
   const counts = useMemo(() =>
     Object.fromEntries(STATUS_ORDER.map(s => [s, books.filter(b => hasStatus(b, s)).length])),
@@ -220,13 +229,13 @@ export default function Bookshelf({ books, onBookClick, filter = 'all', onFilter
   )
 
   const booksByStatus = useMemo(() =>
-    Object.fromEntries(STATUS_ORDER.map(s => [s, sortAlpha(books.filter(b => hasStatus(b, s)))])),
-    [books]
+    Object.fromEntries(STATUS_ORDER.map(s => [s, sortBooks(books.filter(b => hasStatus(b, s)), sortBy)])),
+    [books, sortBy]
   )
 
   const filteredBooks = useMemo(() =>
-    filter === 'all' ? books : sortAlpha(books.filter(b => hasStatus(b, filter))),
-    [books, filter]
+    filter === 'all' ? books : sortBooks(books.filter(b => hasStatus(b, filter)), sortBy),
+    [books, filter, sortBy]
   )
 
   const pad = isMobile ? '0 16px' : '0 28px'
@@ -245,14 +254,29 @@ export default function Bookshelf({ books, onBookClick, filter = 'all', onFilter
       {/* ── FILTRES + RECHERCHE ── */}
       <div style={{ padding: `16px ${isMobile ? '16px' : '28px'} 20px`, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <FilterChips current={filter} counts={counts} onFilterChange={id => { setSearchQuery(''); onFilterChange(id) }} />
-        {filter !== 'all' && (
-          <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder={`Rechercher dans ${STATUS_CONFIG[filter]?.label || ''}...`} />
-        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {filter !== 'all' && (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder={`Rechercher dans ${STATUS_CONFIG[filter]?.label || ''}...`} />
+            </div>
+          )}
+          <select className="xl-sort" value={sortBy} onChange={e => changeSort(e.target.value)} aria-label="Trier les livres">
+            {SORTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* ── VUE GLOBALE (tous les statuts en sections) ── */}
       {filter === 'all' && (
         <div style={{ padding: pad }}>
+          {/* Bibliothèque en bois */}
+          <div style={{ marginBottom: 28 }}>
+            <ExLibrisShelf books={shelfBooks} onOpen={onBookClick} />
+            {shelfBooks.some(b => hasStatus(b, 'en_cours')) && (
+              <div className="xl-caption">Les livres penchés sont en cours de lecture. Touche un livre pour l'ouvrir.</div>
+            )}
+          </div>
+
           {/* Mini stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 28 }}>
             {STATUS_ORDER.map(s => {

@@ -8,6 +8,7 @@ import { useIsMobile } from './hooks/useIsMobile'
 import NavBar, { STATUS_NAV } from './components/NavBar'
 import Bookshelf from './components/Bookshelf'
 import BookModal from './components/BookModal'
+import BookOpen from './components/BookOpen'
 import SearchBar from './components/SearchBar'
 import Scanner from './components/Scanner'
 import YearProgress from './components/YearProgress'
@@ -109,6 +110,8 @@ export default function App() {
   const { profile: myProfile } = useProfile(user?.id)
 
   const [selectedBook,     setSelectedBook]     = useState(null)
+  const [modalTab,         setModalTab]         = useState('couverture')
+  const [openedBook,       setOpenedBook]       = useState(null) // { book, el } : livre ouvert en 3D
   const [showScanner,      setShowScanner]      = useState(false)
   const [filter,           setFilter]           = useState('all')
   const [activeView,       setActiveView]       = useState('library')
@@ -120,8 +123,8 @@ export default function App() {
   // On stocke l'état courant dans un ref pour éviter les stale closures
   const navStateRef = useRef(null)
   useEffect(() => {
-    navStateRef.current = { selectedBook, activeView, filter, showScanner }
-  }, [selectedBook, activeView, filter, showScanner])
+    navStateRef.current = { selectedBook, openedBook, activeView, filter, showScanner }
+  }, [selectedBook, openedBook, activeView, filter, showScanner])
 
   useEffect(() => {
     // Pousse un état "sentinelle" dès le départ — sans lui, la première navigation
@@ -135,6 +138,7 @@ export default function App() {
       // Priorité : scanner > modale livre > vue secondaire > filtre actif
       if (s.showScanner)              { setShowScanner(false);                       return }
       if (s.selectedBook)             { setSelectedBook(null);                       return }
+      if (s.openedBook)               { setOpenedBook(null);                         return }
       if (s.activeView !== 'library') { setActiveView('library'); setFilter('all'); return }
       if (s.filter !== 'all')         { setFilter('all');                            return }
       // Déjà à la racine → on ne fait rien (évite de quitter l'app)
@@ -157,9 +161,45 @@ export default function App() {
     finally { setLoginLoading(false) }
   }
 
-  const handleBookSelect = (book) => {
+  // Un livre déjà dans la bibliothèque s'ouvre en 3D ; un livre trouvé par la recherche ouvre la fiche d'ajout
+  const handleBookSelect = (book, el) => {
     const existing = books.find(b => b.google_id === (book.googleId || book.google_id))
-    setSelectedBook(existing ? { ...book, ...existing, cover: book.cover || existing.cover_url } : book)
+    if (existing) {
+      setOpenedBook({ book: { ...book, ...existing, cover: book.cover || existing.cover_url }, el: el || null })
+      return
+    }
+    setModalTab('couverture')
+    setSelectedBook(book)
+  }
+
+  const handleEditFromBook = (book, tab = 'notes') => {
+    setModalTab(tab)
+    setSelectedBook(book)
+  }
+
+  const handleSetStatuses = async (book, statuses) => {
+    try {
+      await updateBook(book.id, { statuses })
+      if (statuses.includes('en_cours') && !(book.statuses || []).includes('en_cours')) {
+        logActivity({ action: 'en_cours', book })
+        showToast('Bonne lecture')
+      } else {
+        showToast('Mis à jour')
+      }
+    } catch (e) {
+      showToast(e.message || 'Erreur lors de la sauvegarde', 'error')
+      throw e
+    }
+  }
+
+  const handleRemoveFromBook = async (book) => {
+    try {
+      await removeBook(book.id)
+      showToast('Livre retiré')
+    } catch (e) {
+      showToast('Erreur lors de la suppression', 'error')
+      throw e
+    }
   }
 
   const handleSaveBook = async ({ statuses, rating, notes }) => {
@@ -430,12 +470,27 @@ export default function App() {
           <BookModal
             book={selectedBook}
             isInLibrary={isInLibrary(selectedBook?.googleId || selectedBook?.google_id)}
+            initialTab={modalTab}
             onClose={() => setSelectedBook(null)}
             onSave={handleSaveBook}
             onRemove={handleRemoveBook}
           />
         )}
       </AnimatePresence>
+
+      {/* Livre ouvert en 3D */}
+      {openedBook && (
+        <BookOpen
+          key={openedBook.book.id}
+          book={openedBook.book}
+          fromEl={openedBook.el}
+          ownerName={myProfile?.display_name || user.user_metadata?.full_name || ''}
+          onClose={() => setOpenedBook(null)}
+          onEdit={handleEditFromBook}
+          onSetStatuses={handleSetStatuses}
+          onRemove={handleRemoveFromBook}
+        />
+      )}
 
       {/* Scanner */}
       <AnimatePresence>
