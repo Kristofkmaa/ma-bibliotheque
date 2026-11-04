@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { toDisplay, spineColors } from '../lib/bookUtils'
-import { STATUSES } from '../hooks/useLibrary'
 
 const EASE = 'cubic-bezier(.2, .8, .2, 1)'
 const EASE_SHEET = 'cubic-bezier(.76, 0, .18, 1)'
@@ -28,12 +27,12 @@ function Line({ children, className = '' }) {
  * l'encre qui s'étale sur la couverture, chaque ligne de texte qui monte de son masque.
  * mode = 'edit' (livre de la bibliothèque) ou 'add' (résultat de recherche).
  */
-export default function DetailSheet({ book, mode, originRect, open, onClosed, onSave, onRemove, onAdd, inLibrary }) {
+export default function DetailSheet({ book, mode, originRect, open, onClosed, onSave, onRemove, onAdd, inLibrary, shelfOptions = [], defaultShelf = null }) {
   const d = toDisplay(book)
   const [bg, ink] = spineColors(d)
   const sheetRef = useRef(null)
   const blobRefs = useRef([])
-  const [statuses, setStatuses] = useState(d.statuses.length ? d.statuses : (mode === 'add' ? ['souhaite'] : []))
+  const [shelfId, setShelfId] = useState(defaultShelf || shelfOptions[0]?.id || null)
   const [rating, setRating] = useState(d.rating || 0)
   const [notes, setNotes] = useState(d.notes)
   const [busy, setBusy] = useState(false)
@@ -93,12 +92,11 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
     a.onfinish = () => onClosed?.()
   }, [open, originRect, onClosed])
 
-  const toggleStatus = id => setStatuses(prev => (prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]))
 
   const handleSave = async () => {
     setBusy(true); setFeedback('')
     try {
-      await onSave({ statuses, rating: rating > 0 ? rating : null, notes })
+      await onSave({ rating: rating > 0 ? rating : null, notes })
       setFeedback('Enregistré')
       setTimeout(() => setFeedback(''), 1800)
     } catch (e) { setFeedback('Erreur : ' + (e.message || e)) }
@@ -107,7 +105,7 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
 
   const handleAdd = async () => {
     setBusy(true); setFeedback('')
-    try { await onAdd(statuses.length ? statuses : ['souhaite']) }
+    try { await onAdd(shelfId) }
     catch (e) { setFeedback('Erreur : ' + (e.message || e)); setBusy(false) }
   }
 
@@ -141,16 +139,18 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
             </Line>
             {d.isbn && <Line className="detail-credit">ISBN {d.isbn}</Line>}
 
-            <Line>
-              <div className="detail-field-label">Statut</div>
-              <div className="toggle-row">
-                {STATUSES.map(s => (
-                  <button key={s.id} type="button" className={'lbl toggle' + (statuses.includes(s.id) ? ' on' : '')} onClick={() => toggleStatus(s.id)}>
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </Line>
+            {mode === 'add' && !inLibrary && shelfOptions.length > 1 && (
+              <Line>
+                <div className="detail-field-label">Ranger sur l'étagère</div>
+                <div className="toggle-row">
+                  {shelfOptions.map(s => (
+                    <button key={s.id} type="button" className={'lbl toggle' + (shelfId === s.id ? ' on' : '')} onClick={() => setShelfId(s.id)}>
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </Line>
+            )}
 
             {mode === 'edit' && (
               <>

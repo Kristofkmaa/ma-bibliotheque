@@ -1,6 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { spineColors, authorInitials, toRoman, titleKey, authorKey, toDisplay } from '../lib/bookUtils'
-import { getBookStatuses } from '../hooks/useLibrary'
 import { cursor } from '../lib/cursorState'
 import { resolveSkin, skinVars, DEFAULT_SKIN } from '../lib/skins'
 import {
@@ -55,14 +54,13 @@ function fitTitle(title, ws, H, hasArt) {
   return { fs: Math.max(7.5, fs), lines }
 }
 
-const isWish = statuses => statuses.includes('souhaite') && !statuses.some(s => s === 'possede' || s === 'lu' || s === 'en_cours')
+
 
 const Book3D = memo(function Book3D({ book, L, side, z, delay, highlight, onOpen, onHover }) {
   const d = toDisplay(book)
   const [bg, ink] = spineColors(book)
-  const statuses = getBookStatuses(book)
-  const reading = statuses.includes('en_cours')
-  const wish = isWish(statuses)
+  const reading = false
+  const wish = false
   const hasArt = !!d.cover && L.ws >= 24
   const { fs, lines } = fitTitle(d.title, L.ws, L.H, hasArt)
 

@@ -1,6 +1,6 @@
 # 📚 Bibliothèque Levana
 
-Une étagère de livres en ligne, à feuilleter comme une archive : les livres lus, ceux qu'on possède, ceux qu'on attend encore.
+Une étagère de livres en ligne, à feuilleter comme une archive, rangée sur des étagères qu'on nomme comme on veut.
 
 Direction artistique « archive papier » : fond papier grainé, encre noire, cobalt, typographies Newsreader + Inter Tight.
 La bibliothèque est une vraie scène 3D (Three.js) vue de trois quarts : un meuble en bois avec ses planches, son fond et
@@ -29,13 +29,11 @@ Aucun fondu : chaque apparition est un masque, un clip ou une mise à l'échelle
 - **Étagère vivante** : au survol le livre sort de l'étagère et ses voisins s'inclinent, le ruban se balance, les livres
   se posent un à un, et au clic le livre est tiré avant que la fiche s'ouvre
 - **Tri** par ajout récent, titre (articles ignorés), auteur, année ou couleur
-- **Repères visuels** : ruban cobalt = en cours, silhouette en pointillés = souhaité, pas encore sur l'étagère
-- **Onglets de statut** avec bloc cobalt glissant, légende titre / auteur au survol
-- **Fiche livre** : résumé, auteur, année, pages, ISBN, statuts multiples, note sur 5, notes personnelles
+- **Légende** titre / auteur au survol
+- **Fiche livre** : résumé, auteur, année, pages, ISBN, note sur 5, notes personnelles ; à l'ajout, choix de l'étagère
 - **Recherche** dans des millions de livres (Google Books API)
 - **Scanner ISBN** par code-barres (caméra, html5-qrcode)
 - **Reconnaissance par photo** de couverture (Google Vision API, optionnel)
-- **4 statuts** cumulables : En cours · Lus · Possédés · Souhaités
 - **Auth Google** via Supabase, chaque personne a sa propre bibliothèque
 - **Mode démo** automatique sans Supabase (livres stockés dans le navigateur) pour tester l'interface
 - Responsive (téléphone, tablette, ordinateur), curseur personnalisé sur ordinateur, `prefers-reduced-motion` respecté

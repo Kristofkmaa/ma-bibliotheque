@@ -1,13 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from './hooks/useAuth'
-import { useLibrary, STATUSES, bookHasStatus } from './hooks/useLibrary'
+import { useLibrary } from './hooks/useLibrary'
 import { useShelves } from './hooks/useShelves'
 import { effectiveShelves, placeBook } from './lib/shelfOps'
 import { isDemoMode } from './lib/supabase'
 import { sortBooks, SORTS } from './lib/bookUtils'
 import Shelf3D from './components/Shelf3D'
 import { webglAvailable } from './three/webgl'
-import StatusTabs from './components/StatusTabs'
 import DetailSheet from './components/DetailSheet'
 import SearchPanel from './components/SearchPanel'
 import LoginPage from './components/LoginPage'
@@ -44,7 +43,6 @@ function Logo({ sub = 'Bibliothèque' }) {
 
 function Library({ user, onSignOut }) {
   const { books, loading, addBook, updateBook, removeBook, isInLibrary } = useLibrary(user.id)
-  const [filter, setFilter] = useState('tous')
   const { shelves, commit: commitShelves, storage } = useShelves(user.id)
   const [sort, setSortState] = useState(() => readPref('levana.sort2', 'manual'))
   const [newShelfSignal, setNewShelfSignal] = useState(0)
@@ -59,17 +57,11 @@ function Library({ user, onSignOut }) {
 
   const setSort = v => { setSortState(v); writePref('levana.sort2', v) }
   const manual = sort === 'manual'
-  const canEdit = manual && filter === 'tous'
+  const canEdit = manual
 
   const filtered = useMemo(() => {
-    const list = filter === 'tous' ? books : books.filter(b => bookHasStatus(b, filter))
-    return sortBooks(list, sort)
-  }, [books, filter, sort])
-
-  const tabs = useMemo(() => [
-    { id: 'tous', label: 'Tous', count: books.length },
-    ...STATUSES.map(s => ({ id: s.id, label: s.label, count: books.filter(b => bookHasStatus(b, s.id)).length })),
-  ], [books])
+    return sortBooks(books, sort)
+  }, [books, sort])
 
   const overlay = !!detail || search || scanner
 
@@ -113,7 +105,7 @@ function Library({ user, onSignOut }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [scanner, detailOpen, searchOpen, closeDetail, closeSearch])
 
-  const emptyText = filter === 'tous' ? 'Le premier rayon attend son livre' : 'Rien sur ce rayon pour le moment'
+  const emptyText = 'Le premier rayon attend son livre'
 
   return (
     <div className="scene">
@@ -128,7 +120,6 @@ function Library({ user, onSignOut }) {
       </header>
 
       <div className="scene-tabs">
-        <StatusTabs tabs={tabs} value={filter} onChange={setFilter} />
         {canEdit && (
           <button type="button" className="lbl box cobalt" onClick={e => { e.currentTarget.blur(); setNewShelfSignal(n => n + 1) }}>+ Étagère</button>
         )}
@@ -144,7 +135,7 @@ function Library({ user, onSignOut }) {
         <p className="scene-loading lbl">Ouverture des rayons…</p>
       ) : (
         <Bookcase
-          books={filtered} allBooks={books} sort={sort} viewKey={filter} manual={manual} canEdit={canEdit}
+          books={filtered} allBooks={books} sort={sort} viewKey="all" manual={manual} canEdit={canEdit}
           shelves={shelves} commitShelves={commitShelves} newShelfSignal={newShelfSignal}
           onOpen={openBook} onAdd={openSearch} locked={overlay}
           highlightId={highlightId} focusId={focusId} onFocused={onFocused} emptyText={emptyText}
@@ -175,14 +166,14 @@ function Library({ user, onSignOut }) {
           <DetailSheet
             key={detail.book.id || detail.book.googleId}
             book={detail.book} mode={detail.mode} originRect={detail.rect} open={detailOpen}
+            shelfOptions={shelves.map(s => ({ id: s.id, name: s.name }))} defaultShelf={addTarget}
             onClosed={onDetailClosed}
             inLibrary={detail.mode === 'add' && isInLibrary(detail.book.googleId)}
             onSave={async updates => { await updateBook(detail.book.id, updates) }}
             onRemove={async () => { await removeBook(detail.book.id); closeDetail() }}
-            onAdd={async statuses => {
-              const saved = await addBook(detail.book, statuses)
-              if (saved?.id && shelves.length) commitShelves(placeBook(effectiveShelves(shelves, books), saved.id, addTarget).list)
-              setFilter('tous')
+            onAdd={async shelfId => {
+              const saved = await addBook(detail.book, ['possede'])
+              if (saved?.id && shelves.length) commitShelves(placeBook(effectiveShelves(shelves, books), saved.id, shelfId || addTarget).list)
               if (saved?.id) setFocusId(saved.id)
               closeDetail()
               closeSearch()
