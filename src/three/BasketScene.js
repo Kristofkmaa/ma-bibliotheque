@@ -146,16 +146,18 @@ export class BasketScene {
       const t = i / 12
       prof.push(new THREE.Vector2(R_BOT + (R_TOP - R_BOT) * Math.pow(t, 0.85) + Math.sin(t * Math.PI) * 0.04, t * BH))
     }
-    const outer = new THREE.Mesh(new THREE.LatheGeometry(prof, 72), new THREE.MeshStandardMaterial({ map: weaveTexture(), bumpMap: weaveTexture(), bumpScale: 2.2, roughness: 0.85 }))
+    this.weave = weaveTexture().clone(); this.weave.needsUpdate = true
+    this.rope = ropeTexture().clone(); this.rope.needsUpdate = true
+    const outer = new THREE.Mesh(new THREE.LatheGeometry(prof, 72), new THREE.MeshStandardMaterial({ map: this.weave, bumpMap: this.weave, bumpScale: 2.2, roughness: 0.85 }))
     outer.castShadow = true
-    const innerMat = new THREE.MeshStandardMaterial({ map: weaveTexture(), color: 0x6f4a26, roughness: 0.95, side: THREE.BackSide })
+    const innerMat = new THREE.MeshStandardMaterial({ map: this.weave, color: 0x6f4a26, roughness: 0.95, side: THREE.BackSide })
     const inner = new THREE.Mesh(new THREE.LatheGeometry(prof.map(p => new THREE.Vector2(p.x * 0.96, p.y)), 72), innerMat)
     inner.receiveShadow = true
     const bottom = new THREE.Mesh(new THREE.CircleGeometry(R_BOT * 0.96, 48), new THREE.MeshStandardMaterial({ color: 0x5a3a1c, roughness: 1 }))
     bottom.rotation.x = -Math.PI / 2
     bottom.position.y = 0.03
     bottom.receiveShadow = true
-    const ropeMat = new THREE.MeshStandardMaterial({ map: ropeTexture(), bumpMap: ropeTexture(), bumpScale: 1.5, roughness: 0.8 })
+    const ropeMat = new THREE.MeshStandardMaterial({ map: this.rope, bumpMap: this.rope, bumpScale: 1.5, roughness: 0.8 })
     const rim = new THREE.Mesh(new THREE.TorusGeometry(R_TOP + 0.02, 0.075, 14, 96), ropeMat)
     rim.rotation.x = Math.PI / 2
     rim.position.y = BH
@@ -170,7 +172,7 @@ export class BasketScene {
     const pts = []
     for (let i = 0; i <= 24; i++) {
       const a = Math.PI * (i / 24)
-      pts.push(new THREE.Vector3(Math.cos(a) * (R_TOP * SX - 0.02), BH + Math.sin(a) * 1.15, 0))
+      pts.push(new THREE.Vector3(Math.cos(a) * (R_TOP * SX - 0.02), Math.sin(a) * 1.15, 0))
     }
     const handleMat = ropeMat.clone()
     handleMat.map = ropeTexture().clone(); handleMat.map.repeat.set(16, 1); handleMat.map.needsUpdate = true
@@ -180,17 +182,34 @@ export class BasketScene {
     this.root.add(handle)
   }
 
-  /** L'ovale s'élargit (et s'approfondit un peu) avec k ; la hauteur ne change pas. */
-  _applyScale() {
-    const k = this.k.v
-    this.body.scale.set(SX * k, 1, SZ * (1 + (k - 1) * 0.6))
-    this.handle.scale.set(k, 1, 1)
+  /**
+   * Proportions du panier pour une largeur k : il garde une silhouette harmonieuse en grandissant
+   * (plus profond, un peu plus haut, anse plus haute) au lieu de s'aplatir.
+   */
+  _dims(k = this.k.v) {
+    return { kx: k, kz: 1 + (k - 1) * 0.85, ky: 1 + (k - 1) * 0.35, kh: 1 + (k - 1) * 0.6 }
   }
 
-  /** Largeur du cadre : le panier grandit à l'écran, les livres gardent leur taille. */
+  _applyScale() {
+    const { kx, kz, ky, kh } = this._dims()
+    this.body.scale.set(SX * kx, ky, SZ * kz)
+    this.handle.position.y = BH * ky
+    this.handle.scale.set(kx, kh, 1)
+    // l'osier garde la même maille quelle que soit la taille
+    this.weave.repeat.set(7 * (kx + kz) / 2, 3.2 * ky)
+    this.rope.repeat.set(30 * (kx + kz) / 2, 1)
+  }
+
+  /** Cadre : le panier grandit à l'écran dans les deux sens (mêmes proportions), sans devenir gigantesque. */
   _sizeContainer() {
-    const w = Math.round(this.baseWidth * (1 + Math.min(0.62, (this.k.v - 1) * 0.85)))
-    if (w !== this._lastW) { this._lastW = w; this.container.style.width = `${w}px` }
+    const g = Math.min(0.62, (this.k.v - 1) * 0.75)
+    const w = Math.round(this.baseWidth * (1 + g))
+    const h = Math.round(this.baseWidth * 0.95 * (1 + g * 0.55))
+    if (w !== this._lastW || h !== this._lastH) {
+      this._lastW = w; this._lastH = h
+      this.container.style.width = `${w}px`
+      this.container.style.height = `${h}px`
+    }
   }
 
   resize() {
@@ -205,11 +224,11 @@ export class BasketScene {
 
   /** Cadre la caméra sur le panier (largeur actuelle) et son anse. */
   _fit() {
-    const k = this.k.v, kz = 1 + (k - 1) * 0.6
+    const { kx: k, kz, ky, kh } = this._dims()
     const target = new THREE.Vector3(0, 0.95, 0)
     const dir = new THREE.Vector3(Math.sin(CAM_AZ), CAM_TILT, Math.cos(CAM_AZ)).normalize()
     const pts = []
-    for (const x of [-SX * 1.08 * k, SX * 1.08 * k]) for (const y of [0, BH + 1.25]) for (const z of [-SZ * kz, SZ * kz]) pts.push(new THREE.Vector3(x, y, z))
+    for (const x of [-SX * 1.08 * k, SX * 1.08 * k]) for (const y of [0, BH * ky + 1.15 * kh + 0.1]) for (const z of [-SZ * kz, SZ * kz]) pts.push(new THREE.Vector3(x, y, z))
     let lo = 1, hi = 60
     for (let i = 0; i < 26; i++) {
       const d = (lo + hi) / 2
@@ -294,7 +313,7 @@ export class BasketScene {
   _startPose(b) {
     const el = Math.atan2(CAM_TILT, 1)
     // juste au-dessus de sa place : il tombera tout droit dans sa tranche
-    return { x: b.base.x, y: BH + BOOK_H / 2 + 0.55, z: b.base.z, rx: -el, ry: CAM_AZ, rz: 0 }
+    return { x: b.base.x, y: BH * this._dims().ky + BOOK_H / 2 + 0.55, z: b.base.z, rx: -el, ry: CAM_AZ, rz: 0 }
   }
 
   /** Fait apparaître un livre ; s'il doit tomber, il part de la pose de départ. */
@@ -382,7 +401,7 @@ export class BasketScene {
     })
     // largeur du panier : juste assez pour les places occupées (coins du bas dans l'ovale)
     const fits = k => {
-      const kz = 1 + (k - 1) * 0.6
+      const { kz } = this._dims(k)
       const ax = R_BOT * 0.93 * SX * k, bz = R_BOT * 0.93 * SZ * kz
       for (const b of list) {
         const sl = slots[b.slot]
@@ -462,9 +481,9 @@ export class BasketScene {
 
   /** Points d'accroche des éléments HTML : l'étiquette sur le devant, l'ouverture (cible des envols). */
   _emitAnchors() {
-    const kz = 1 + (this.k.v - 1) * 0.6
+    const { kz, ky } = this._dims()
     const p = (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(this.camera); return { x: (v.x + 1) / 2 * this.w, y: (1 - v.y) / 2 * this.h } }
-    this.cb.onAnchors?.({ tag: p(0.15, BH * 0.42, SZ * kz * 0.95), mouth: p(0, BH + 0.1, 0) })
+    this.cb.onAnchors?.({ tag: p(0.15, BH * ky * 0.42, SZ * kz * 0.95), mouth: p(0, BH * ky + 0.1, 0) })
   }
 
   // ---- Boucle --------------------------------------------------------------------------------

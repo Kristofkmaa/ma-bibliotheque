@@ -120,13 +120,38 @@ export class BookcaseScene {
   resize() {
     const w = this.container.clientWidth, h = this.container.clientHeight
     if (!w || !h) return
+    if (w === this.w && h === this.h && this.layout) return
     this.w = w; this.h = h
     this.renderer.setSize(w, h, false)
     this.camera.aspect = w / h
-    this.layout = worldLayout(w, h, window.innerWidth <= 767)
-    this._buildCase()
-    this._fitCamera()
-    this._placeAll(true)
+    const next = worldLayout(w, h, window.innerWidth <= 767)
+    const sameShape = lay => lay.rows === this.layout.rows && lay.mobile === this.layout.mobile && Math.abs(lay.CW - this.layout.CW) < 1e-6
+    if (!this.layout) {
+      // premier affichage
+      this.layout = next
+      this._buildCase()
+      this._fitCamera()
+      this._placeAll(true)
+    } else if (sameShape(next)) {
+      this._fitCamera()
+    } else {
+      // La taille change (fenêtre, panier qui s'anime à côté…) : on recadre tout de suite, mais on
+      // ne reconstruit le meuble qu'une fois la taille stabilisée, en gardant les portes telles quelles.
+      this._fitCamera()
+      clearTimeout(this.rebuildTimer)
+      this.rebuildTimer = setTimeout(() => {
+        if (this.disposed) return
+        const lay = worldLayout(this.w, this.h, window.innerWidth <= 767)
+        if (sameShape(lay)) return
+        this.layout = lay
+        this._buildCase()
+        this._fitCamera()
+        this._placeAll(false)
+        this.kick()
+      }, 220)
+    }
+    this._ppu = null
+    this.overlayKey = ''
     this.kick()
   }
 
@@ -186,8 +211,12 @@ export class BookcaseScene {
   }
 
   _buildCase() {
+    const rebuilding = !!this.caseParts
     for (const o of [...this.caseGroup.children]) { this.caseGroup.remove(o); o.geometry?.dispose() }
     for (const o of [...this.doorsGroup.children]) { this.doorsGroup.remove(o); o.geometry?.dispose() }
+    // libère les matériaux de l'ancien meuble
+    this.caseParts?.forEach(pt => { pt.wood.dispose(); pt.wall.dispose(); pt.doorMats.forEach(m => m.dispose()) })
+    this.crown?.material.dispose()
     const { rows, CW } = this.layout
     const H = rows * (RH + PT) + PT
     this.caseParts = []
@@ -218,7 +247,7 @@ export class BookcaseScene {
       const dl = new THREE.Mesh(new THREE.BoxGeometry(half, RH - 0.02, DOOR_T), doorMatL)
       const dr = new THREE.Mesh(new THREE.BoxGeometry(CW, RH - 0.02, DOOR_T), doorMatR)
       const dz = SD / 2 + 0.06
-      dl.position.set(0, y0 + RH / 2, dz); dr.position.set(0, y0 + RH / 2, dz + 0.004)
+      dl.position.set(0, y0 + RH / 2, dz); dr.position.set(0, y0 + RH / 2, dz + DOOR_T + 0.012) // jamais dans le même plan : pas de scintillement
       dl.castShadow = dr.castShadow = true
       this.doorsGroup.add(dl, dr)
       part.doorL = dl; part.doorR = dr; part.doorMats = [doorMatL, doorMatR]; part.doorStyle = 'panneau'
@@ -234,7 +263,12 @@ export class BookcaseScene {
     this.crown = crown
     this.caseGroup.add(crown)
     this.rowSkins = []
-    if (this.rowsData) this.setRows(this.rowsData, { instant: true })
+    if (this.rowsData) this.setRows(this.rowsData, { instant: !rebuilding })
+    if (rebuilding) {
+      // reconstruction : les portes reprennent leur position (pas de fermeture/réouverture)
+      this._updateDoorTargets()
+      this.caseParts.forEach(pt => { pt.left.snap(pt.left.t); pt.right.snap(pt.right.t); pt.born.snap(1) })
+    }
   }
 
   /** Apparence d'un rayon : couleurs du bois, du fond, style des portes (les couleurs se fondent). */
@@ -715,6 +749,7 @@ export class BookcaseScene {
 
   dispose() {
     this.disposed = true
+    clearTimeout(this.rebuildTimer)
     this.ro.disconnect()
     const el = this.renderer.domElement
     el.removeEventListener('pointermove', this.onMove)

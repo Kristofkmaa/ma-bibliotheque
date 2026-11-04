@@ -79,11 +79,16 @@ export default function Bookcase3D({
 
   useLayoutEffect(() => {
     const el = caseRef.current
-    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight, mobile: window.innerWidth <= 767 })
+    const measure = () => setSize(prev => {
+      const next = { w: el.clientWidth, h: el.clientHeight, mobile: window.innerWidth <= 767 }
+      return prev.w === next.w && prev.h === next.h && prev.mobile === next.mobile ? prev : next
+    })
     measure()
-    const ro = new ResizeObserver(measure)
+    // on attend que la taille se stabilise (panier qui s'anime à côté) avant de réorganiser les rayons
+    let t = null
+    const ro = new ResizeObserver(() => { clearTimeout(t); t = setTimeout(measure, 220) })
     ro.observe(el)
-    return () => ro.disconnect()
+    return () => { clearTimeout(t); ro.disconnect() }
   }, [])
 
   const L = useMemo(() => worldLayout(size.w, size.h, size.mobile), [size])
