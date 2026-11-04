@@ -14,6 +14,11 @@ Aucun fondu : chaque apparition est un masque, un clip ou une mise à l'échelle
 ## ✨ Fonctionnalités
 
 - **Étagère en perspective** : livres en volume, rayons étiquetés (« Rayon II · E – P »), étagères suivantes avec ← →
+- **Portes coulissantes** : la bibliothèque s'ouvre portes fermées puis elles coulissent ; sur chaque rayon, une porte
+  cache la place libre (avec « + Ajouter un livre ») ; changer d'étagère, de filtre ou de tri ferme les portes, échange
+  les livres derrière et les rouvre
+- **Étagère vivante** : au survol le livre sort de l'étagère et ses voisins s'inclinent, le ruban se balance, les livres
+  se posent un à un, et au clic le livre est tiré avant que la fiche s'ouvre
 - **Tri** par ajout récent, titre (articles ignorés), auteur, année ou couleur
 - **Repères visuels** : ruban cobalt = en cours, silhouette en pointillés = souhaité, pas encore sur l'étagère
 - **Onglets de statut** avec bloc cobalt glissant, légende titre / auteur au survol

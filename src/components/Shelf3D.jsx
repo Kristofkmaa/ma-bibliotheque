@@ -4,11 +4,12 @@ import { getBookStatuses } from '../hooks/useLibrary'
 import { cursor } from '../lib/cursorState'
 import Caption from './Caption'
 
-const EASE = 'cubic-bezier(.2, .8, .2, 1)'
 const PLANK = 16       // épaisseur de la planche (px)
 const ROOM = 34        // espace libre au-dessus des livres (px)
 const CHAR = 0.74      // largeur moyenne d'une capitale Newsreader (em)
 const TOP = 30         // marge haute réservée à la couronne du meuble (px)
+const CLOSE_MS = 640   // durée de fermeture des portes (doit suivre le CSS)
+const STAGGER = 80     // décalage entre rayons (ms)
 
 /** Géométrie : nombre de rayons par étagère, taille des livres, livres par rayon. */
 function computeLayout(w, h, mobile) {
@@ -100,7 +101,7 @@ const isWish = statuses => statuses.includes('souhaite') && !statuses.some(s => 
  * donc bouger (survol, prise en main) sans aucun recalcul de la scène.
  * Résultat identique à une vraie scène 3D, sans aucun coût à l'affichage.
  */
-const Row = memo(function Row({ row, r, label, L, z, first, highlightId, onOpen, onHover }) {
+const Row = memo(function Row({ row, r, label, L, z, first, highlightId, onOpen, onHover, doorsOpen, doorLabel, onAdd }) {
   const { w: W, rowH, H, ws, gap, D, padX, P, m } = L
   const ox = W / 2, oy = rowH * 0.22
   const X0 = m, X1 = W - m
@@ -181,6 +182,11 @@ const Row = memo(function Row({ row, r, label, L, z, first, highlightId, onOpen,
         </div>
       </div>
 
+      <Doors
+        L={L} r={r} ox={ox} oy={oy} scale={k(zf + 6)} yp={yp} count={row.length}
+        open={doorsOpen} label={doorLabel} onAdd={onAdd}
+      />
+
       <div className="layer" style={{ transformOrigin: `${ox}px ${oy}px`, transform: `scale(${k(zp).toFixed(4)})` }}>
         {first && <div className="crown" style={{ top: -PLANK, height: PLANK, left: X0 - 5, right: m - 5 }} />}
         <div className="plank-front" style={{ top: yp, height: PLANK, left: X0, right: m }}><span className="plank-label">{label}</span></div>
@@ -190,6 +196,50 @@ const Row = memo(function Row({ row, r, label, L, z, first, highlightId, onOpen,
     </div>
   )
 })
+
+/**
+ * Portes coulissantes d'un rayon, juste devant les livres.
+ * - ouvertes : la porte droite ferme seulement la place vide après le dernier livre ;
+ * - fermées : les deux portes se rejoignent au milieu (changement d'étagère, ouverture du site).
+ */
+function Doors({ L, r, ox, oy, scale, yp, count, open, label, onAdd }) {
+  const { w: W, m, padX, ws, gap } = L
+  const width = W - 2 * m
+  const half = width / 2
+  const used = padX + count * (ws + gap) + 12 // fin du dernier livre, plus un souffle
+  const empty = count === 0
+  const fullyOpen = open && !empty && used > width - 40
+  // position du bord d'attaque de chaque porte (en px depuis la gauche du meuble)
+  const rightX = !open || empty ? half : fullyOpen ? width + 30 : used
+  const leftX = !open || empty ? half : -30
+  // la porte propose d'ajouter un livre quand elle cache une vraie place libre (ou un rayon vide)
+  const wideFree = open && !fullyOpen && (empty || width - used > 150)
+  const delay = r * STAGGER
+
+  return (
+    <div className="layer" style={{ transformOrigin: `${ox}px ${oy}px`, transform: `scale(${scale.toFixed(4)})` }}>
+      <div className={'doors ' + (open ? 'opening' : 'closing')} style={{ left: m, width, top: 0, height: yp }}>
+        <div
+          className="door left" aria-hidden="true"
+          style={{ width: half + 1, '--x': `${(leftX - half - 1).toFixed(1)}px`, transitionDelay: `${delay}ms` }}
+        >
+          <span className="pull" />
+        </div>
+        <div
+          className={'door right' + (wideFree ? ' free' : '')}
+          style={{ width, '--x': `${rightX.toFixed(1)}px`, transitionDelay: `${delay}ms` }}
+        >
+          <span className="pull" />
+          {wideFree ? (
+            <button type="button" className="door-card" onClick={onAdd}>+ Ajouter un livre</button>
+          ) : (
+            <span className="door-card" aria-hidden="true">{label}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function rowLabel(row, i, page, rows, sort) {
   const n = toRoman(page * rows + i + 1)
@@ -215,9 +265,8 @@ function rowLabel(row, i, page, rows, sort) {
  * Ils ne bougent pas : on change d'étagère avec les flèches (la page se dévoile d'un bloc),
  * on clique un livre pour ouvrir sa fiche.
  */
-export default function Shelf3D({ books, sort, onOpen, locked, highlightId, focusId, onFocused, emptyText }) {
+export default function Shelf3D({ books, sort, viewKey, onOpen, onAdd, locked, highlightId, focusId, onFocused, emptyText }) {
   const caseRef = useRef(null)
-  const pageRef = useRef(null)
   const [size, setSize] = useState({ w: 0, h: 0, mobile: false })
   const [page, setPage] = useState(0)
   const [dir, setDir] = useState(1)
@@ -265,15 +314,32 @@ export default function Shelf3D({ books, sort, onOpen, locked, highlightId, focu
     onFocused?.()
   }, [focusId, books, L.perPage, current, onFocused])
 
-  // L'étagère suivante se dévoile d'un bloc (masque), les livres eux ne bougent pas
-  useLayoutEffect(() => {
-    const el = pageRef.current
-    if (!el) return
-    const from = dir > 0 ? 'inset(0 0 0 100%)' : 'inset(0 100% 0 0)'
-    const a = el.animate([{ clipPath: from }, { clipPath: 'inset(0 0 0 0)' }], { duration: 760, easing: EASE })
-    return () => a.cancel()
+  // Ce qui est affiché derrière les portes. On ne change de contenu que portes fermées :
+  // fermeture → échange des livres → réouverture. Une simple mise à jour (note, statut)
+  // passe directement, sans animation.
+  const key = `${viewKey}|${books.length}|${current}|${L.perPage}`
+  const [shown, setShown] = useState({ key, books, page: current })
+  const [doorsOpen, setDoorsOpen] = useState(false)
+
+  // Ouverture du site : la bibliothèque apparaît portes fermées, puis elles coulissent
+  useEffect(() => {
+    const t = setTimeout(() => setDoorsOpen(true), 420)
+    return () => clearTimeout(t)
+  }, [])
+
+  useEffect(() => {
+    if (key === shown.key) {
+      if (books !== shown.books) setShown(s => ({ ...s, books }))
+      return
+    }
+    setDoorsOpen(false)
+    const t = setTimeout(() => {
+      setShown({ key, books, page: current })
+      setDoorsOpen(true)
+    }, CLOSE_MS + (L.rows - 1) * STAGGER + 60)
+    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current])
+  }, [key, books, current])
 
   // Clavier, molette, glissé du doigt : changer d'étagère
   useEffect(() => {
@@ -312,10 +378,10 @@ export default function Shelf3D({ books, sort, onOpen, locked, highlightId, focu
   }, [go])
 
   const rows = useMemo(() => {
-    const start = current * L.perPage
-    const slice = books.slice(start, start + L.perPage)
+    const start = shown.page * L.perPage
+    const slice = shown.books.slice(start, start + L.perPage)
     return Array.from({ length: L.rows }, (_, r) => slice.slice(r * L.perRow, (r + 1) * L.perRow))
-  }, [books, current, L])
+  }, [shown, L])
 
   const hd = hovered ? toDisplay(hovered) : null
   const caption = hd
@@ -330,15 +396,16 @@ export default function Shelf3D({ books, sort, onOpen, locked, highlightId, focu
         className="case3d" ref={caseRef}
         style={{ '--H': `${L.H}px`, '--ws': `${L.ws}px`, '--gap': `${L.gap}px`, '--padx': `${L.padX}px` }}
       >
-        <div className="case-page" ref={pageRef} key={current}>
+        <div className="case-page">
           {rows.map((row, r) => (
             <Row
               key={r} row={row} r={r} L={L} z={L.rows - r} first={r === 0}
-              label={rowLabel(row, r, current, L.rows, sort)}
+              label={rowLabel(row, r, shown.page, L.rows, sort)}
               highlightId={highlightId} onOpen={onOpen} onHover={setHovered}
+              doorsOpen={doorsOpen} doorLabel={row.length || books.length ? `Étagère ${toRoman(current + 1)}` : 'Bibliothèque Levana'} onAdd={onAdd}
             />
           ))}
-          {!books.length && <p className="row-empty">{emptyText}</p>}
+          {!shown.books.length && doorsOpen && <p className="row-empty">{emptyText}</p>}
         </div>
       </div>
 

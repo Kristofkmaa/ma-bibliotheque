@@ -177,6 +177,59 @@ a { color: inherit; }
   border-left: 1px solid rgba(20, 16, 10, 0.25); border-right: 1px solid rgba(20, 16, 10, 0.25);
 }
 
+/* Portes coulissantes ------------------------------------------------------------ */
+/* Elles ferment ce qu'on ne doit pas voir : la place vide d'un rayon, et toute l'étagère
+   pendant qu'on change de livres derrière. Fermeture lourde, ouverture avec du ressort. */
+.doors { position: absolute; overflow: hidden; pointer-events: none; }
+.door {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  pointer-events: auto;
+  background:
+    repeating-linear-gradient(90deg, rgba(110, 80, 30, 0.045) 0 1px, transparent 1px 6px, rgba(110, 80, 30, 0.03) 6px 7px, transparent 7px 13px),
+    linear-gradient(180deg, #E6DBC3 0%, #D9CBAD 55%, #CFBF9E 100%);
+  border-top: 1px solid rgba(20, 16, 10, 0.25); border-bottom: 1px solid rgba(20, 16, 10, 0.35);
+  will-change: transform;
+}
+.doors.closing .door { transition: transform 0.64s cubic-bezier(.62, .02, .28, 1.06); }
+.doors.opening .door { transition: transform 0.95s cubic-bezier(.3, 1.22, .42, 1); }
+/* cadre intérieur du panneau */
+.door::before {
+  content: ''; position: absolute; inset: 9px 10px;
+  border: 1px solid rgba(20, 16, 10, 0.2);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.22), inset 0 0 0 4px rgba(20, 16, 10, 0.06);
+  pointer-events: none;
+}
+/* ombre du bord d'attaque sur les livres */
+.door.right::after, .door.left::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 16px; pointer-events: none;
+}
+.door.right { border-left: 1px solid rgba(20, 16, 10, 0.4); }
+.door.right::after { left: -17px; background: linear-gradient(90deg, rgba(20, 16, 10, 0), rgba(20, 16, 10, 0.2)); }
+.door.left { border-right: 1px solid rgba(20, 16, 10, 0.4); }
+.door.left::after { right: -17px; background: linear-gradient(270deg, rgba(20, 16, 10, 0), rgba(20, 16, 10, 0.2)); }
+/* poignée encastrée */
+.pull {
+  position: absolute; top: 50%; width: 7px; height: min(46px, 30%); transform: translateY(-50%);
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(20, 16, 10, 0.4), rgba(20, 16, 10, 0.14));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.door.right .pull { left: 18px; }
+.door.left .pull { right: 18px; }
+/* porte-étiquette en laiton */
+.door-card {
+  position: absolute; top: 22px; left: 34px;
+  padding: 5px 9px 4px; white-space: nowrap;
+  font-family: var(--sans); font-weight: 600; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink); background: var(--sheet);
+  border: 1px solid #A88B4A; outline: 2px solid rgba(168, 139, 74, 0.35); outline-offset: 1px;
+}
+button.door-card { cursor: pointer; transition: background-color 0.25s var(--ease), color 0.25s var(--ease); }
+button.door-card:hover { background: var(--cobalt); color: #fff; }
+/* une porte qui couvre une place libre s'entrouvre quand on s'approche de sa poignée */
+.door { transform: translateX(calc(var(--x, 0px) + var(--nudge, 0px))); }
+.doors.opening .door.right.free:hover { --nudge: 12px; }
+
 /* Rangée de livres (dans le plan avant) */
 .row-books { position: absolute; right: 0; display: flex; align-items: flex-end; gap: var(--gap); }
 /* Un livre vivant : il se pose sur la planche, sort un peu quand on le survole,

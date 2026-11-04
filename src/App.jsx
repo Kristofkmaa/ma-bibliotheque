@@ -119,7 +119,7 @@ function Library({ user, onSignOut }) {
         <p className="scene-loading lbl">Ouverture des rayons…</p>
       ) : (
         <Shelf3D
-          books={filtered} sort={sort} onOpen={openBook} locked={overlay}
+          books={filtered} sort={sort} viewKey={filter} onOpen={openBook} onAdd={openSearch} locked={overlay}
           highlightId={highlightId} focusId={focusId} onFocused={onFocused} emptyText={emptyText}
         />
       )}
