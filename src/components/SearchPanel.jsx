@@ -10,15 +10,98 @@ function CoverImg({ src }) {
   if (!src) return null
   const https = src.replace('http://', 'https://')
   return fallback
-    ? <img src={https} alt="" loading="lazy" />
-    : <img src={relayUrl(https)} alt="" crossOrigin="anonymous" onError={() => setFallback(true)} />
+    ? <img src={https} alt="" loading="lazy" draggable="false" />
+    : <img src={relayUrl(https)} alt="" crossOrigin="anonymous" draggable="false" onError={() => setFallback(true)} />
 }
 
 const EASE_SHEET = 'cubic-bezier(.76, 0, .18, 1)'
 const HAS_VISION = !!import.meta.env.VITE_GOOGLE_VISION_API_KEY
 
 /** Panneau de recherche Google Books, plein écran, même papier que la fiche. */
-export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onScan, inBasket, onBasket, basketSlot, basketFull }) {
+export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onScan, inBasket, onBasket, onBasketDrop, basketSlot, basketFull }) {
+  const suppressClick = useRef(false)
+
+  /**
+   * Glisser une couverture des résultats jusqu'au panier (souris : on tire ; doigt : appui long).
+   * Lâchée sur le panier, elle continue d'un seul tenant jusque dans le panier 3D.
+   */
+  const startDrag = (e, b) => {
+    if (e.button > 0 || !onBasketDrop) return
+    const cover = e.currentTarget.querySelector('.result-cover')
+    const rc = cover.getBoundingClientRect()
+    const src = cover.querySelector('img')?.src
+    const fx = (e.clientX - rc.left) / rc.width, fy = (e.clientY - rc.top) / rc.height
+    const start = { x: e.clientX, y: e.clientY }
+    const touch = e.pointerType !== 'mouse'
+    let ghost = null, over = false, timer = null, last = start
+    const zone = () => document.querySelector('.search-basket')
+    const target = () => document.querySelector('.search-basket .basket3d, .search-basket .big-basket')
+
+    const place = (x, y) => {
+      ghost.style.transform = `translate(${x - fx * rc.width}px, ${y - fy * rc.height}px) rotate(-3deg) scale(${over ? 0.92 : 1.05})`
+    }
+    const begin = () => {
+      ghost = document.createElement('div')
+      ghost.className = 'drag-cover'
+      ghost.style.width = `${rc.width}px`; ghost.style.height = `${rc.height}px`
+      if (src) { const img = new Image(); img.src = src; img.alt = ''; ghost.appendChild(img) }
+      document.body.appendChild(ghost)
+      document.body.classList.add('is-dragging')
+      cover.classList.add('lifted')
+      suppressClick.current = true
+      navigator.vibrate?.(8)
+      place(last.x, last.y)
+    }
+    const isOver = (x, y) => {
+      const t = target()
+      if (!t) return false
+      const r = t.getBoundingClientRect()
+      return x > r.left - 30 && x < r.right + 30 && y > r.top - 40 && y < r.bottom + 30
+    }
+    const move = ev => {
+      last = { x: ev.clientX, y: ev.clientY }
+      const dist = Math.hypot(ev.clientX - start.x, ev.clientY - start.y)
+      if (!ghost) {
+        if (!touch && dist > 6) begin()
+        else if (touch && dist > 10) { finish(null); return }
+        if (!ghost) return
+      }
+      ev.preventDefault()
+      const o = isOver(ev.clientX, ev.clientY)
+      if (o !== over) { over = o; zone()?.classList.toggle('drop-ready', o) }
+      place(ev.clientX, ev.clientY)
+    }
+    const noScroll = ev => { if (ghost) ev.preventDefault() }
+    const finish = ev => {
+      clearTimeout(timer)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', finish)
+      window.removeEventListener('touchmove', noScroll)
+      if (!ghost) return
+      document.body.classList.remove('is-dragging')
+      zone()?.classList.remove('drop-ready')
+      const g = ghost
+      ghost = null
+      setTimeout(() => { suppressClick.current = false }, 60)
+      if (ev && ev.type === 'pointerup' && over) {
+        // le livre volant reprend exactement là où on l'a lâché
+        const r = g.getBoundingClientRect()
+        g.remove()
+        cover.classList.remove('lifted')
+        onBasketDrop(b, { left: r.left, top: r.top, width: r.width, height: r.height }, src)
+      } else {
+        g.animate([{ transform: g.style.transform }, { transform: `translate(${rc.left}px, ${rc.top}px) rotate(0deg) scale(1)` }],
+          { duration: 380, easing: 'cubic-bezier(.3, 1.25, .5, 1)' }).onfinish = () => { g.remove(); cover.classList.remove('lifted') }
+      }
+    }
+    if (touch) timer = setTimeout(() => { if (!ghost) begin() }, 320)
+    window.addEventListener('pointermove', move, { passive: false })
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', finish)
+    window.addEventListener('touchmove', noScroll, { passive: false })
+  }
+
   const panel = useRef(null)
   const inputRef = useRef(null)
   const fileRef = useRef(null)
@@ -113,12 +196,18 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
             {results.map(b => {
               const here = isInLibrary(b.googleId)
               const picked = inBasket(b.googleId)
+              const draggable = !here && !picked && !basketFull
               return (
-                <div key={b.googleId} className="result-card">
-                  <button type="button" className="result-open" onClick={e => onPick(b, e.currentTarget.querySelector('.result-cover')?.getBoundingClientRect())}>
+                <div key={b.googleId} className={'result-card' + (here ? ' owned' : '') + (draggable ? ' can-drag' : '')}>
+                  <button
+                    type="button" className="result-open"
+                    onPointerDown={draggable ? e => startDrag(e, b) : undefined}
+                    onDragStart={e => e.preventDefault()}
+                    onClick={e => { if (suppressClick.current) return; onPick(b, e.currentTarget.querySelector('.result-cover')?.getBoundingClientRect()) }}
+                  >
                     <div className="result-cover">
                       <CoverImg src={b.cover} />
-                      {here && <span className="in-lib">Déjà là</span>}
+                      {here && <span className="in-lib">Déjà dans ta bibliothèque</span>}
                     </div>
                     <div className="result-title">{b.title}</div>
                     <div className="result-author">{b.authors.join(', ')}{b.publishedDate ? ` · ${b.publishedDate.slice(0, 4)}` : ''}</div>

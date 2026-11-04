@@ -818,3 +818,22 @@ button.plank-label.over.editable:hover { transform: translate(0, calc(-50% - 1px
   .search-basket { min-width: 0; }
   .shelf-basket { min-width: 0; }
 }
+
+/* Recherche : livres déjà dans la bibliothèque (grisés), glisser vers le panier */
+.result-card.owned .result-cover img { filter: grayscale(1); opacity: 0.42; }
+.result-card.owned .result-cover { background: #D8D4CB; box-shadow: none; }
+.result-card.owned .result-title, .result-card.owned .result-author { color: var(--muted); }
+.result-card.owned:hover .result-cover { transform: none; }
+.result-cover .in-lib { background: var(--ink); left: 6px; right: 6px; text-align: center; top: auto; bottom: 8px; line-height: 1.3; }
+.result-card.can-drag .result-open { touch-action: pan-y; cursor: grab; }
+.result-cover.lifted { opacity: 0.3; transform: none !important; }
+.drag-cover {
+  position: fixed; left: 0; top: 0; z-index: 220; pointer-events: none; overflow: hidden; border-radius: 2px;
+  background: #C7692A; box-shadow: 0 26px 30px -14px rgba(20, 16, 10, 0.55);
+  transition: transform 0.12s ease-out;
+}
+.drag-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.search-basket .basket3d, .search-basket .big-basket { transition: transform 0.35s cubic-bezier(.3, 1.4, .5, 1); }
+.search-basket.drop-ready .basket3d, .search-basket.drop-ready .big-basket { transform: scale(1.06) rotate(-1.5deg); }
+.search-basket.drop-ready .sb-hint { color: var(--cobalt); }
+.search-basket.drop-ready .sb-title::after { content: ' · lâche-le ici'; font-style: italic; color: var(--cobalt); font-size: 0.6em; }

@@ -189,7 +189,7 @@ export class BasketScene {
 
   /** Largeur du cadre : le panier grandit à l'écran, les livres gardent leur taille. */
   _sizeContainer() {
-    const w = Math.round(this.baseWidth * (1 + (this.k.v - 1) * 0.85))
+    const w = Math.round(this.baseWidth * (1 + Math.min(0.62, (this.k.v - 1) * 0.85)))
     if (w !== this._lastW) { this._lastW = w; this.container.style.width = `${w}px` }
   }
 
@@ -233,9 +233,8 @@ export class BasketScene {
       if (this.books.has(it.googleId)) { this.books.get(it.googleId).item = it; return }
       this._makeBook(it)
     })
-    this.k.t = basketScale(this.books.size)
+    this._layout()   // fixe aussi la largeur du panier (k) pour que tout tienne
     if (!this.ready) { this.k.snap(this.k.t); this._applyScale(); this._sizeContainer() }
-    this._layout()
     this.ready = true
     this.kick()
   }
@@ -252,7 +251,7 @@ export class BasketScene {
   _makeBook(item) {
     const book = toBook(item)
     const h = hashString(item.googleId)
-    const t = 0.13 + ((h >> 3) % 6) * 0.012
+    const t = 0.11 + ((h >> 3) % 5) * 0.008
     const cover = new THREE.MeshStandardMaterial({ roughness: 0.55 })
     const back = new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 })
     const spine = new THREE.MeshStandardMaterial({ map: spineTexture(book), roughness: 0.6 })
@@ -267,7 +266,7 @@ export class BasketScene {
     const b = {
       item, mesh, wrap, mats: [cover, back, spine], t,
       x: new Spring(0, 150, 0.8), y: new Spring(0, 150, 0.82), z: new Spring(0, 150, 0.8),
-      rx: new Spring(0, 120, 0.8), ry: new Spring(0, 130, 0.75), rz: new Spring(0, 130, 0.7), fresh: true,
+      rx: new Spring(0, 260, 0.9), ry: new Spring(0, 320, 0.9), rz: new Spring(0, 200, 0.85), fresh: true,
     }
     this.books.set(item.googleId, b)
     b.incoming = this.expected.delete(item.googleId)
@@ -294,7 +293,8 @@ export class BasketScene {
   /** Pose de départ d'une chute : au-dessus du panier, couverture face à nous (comme une image). */
   _startPose(b) {
     const el = Math.atan2(CAM_TILT, 1)
-    return { x: b.base.x * 0.6, y: BH + BOOK_H / 2 + 0.45, z: b.base.z + 0.35, rx: -el, ry: CAM_AZ, rz: 0 }
+    // juste au-dessus de sa place : il tombera tout droit dans sa tranche
+    return { x: b.base.x, y: BH + BOOK_H / 2 + 0.55, z: b.base.z, rx: -el, ry: CAM_AZ, rz: 0 }
   }
 
   /** Fait apparaître un livre ; s'il doit tomber, il part de la pose de départ. */
@@ -342,43 +342,67 @@ export class BasketScene {
   }
 
   /**
-   * Disposition : jusqu'à trois rangs de livres debout, couverture vers nous, un peu de travers.
-   * Chaque livre repose sur le fond (en tenant compte de son inclinaison) et reste entre les parois.
+   * Disposition « dossiers dans une corbeille » : les livres sont parallèles, couverture face à
+   * nous, rangés l'un derrière l'autre (tranches) sur 1 à 3 colonnes. Deux livres ne partagent
+   * jamais le même volume : chaque tranche a sa profondeur, et dans une tranche les livres
+   * penchent tous du même côté. Le panier s'élargit assez pour tout contenir.
    */
   _layout() {
     const list = [...this.books.values()]
     const n = list.length
-    const k = this.k.t, kz = 1 + (k - 1) * 0.6
-    const nRows = n <= 5 ? 1 : n <= 12 ? 2 : 3
-    const rows = Array.from({ length: nRows }, (_, r) => list.slice(Math.floor((r * n) / nRows), Math.floor(((r + 1) * n) / nRows)))
-    const halfDepth = R_BOT * 0.9 * SZ * kz
-    rows.forEach((row, ri) => {
-      const cnt = row.length
-      if (!cnt) return
-      const depthPos = nRows === 1 ? 0.12 : -0.38 + (0.76 * ri) / (nRows - 1)  // du fond vers l'avant
-      const z = depthPos * halfDepth
-      const lift = (nRows - 1 - ri) * 0.16                                         // les rangs du fond dépassent
-      // demi-largeur intérieure au fond, à cette profondeur (ellipse)
-      const halfIn = R_BOT * 0.92 * SX * k * Math.sqrt(Math.max(0.2, 1 - (z / (R_BOT * SZ * kz)) ** 2))
-      row.forEach((b, i) => {
-        const h = hashString(b.item.googleId)
-        const rz0 = Math.max(-0.14, Math.min(0.14, ((h % 15) - 7) * 0.02))
-        const ry = (((h >> 4) % 9) - 4) * 0.045
-        // emprise au sol du livre incliné, pour rester entre les parois
-        const foot = (BOOK_W / 2) * Math.cos(rz0) + (BOOK_H / 2) * Math.abs(Math.sin(rz0)) * 0.35 + 0.04
-        const span = Math.max(0, 2 * (halfIn - foot))
-        const step = cnt > 1 ? Math.min(0.5, span / (cnt - 1)) : 0
-        const x = cnt > 1 ? -((cnt - 1) * step) / 2 + i * step : 0
-        // le coin le plus bas touche le fond
-        const y = 0.04 + (BOOK_H / 2) * Math.cos(rz0) + (BOOK_W / 2) * Math.abs(Math.sin(rz0)) + lift
-        b.base = { x, y, z: z + (((h >> 7) % 5) - 2) * 0.012, rz: rz0, ry }
-        if (b.fresh) {
-          b.x.snap(b.base.x); b.y.snap(b.base.y); b.z.snap(b.base.z); b.rz.snap(b.base.rz); b.ry.snap(b.base.ry)
-          b.fresh = false
-          if (!b.waiting && !b.incoming && this.ready) this._show(b, true)
-        }
-        this._target(b)
-      })
+    if (!n) { this.k.t = basketScale(0); return }
+    const cols = n <= 6 ? 1 : n <= 13 ? 2 : 3
+    const slices = Math.ceil(n / cols)
+    // alignés sur l'ovale du panier (le plus compact) ; la vue de 3/4 montre leurs couvertures
+    const nrm = new THREE.Vector3(0, 0, 1)     // vers l'avant du panier
+    const tan = new THREE.Vector3(1, 0, 0)     // de gauche à droite
+    const maxT = Math.max(...list.map(b => b.t))
+    const depth = maxT + 0.028                 // d'une tranche à l'autre
+    const pitch = BOOK_W + 0.07                // d'une colonne à l'autre
+    const lean = j => [-0.05, 0.04, -0.02, 0.05, -0.04, 0.025, -0.05][j % 7]
+    const slot = (i) => {
+      const ci = i % cols, j = Math.floor(i / cols)
+      const a = (ci - (cols - 1) / 2) * pitch + (j % 2 ? 0.035 : -0.035)
+      const d = (j - (slices - 1) / 2) * depth
+      return { a, d, j }
+    }
+    // emprise au sol de chaque livre (coins du bas, livre penché) dans le repère du panier
+    const footprint = (a, d, rz) => {
+      const out = []
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const lx = sx * ((BOOK_W / 2) * Math.cos(rz) + (BOOK_H / 2) * Math.abs(Math.sin(rz)))
+        const ld = d + sz * maxT / 2
+        out.push(tan.clone().multiplyScalar(a + lx).addScaledVector(nrm, ld))
+      }
+      return out
+    }
+    const fits = k => {
+      const kz = 1 + (k - 1) * 0.6
+      const ax = R_BOT * 0.93 * SX * k, bz = R_BOT * 0.93 * SZ * kz
+      for (let i = 0; i < n; i++) {
+        const { a, d, j } = slot(i)
+        for (const c of footprint(a, d, lean(j))) if ((c.x / ax) ** 2 + (c.z / bz) ** 2 > 1) return false
+      }
+      return true
+    }
+    let k = basketScale(n)
+    while (!fits(k) && k < 2.6) k += 0.02
+    this.k.t = k
+    list.forEach((b, i) => {
+      const { a, d, j } = slot(i)
+      const h = hashString(b.item.googleId)
+      const rz = lean(j)
+      const p = tan.clone().multiplyScalar(a).addScaledVector(nrm, d)
+      // le coin le plus bas touche le fond ; les tranches du fond dépassent un peu (posées sur les autres)
+      const lift = (slices - 1 - j) * 0.09 + ((h >> 6) % 4) * 0.01
+      const y = 0.045 + (BOOK_H / 2) * Math.cos(rz) + (BOOK_W / 2) * Math.abs(Math.sin(rz)) + lift
+      b.base = { x: p.x, y, z: p.z, rz, ry: 0 }
+      if (b.fresh) {
+        b.x.snap(b.base.x); b.y.snap(b.base.y); b.z.snap(b.base.z); b.rz.snap(b.base.rz); b.ry.snap(b.base.ry)
+        b.fresh = false
+        if (!b.waiting && !b.incoming && this.ready) this._show(b, true)
+      }
+      this._target(b)
     })
   }
 
@@ -386,10 +410,10 @@ export class BasketScene {
     const hov = b.item.googleId === this.hoverId
     b.x.t = b.base.x
     b.y.t = b.base.y + (hov ? 0.32 : 0)
-    b.z.t = b.base.z + (hov ? 0.18 : 0)
+    b.z.t = b.base.z
     b.rx.t = 0
-    b.rz.t = hov ? 0 : b.base.rz
-    b.ry.t = hov ? CAM_AZ * 0.5 : b.base.ry
+    b.rz.t = b.base.rz          // il monte dans sa tranche, sans toucher les autres
+    b.ry.t = b.base.ry
   }
 
   // ---- Interactions ------------------------------------------------------------------------

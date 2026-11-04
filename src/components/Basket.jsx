@@ -142,7 +142,7 @@ export function SearchBasket({ items, bump, onBookClick, onRemove, onDone, mobil
           ? <p className="sb-hint">Ton panier est plein ({MAX_BASKET} livres) : va les ranger sur tes étagères.</p>
           : items.length
           ? <p className="sb-hint">Continue tes trouvailles, puis va les ranger sur tes étagères.</p>
-          : <p className="sb-hint">Appuie sur <b>+</b> à côté d'un livre pour le mettre dans le panier.</p>}
+          : <p className="sb-hint">Appuie sur <b>+</b>, ou glisse un livre jusqu'ici pour le mettre dans le panier.</p>}
         {items.length > 0 && (
           <button type="button" className="lbl box cobalt sb-go" onClick={onDone}>
             Ranger mes {items.length} livre{items.length > 1 ? 's' : ''} →

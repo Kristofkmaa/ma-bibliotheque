@@ -24,7 +24,9 @@ Aucun fondu : chaque apparition est un masque, un clip ou une mise à l'échelle
   laque noire, bois blanc, acier), **couleur du fond** (8 teintes) et **portes** (panneau, cannage, lattes), avec
   « Ce style partout »
 - **Panier en osier en 3D** (Three.js : corbeille ovale tressée, bord en tresse, anse) : dans la recherche, il est posé à
-  côté des résultats ; le « + » d'un livre l'y fait voler, le livre tombe dedans et s'y tient debout, de travers. De retour à la bibliothèque, le panier est posé à
+  côté des résultats ; le « + » d'un livre (ou un glisser-déposer de sa couverture) l'y fait voler d'un seul tenant, puis
+  il tombe dans sa place. Les livres y sont rangés comme des dossiers (parallèles, jamais emmêlés) ; le panier grandit
+  avec son contenu, jusqu'à 20 livres. Les livres déjà dans la bibliothèque sont grisés dans la recherche. De retour à la bibliothèque, le panier est posé à
   côté du meuble : on attrape un livre dedans et on le pose sur l'étagère voulue (un emplacement s'ouvre dans la rangée),
   ou « Tout ranger » sur une étagère ; retirer un livre, vider le panier
 - **Pas de « chargement » à l'ajout** : un livre ajouté se pose dans la rangée et la porte s'ajuste ; les portes ne se

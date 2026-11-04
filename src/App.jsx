@@ -102,11 +102,12 @@ function Library({ user, onSignOut }) {
   // un livre en vol est déjà dans le panier (version 3D) : on compte chaque livre une seule fois
   const basketCount = new Set([...basket.items.map(b => b.googleId), ...flying]).size
   const basketFull = basketCount >= MAX_BASKET
-  const addToBasket = useCallback((book, coverEl) => {
+  const addToBasket = useCallback((book, coverEl, dropRect, dropSrc) => {
     if (basketFull) return
     preloadCover(book)
     const img = coverEl?.querySelector('img')
-    const from = coverEl?.getBoundingClientRect()
+    const from = dropRect || coverEl?.getBoundingClientRect()
+    const srcUrl = dropSrc || img?.src
     const color = spineColors({ google_id: book.googleId, title: book.title })[0]
     const done = () => setFlying(f => { const n = new Set(f); n.delete(book.googleId); return n })
     setFlying(f => new Set(f).add(book.googleId))
@@ -116,7 +117,7 @@ function Library({ user, onSignOut }) {
       api.expect(book.googleId)
       basket.add(book)
       flyIntoBasket({
-        from, src: img?.src, color,
+        from, src: srcUrl, color,
         target: () => api.startRect(book.googleId),
         ready: () => api.ready(book.googleId),
         onLand: () => api.reveal(book.googleId),
@@ -124,7 +125,7 @@ function Library({ user, onSignOut }) {
       })
     } else {
       // panier dessiné (sans 3D)
-      flyTo(from, img?.src, document.querySelector('.search-basket .bb-target'), () => {
+      flyTo(from, srcUrl, document.querySelector('.search-basket .bb-target'), () => {
         basket.add(book); done(); setBump(n => n + 1)
       }, color)
     }
@@ -241,6 +242,7 @@ function Library({ user, onSignOut }) {
       {search && (
         <>
           <SearchPanel open={searchOpen} onClosed={onSearchClosed} onPick={onPick} isInLibrary={isInLibrary} onScan={() => setScanner(true)} inBasket={inBasket} onBasket={addToBasket} basketFull={basketFull}
+            onBasketDrop={(b, rect, src) => addToBasket(b, null, rect, src)}
             basketSlot={<SearchBasket items={basket.items} bump={bump} mobile={mobile} apiRef={searchBasketApi} onBookClick={b => onPick(b, null)} onRemove={basket.remove} onDone={closeSearch} />} />
           <button type="button" className="lbl box search-close-btn" style={{ zIndex: 59, position: 'fixed' }} onClick={closeSearch}>Fermer</button>
         </>
