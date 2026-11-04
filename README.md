@@ -14,6 +14,12 @@ Aucun fondu : chaque apparition est un masque, un clip ou une mise à l'échelle
 
 ## ✨ Fonctionnalités
 
+- **Un seul grand mur** : toutes les étagères sont empilées dans le même meuble 3D, qu'on parcourt en défilant (molette,
+  doigt, flèches du clavier, élan) ; « Tout voir » (ou pincement) recule pour une vue d'ensemble, un clic sur une étagère
+  s'en rapproche. Un **sommaire** liste les étagères et y emmène, une **réglette** sur le côté montre où l'on est, et
+  **« Retrouver un livre »** va jusqu'au livre cherché, qui sort un instant de l'étagère. Seules les étagères proches de
+  l'écran ont leurs livres en 3D ; leurs portes s'ouvrent quand elles arrivent dans le champ. Pendant un glisser-déposer,
+  le mur défile tout seul près des bords.
 - **Étagère en perspective** : livres en volume, rayons étiquetés (« Rayon II · E – P »), étagères suivantes avec ← →
 - **Portes coulissantes** : la bibliothèque s'ouvre portes fermées puis elles coulissent ; sur chaque rayon, une porte
   cache la place libre (avec « + Ajouter un livre ») ; changer d'étagère, de filtre ou de tri ferme les portes, échange
@@ -119,6 +125,7 @@ src/
 │   ├── Shelf3D.jsx       # Version dessinée à plat (navigateurs sans WebGL)
 │   ├── Basket.jsx        # Panier (recherche et bibliothèque), glisser vers une étagère ; version dessinée sans WebGL
 │   ├── Basket3D.jsx      # Panier en 3D (chargé à part)
+│   ├── LibrarySearch.jsx # « Retrouver un livre » dans sa bibliothèque
 │   ├── MyShelves.jsx     # Fenêtre « Mes étagères » (meuble à plat + réglages)
 │   ├── ShelfEditor.jsx   # Carte d'édition d'une étagère (nom, matière, fond, portes, ordre)
 │   ├── Caption.jsx       # Légende : titre / auteur qui glissent dans des masques

@@ -12,9 +12,13 @@ import ShelfEditor from './ShelfEditor'
 
 const CLOSE_MS = 700
 const PH_BOOK = { id: PH, placeholder: true }
+const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`
 
-/** Découpe en rayons : les étagères (rangement manuel) ou la liste triée (autres tris). */
-function buildRows({ manual, shelves, autoBooks, byId, visible, canEdit, perRow, rowsPerPage }) {
+/**
+ * Tous les rayons du mur : les étagères (rangement manuel) ou la liste triée (autres tris).
+ * En rangement manuel, un rayon libre au bas du mur accueille une nouvelle étagère (glisser un livre).
+ */
+function buildRows({ manual, shelves, autoBooks, byId, visible, canEdit, perRow, minRows }) {
   const rows = []
   if (manual) {
     for (const s of shelves) {
@@ -27,12 +31,12 @@ function buildRows({ manual, shelves, autoBooks, byId, visible, canEdit, perRow,
       const n = Math.max(1, Math.ceil(list.length / perRow))
       for (let j = 0; j < n; j++) rows.push({ key: `${s.id}:${j}`, shelf: s, start: j * perRow, books: list.slice(j * perRow, (j + 1) * perRow), cont: j > 0 })
     }
+    if (canEdit && !shelves.some(s => s.preview)) rows.push({ key: 'free-end', free: true, books: [] })
   } else {
     const n = Math.ceil(autoBooks.length / perRow)
     for (let j = 0; j < n; j++) rows.push({ key: `a${j}`, auto: j, books: autoBooks.slice(j * perRow, (j + 1) * perRow) })
   }
-  const pad = rows.length ? (rowsPerPage - (rows.length % rowsPerPage)) % rowsPerPage : rowsPerPage
-  for (let i = 0; i < pad; i++) rows.push({ key: `free${i}`, free: true, books: [] })
+  while (rows.length < minRows) rows.push({ key: `free${rows.length}`, free: true, books: [] })
   return rows
 }
 
@@ -56,24 +60,25 @@ function autoLabel(row, n, sort) {
 }
 
 /**
- * Bibliothèque en vraie 3D, vue de trois quarts (Three.js).
- * Toute la logique (étagères, pages, portes, éditeur, glisser-déposer) est ici ;
- * le dessin et les ressorts sont dans BookcaseScene.
+ * La bibliothèque en vraie 3D : un seul grand mur qu'on parcourt en défilant, avec une vue
+ * d'ensemble, un sommaire et une réglette de position. Le dessin et les ressorts sont dans
+ * BookcaseScene ; ici : les étagères, les portes, le glisser-déposer, l'interface autour.
  */
 export default function Bookcase3D({
   books, allBooks, sort, viewKey, manual, canEdit, shelves, commitShelves, newShelfSignal,
-  onOpen, onAdd, locked, focusId, onFocused, emptyText, apiRef, aside, onShelfClick,
+  onOpen, locked, focusId, onFocused, emptyText, apiRef, aside, onShelfClick,
 }) {
   const caseRef = useRef(null)
   const sceneRef = useRef(null)
   const [size, setSize] = useState({ w: 1200, h: 520, mobile: false })
-  const [page, setPage] = useState(0)
-  const [dir, setDir] = useState(1)
   const [hovered, setHovered] = useState(null)
+  const [spot, setSpot] = useState(null)
   const [dragView, setDragView] = useState(null)
   const [bornId, setBornId] = useState(null)
   const [editing, setEditing] = useState(null)
-  const [overlay, setOverlay] = useState([])
+  const [centerRow, setCenterRow] = useState(0)
+  const [zoomedOut, setZoomedOut] = useState(false)
+  const [tocOpen, setTocOpen] = useState(false)
   const lockedRef = useRef(locked)
   lockedRef.current = locked
 
@@ -84,7 +89,6 @@ export default function Bookcase3D({
       return prev.w === next.w && prev.h === next.h && prev.mobile === next.mobile ? prev : next
     })
     measure()
-    // on attend que la taille se stabilise (panier qui s'anime à côté) avant de réorganiser les rayons
     let t = null
     const ro = new ResizeObserver(() => { clearTimeout(t); t = setTimeout(measure, 220) })
     ro.observe(el)
@@ -102,49 +106,18 @@ export default function Bookcase3D({
     [manual, eff, dragView],
   )
   const rowsAll = useMemo(
-    () => buildRows({ manual, shelves: display, autoBooks: books, byId, visible, canEdit, perRow: L.perRow, rowsPerPage: L.rows }),
+    () => buildRows({ manual, shelves: display, autoBooks: books, byId, visible, canEdit, perRow: L.perRow, minRows: L.rows }),
     [manual, display, books, byId, visible, canEdit, L.perRow, L.rows],
   )
-  const pages = Math.max(1, rowsAll.length / L.rows)
-  const current = Math.min(page, pages - 1)
-  const liveRows = useMemo(() => rowsAll.slice(current * L.rows, (current + 1) * L.rows), [rowsAll, current, L.rows])
 
-  const go = useCallback(delta => {
-    setPage(p => {
-      const next = Math.max(0, Math.min(pages - 1, Math.min(p, pages - 1) + delta))
-      if (next !== p) setDir(delta > 0 ? 1 : -1)
-      return next
-    })
-  }, [pages])
-  const goRef = useRef(go)
-  goRef.current = go
-
-  const listKey = `${viewKey}|${sort}`
-  const lastKey = useRef(listKey)
-  useEffect(() => {
-    if (lastKey.current !== listKey) { lastKey.current = listKey; setPage(0) }
-  }, [listKey])
-
-  useEffect(() => {
-    if (!focusId) return
-    const idx = rowsAll.findIndex(r => r.books.some(b => b.id === focusId))
-    if (idx < 0) return
-    const target = Math.floor(idx / L.rows)
-    setDir(target >= current ? 1 : -1)
-    setPage(target)
-    onFocused?.()
-  }, [focusId, rowsAll, L.rows, current, onFocused])
-
-  // ---- Portes : on ne change de page que portes fermées ----------------------------------
-  // Les portes ne se ferment que pour changer de page, de tri ou de vue. Un livre ajouté ou retiré,
-  // un changement de taille : les livres glissent et la porte s'ajuste, sans « chargement ».
-  const key = `${viewKey}|${sort}|${current}`
+  // ---- Portes : elles ne se ferment que pour changer de tri ou de vue -----------------------
+  const key = `${viewKey}|${sort}`
   const [shownKey, setShownKey] = useState(key)
   const [frozen, setFrozen] = useState(null)
   const [doorsOpen, setDoorsOpen] = useState(false)
   const introDone = useRef(false)
-  const lastRows = useRef(liveRows)
-  const displayRows = frozen || liveRows
+  const lastRows = useRef(rowsAll)
+  const displayRows = frozen || rowsAll
 
   useEffect(() => {
     const t = setTimeout(() => { introDone.current = true; setDoorsOpen(true) }, 450)
@@ -164,6 +137,7 @@ export default function Bookcase3D({
       setShownKey(key)
       introDone.current = true
       setDoorsOpen(true)
+      sceneRef.current?.scrollToTop()
     }, CLOSE_MS + 120)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -176,11 +150,15 @@ export default function Bookcase3D({
   const commitRef = useRef(commitShelves)
   commitRef.current = commitShelves
   const pendingNew = useRef(null)
+  const labelEls = useRef([])
+  const thumbRef = useRef(null)
+  const lastExt = useRef(null)
 
   useEffect(() => {
     const scene = new BookcaseScene(caseRef.current, {
       onHover: b => { setHovered(b); cursor.state = b ? 'open' : 'default' },
       onOpen: (b, el) => dataRef.current.onOpen(b, el),
+      isLocked: () => lockedRef.current,
       canDrag: () => { const d = dataRef.current; return d.manual && d.canEdit && !lockedRef.current },
       onDragStart: id => {
         const d = dataRef.current
@@ -198,9 +176,7 @@ export default function Bookcase3D({
           return { ...v, target: { shelfId: base.shelf.id, index: base.start + t.index } }
         })
       },
-      onDragMove: (x, y) => edgeFlip(x, y),
       onDragEnd: (id, t) => {
-        clearTimeout(edge.current.timer); edge.current.dir = 0
         setDragView(v => {
           if (t && v?.target) {
             const res = moveBook(dataRef.current.eff, id, v.target.shelfId, v.target.index)
@@ -210,7 +186,15 @@ export default function Bookcase3D({
           return null
         })
       },
-      onOverlay: setOverlay,
+      onAutoScroll: () => { const x = lastExt.current; if (x) apiRef?.current?.previewExternal(x.id, x.x, x.y) },
+      onCenter: r => setCenterRow(r),
+      onZoom: z => setZoomedOut(z < 0.5),
+      onSpot: b => setSpot(b),
+      onView: v => {
+        const el = thumbRef.current
+        if (el) { el.style.top = `${(v.top * 100).toFixed(2)}%`; el.style.height = `${Math.max(4, (v.bottom - v.top) * 100).toFixed(2)}%` }
+      },
+      labelEl: r => labelEls.current[r],
     })
     sceneRef.current = scene
     if (location.search.includes('debug')) window.__bookcase = scene // tests automatisés
@@ -218,32 +202,8 @@ export default function Bookcase3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // rayons de la page courante sans le livre déplacé (pour viser l'emplacement)
-  dataRef.current.rowsWithout = id => {
-    const lst = buildRows({ manual: true, shelves: previewDrag(eff, id, null), autoBooks: [], byId, visible, canEdit: true, perRow: L.perRow, rowsPerPage: L.rows })
-    return lst.slice(current * L.rows, (current + 1) * L.rows)
-  }
-
-  // Au bord de l'écran pendant un glisser-déposer : page suivante / précédente
-  const edge = useRef({ dir: 0, timer: null })
-  const edgeFlip = (x, y) => {
-    const rc = caseRef.current.getBoundingClientRect()
-    let dirn = 0
-    if (x < rc.left + 36) dirn = -1
-    else if (x > rc.right - 36) dirn = 1
-    document.querySelectorAll('.nav-arrow').forEach((a, i) => {
-      const r = a.getBoundingClientRect()
-      if (x >= r.left - 10 && x <= r.right + 10 && y >= r.top - 10 && y <= r.bottom + 10) dirn = i === 0 ? -1 : 1
-    })
-    if (dirn !== edge.current.dir) {
-      clearTimeout(edge.current.timer)
-      edge.current.dir = dirn
-      if (dirn) {
-        const tick = () => { goRef.current(dirn); edge.current.timer = setTimeout(tick, 1600) }
-        edge.current.timer = setTimeout(tick, 650)
-      }
-    }
-  }
+  // tous les rayons sans le livre déplacé (pour viser l'emplacement)
+  dataRef.current.rowsWithout = id => buildRows({ manual: true, shelves: previewDrag(eff, id, null), autoBooks: [], byId, visible, canEdit: true, perRow: L.perRow, minRows: L.rows })
 
   // ---- Livres venus du panier : on vise une étagère, un emplacement s'ouvre -----------------
   const extTarget = useRef(null)
@@ -254,7 +214,8 @@ export default function Bookcase3D({
         const d = dataRef.current
         const sc = sceneRef.current
         if (!sc || !d.manual || !d.canEdit) return null
-        edgeFlip(x, y)
+        lastExt.current = { id, x, y }
+        sc.setExternalPointer(x, y)
         const t = sc.targetAt(x, y)
         let target = null
         if (t) {
@@ -268,7 +229,8 @@ export default function Bookcase3D({
         return target
       },
       endExternal: () => {
-        clearTimeout(edge.current.timer); edge.current.dir = 0
+        sceneRef.current?.setExternalPointer(null)
+        lastExt.current = null
         const t = extTarget.current
         extTarget.current = null
         setDragView(null)
@@ -287,6 +249,15 @@ export default function Bookcase3D({
 
   useEffect(() => { sceneRef.current?.setRows(rowsForScene) }, [rowsForScene])
   useEffect(() => { sceneRef.current?.setDoors(doorsOpen) }, [doorsOpen])
+  useLayoutEffect(() => { sceneRef.current?.refreshOverlay() })
+
+  // Aller à un livre (après un ajout, ou depuis la recherche)
+  useEffect(() => {
+    if (!focusId) return
+    if (!rowsAll.some(r => r.books.some(b => b.id === focusId))) return
+    const t = setTimeout(() => { sceneRef.current?.focusBook(focusId); onFocused?.() }, 80)
+    return () => clearTimeout(t)
+  }, [focusId, rowsAll, onFocused])
 
   // ---- Opérations sur les étagères ----------------------------------------------------------
   const effRef = useRef(eff)
@@ -303,27 +274,26 @@ export default function Bookcase3D({
     if (newShelfSignal !== lastSignal.current) { lastSignal.current = newShelfSignal; createNew() }
   }, [newShelfSignal, createNew])
 
-  const labelRefs = useRef({})
+  const shelfLabelRefs = useRef({})
   const openEditorFor = useCallback((id, selectName) => {
-    const el = labelRefs.current[id]
+    const el = shelfLabelRefs.current[id]
     if (el) setEditing({ shelfId: id, rect: el.getBoundingClientRect(), selectName, openId: performance.now() })
   }, [])
 
+  // Une étagère vient d'être créée (livre lâché dans le rayon libre) : on y va, elle se construit
   useEffect(() => {
     const id = pendingNew.current
     if (!id) return
     const idx = rowsAll.findIndex(r => r.shelf?.id === id)
     if (idx < 0) return
     pendingNew.current = null
-    const target = Math.floor(idx / L.rows)
-    const wait = target !== current ? CLOSE_MS + 500 : 0
-    if (target !== current) { setDir(target > current ? 1 : -1); setPage(target) }
+    sceneRef.current?.scrollToRow(idx)
     setTimeout(() => {
       setBornId(id)
       setTimeout(() => openEditorFor(id, true), 1000)
       setTimeout(() => setBornId(b => (b === id ? null : b)), 1800)
-    }, wait)
-  }, [rowsAll, L.rows, current, openEditorFor])
+    }, 500)
+  }, [rowsAll, openEditorFor])
 
   const editShelf = editing ? eff.find(s => s.id === editing.shelfId) : null
   const realIndex = editShelf ? realShelves.findIndex(s => s.id === editShelf.id) : -1
@@ -332,54 +302,60 @@ export default function Bookcase3D({
     if (keepEditing && res.id && editing && res.id !== editing.shelfId) setEditing(e => e && { ...e, shelfId: res.id })
   }
 
-  // ---- Changer de page : clavier, molette, glissé du doigt ----------------------------------
+  // ---- Clavier : parcourir le mur ----------------------------------------------------------------
   useEffect(() => {
-    const el = caseRef.current
-    let acc = 0, cool = 0, startX = null
-    const busy = () => lockedRef.current || document.body.classList.contains('is-dragging')
     const onKey = e => {
-      if (busy() || (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName))) return
-      if (e.key === 'ArrowRight' || e.key === 'PageDown') go(1)
-      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(-1)
-    }
-    const onWheel = e => {
-      if (busy()) return
-      const now = performance.now()
-      if (now < cool) return
-      acc += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
-      if (Math.abs(acc) > 90) { go(acc > 0 ? 1 : -1); acc = 0; cool = now + 800 }
-    }
-    const onDown = e => { startX = e.clientX }
-    const onUp = e => {
-      if (startX == null || busy()) { startX = null; return }
-      const dx = e.clientX - startX
-      startX = null
-      if (Math.abs(dx) > 70) go(dx < 0 ? 1 : -1)
+      const sc = sceneRef.current
+      if (!sc || lockedRef.current || document.body.classList.contains('is-dragging')) return
+      if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return
+      const map = { ArrowDown: () => sc.scrollBy(1), ArrowUp: () => sc.scrollBy(-1), PageDown: () => sc.scrollBy(L.rows), PageUp: () => sc.scrollBy(-L.rows), Home: () => sc.scrollToTop(), End: () => sc.scrollToBottom() }
+      if (map[e.key]) { e.preventDefault(); map[e.key]() }
     }
     window.addEventListener('keydown', onKey)
-    el.addEventListener('wheel', onWheel, { passive: true })
-    el.addEventListener('pointerdown', onDown)
-    window.addEventListener('pointerup', onUp)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      el.removeEventListener('wheel', onWheel)
-      el.removeEventListener('pointerdown', onDown)
-      window.removeEventListener('pointerup', onUp)
-    }
-  }, [go])
+    return () => window.removeEventListener('keydown', onKey)
+  }, [L.rows])
+
+  // ---- Sommaire : une entrée par étagère (ou par rayon dans les autres tris) -----------------
+  const sections = useMemo(() => {
+    const out = []
+    displayRows.forEach((m, i) => {
+      if (m.free) return
+      if (manual) {
+        if (!m.shelf || m.shelf.preview) return
+        const last = out[out.length - 1]
+        if (m.cont && last && last.key === m.shelf.id) { last.last = i; last.count += m.books.length; return }
+        out.push({ key: m.shelf.id, label: m.shelf.name, row: i, last: i, count: m.books.length, pseudo: !!m.shelf.pseudo })
+      } else {
+        out.push({ key: m.key, label: autoLabel(m.books, m.auto, sort), row: i, last: i, count: m.books.length })
+      }
+    })
+    return out
+  }, [displayRows, manual, sort])
+  const currentSection = sections.find(s => centerRow >= s.row && centerRow <= s.last) || sections[0]
+  const totalRows = Math.max(displayRows.length, L.rows)
+
+  // fermer le sommaire en cliquant ailleurs
+  useEffect(() => {
+    if (!tocOpen) return
+    const onDown = e => { if (!e.target.closest?.('.toc')) setTocOpen(false) }
+    window.addEventListener('pointerdown', onDown)
+    return () => window.removeEventListener('pointerdown', onDown)
+  }, [tocOpen])
 
   // ---- Rendu --------------------------------------------------------------------------------
-  const shelfNames = [...new Set(displayRows.filter(r => r.shelf && !r.shelf.preview).map(r => r.shelf.name))]
-  const hd = hovered ? toDisplay(hovered) : null
-  const hint = manual && canEdit
-    ? (size.mobile ? 'Appui long sur un livre pour le déplacer' : 'Glisse un livre pour le ranger, clique pour l’ouvrir')
-    : (size.mobile ? 'Touche un livre pour l’ouvrir' : 'Survole un livre, clique pour l’ouvrir')
+  const shown = spot || hovered
+  const hd = shown ? toDisplay(shown) : null
+  const hint = zoomedOut
+    ? 'Touche une étagère pour t’en approcher'
+    : size.mobile ? 'Glisse pour parcourir · pince pour tout voir' : 'Molette pour parcourir · clique un livre pour l’ouvrir'
   const caption = hd
     ? { title: hd.title, subtitle: hd.authors.join(', '), year: [hd.year, hd.pageCount ? `${hd.pageCount} pages` : null].filter(Boolean).join(' / ') || ' ' }
     : books.length || (manual && canEdit)
       ? {
-        title: manual && shelfNames.length ? shelfNames.slice(0, 3).join(' · ') : `Étagère ${toRoman(current + 1)}`,
-        subtitle: `${books.length} ${books.length > 1 ? 'livres' : 'livre'} · page ${current + 1} sur ${pages}`,
+        title: zoomedOut ? `${plural(sections.length, 'étagère')}` : currentSection?.label || 'Ma bibliothèque',
+        subtitle: zoomedOut
+          ? `${plural(books.length, 'livre')} en tout`
+          : currentSection ? `${plural(currentSection.count, 'livre')} · étagère ${sections.indexOf(currentSection) + 1} sur ${sections.length}` : plural(books.length, 'livre'),
         year: hint,
       }
       : { title: emptyText, subtitle: 'Ajoute un livre avec le bouton en haut', year: ' ' }
@@ -387,12 +363,9 @@ export default function Bookcase3D({
   return (
     <>
       <div className="case-row">
-      <div className={'case3d webgl' + (manual && canEdit ? ' editable' : '')} ref={caseRef}>
-        {overlay.map((o, r) => {
-          const meta = displayRows[r]
-          if (!meta) return null
+      <div className={'case3d webgl' + (manual && canEdit ? ' editable' : '') + (zoomedOut ? ' overview' : '')} ref={caseRef}>
+        {displayRows.map((meta, r) => {
           const shelf = meta.shelf
-          // plus de bouton « Ajouter » sur les portes : tout se gère dans « Mes étagères »
           let label = ''
           if (manual) {
             if (shelf) label = meta.cont ? `${shelf.name} · suite` : shelf.name
@@ -400,38 +373,79 @@ export default function Bookcase3D({
             label = meta.free ? '' : autoLabel(meta.books, meta.auto, sort)
           }
           const editable = manual && canEdit && !!shelf && !meta.cont && !shelf.preview
-          return (
-            <div key={r}>
-              {label && (editable ? (
-                <button
-                  type="button" ref={el => { if (shelf) labelRefs.current[shelf.id] = el }}
-                  className={'plank-label editable over' + (meta.shelf?.id === bornId ? ' born' : '')}
-                  style={{ left: o.label.x, top: o.label.y }}
-                  onClick={e => {
-                    if (onShelfClick && !shelf.pseudo) { onShelfClick(shelf.id); return }
-                    setEditing({ shelfId: shelf.id, rect: e.currentTarget.getBoundingClientRect(), selectName: false, openId: performance.now() })
-                  }}
-                  title="Modifier cette étagère"
-                >
-                  <span className="pl-name">{label}</span><span className="pl-pen" aria-hidden="true">✎</span>
-                </button>
-              ) : (
-                <span className="plank-label over" style={{ left: o.label.x, top: o.label.y }}>{label}</span>
-              ))}
-            </div>
+          if (!label) { labelEls.current[r] = null; return null }
+          return editable ? (
+            <button
+              key={meta.key} type="button"
+              ref={el => { labelEls.current[r] = el; if (shelf) shelfLabelRefs.current[shelf.id] = el }}
+              className={'plank-label editable over' + (shelf.id === bornId ? ' born' : '')}
+              style={{ visibility: 'hidden' }}
+              onClick={e => {
+                if (onShelfClick && !shelf.pseudo) { onShelfClick(shelf.id); return }
+                setEditing({ shelfId: shelf.id, rect: e.currentTarget.getBoundingClientRect(), selectName: false, openId: performance.now() })
+              }}
+              title="Modifier cette étagère"
+            >
+              <span className="pl-name">{label}</span><span className="pl-pen" aria-hidden="true">✎</span>
+            </button>
+          ) : (
+            <span key={meta.key} ref={el => { labelEls.current[r] = el }} className="plank-label over" style={{ visibility: 'hidden' }}>{label}</span>
           )
         })}
+
+        {/* réglette : où l'on est dans le mur ; un clic sur un repère y amène */}
+        {sections.length > 1 && (
+          <div className="wall-rail" aria-hidden="true">
+            <span className="rail-track" />
+            {sections.map(s => (
+              <button
+                key={s.key} type="button" tabIndex={-1}
+                className={'rail-tick' + (s === currentSection ? ' on' : '')}
+                style={{ top: `${((s.row * 1.29 + 0.07) / (totalRows * 1.29 + 0.07)) * 100}%` }}
+                title={s.label}
+                onClick={() => sceneRef.current?.scrollToRow(s.row)}
+              />
+            ))}
+            <span className="rail-thumb" ref={thumbRef} />
+          </div>
+        )}
       </div>
       {aside}
       </div>
 
       <div className="scene-bottom">
-        <button type="button" className="nav-arrow" aria-label="Page précédente" onClick={() => go(-1)} disabled={current === 0}>
-          <svg viewBox="0 0 18 10" fill="none" stroke="currentColor" strokeWidth="1.2"><path d="M5 1 L1 5 L5 9 M1 5 L17 5" /></svg>
-        </button>
-        <Caption className="scene-caption" title={caption.title} subtitle={caption.subtitle} year={caption.year} dir={dir} />
-        <button type="button" className="nav-arrow" aria-label="Page suivante" onClick={() => go(1)} disabled={current >= pages - 1}>
-          <svg viewBox="0 0 18 10" fill="none" stroke="currentColor" strokeWidth="1.2"><path d="M13 1 L17 5 L13 9 M17 5 L1 5" /></svg>
+        <div className="toc">
+          <button type="button" className={'lbl box toc-btn' + (tocOpen ? ' on' : '')} onClick={() => setTocOpen(o => !o)} aria-expanded={tocOpen} aria-label="Sommaire">
+            <svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><path d="M0 1h12M0 5h12M0 9h12" stroke="currentColor" /></svg>
+            <span className="zl">Sommaire</span>
+          </button>
+          {tocOpen && (
+            <div className="toc-pop grain" role="menu">
+              <div className="lbl toc-head">{plural(sections.length, 'étagère')} · {plural(books.length, 'livre')}</div>
+              <div className="toc-list">
+                {sections.map((s, i) => (
+                  <button
+                    key={s.key} type="button" role="menuitem"
+                    className={'toc-item' + (s === currentSection ? ' on' : '')}
+                    onClick={() => { sceneRef.current?.scrollToRow(s.row); setTocOpen(false) }}
+                  >
+                    <span className="toc-num">{String(i + 1).padStart(2, '0')}</span>
+                    <span className="toc-name">{s.label}</span>
+                    <span className="toc-count">{s.count}</span>
+                  </button>
+                ))}
+                {!sections.length && <p className="se-note">Aucune étagère pour le moment.</p>}
+              </div>
+            </div>
+          )}
+        </div>
+        <Caption className="scene-caption" title={caption.title} subtitle={caption.subtitle} year={caption.year} dir={1} />
+        <button type="button" className={'lbl box zoom-btn' + (zoomedOut ? ' on' : '')} onClick={() => sceneRef.current?.setZoom(zoomedOut)} aria-label={zoomedOut ? 'Se rapprocher' : 'Tout voir'}>
+          {zoomedOut ? (
+            <><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><path d="M1 4V1h3M10 4V1H7M1 7v3h3M10 7v3H7" stroke="currentColor" fill="none" /></svg> <span className="zl">Se rapprocher</span></>
+          ) : (
+            <><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><path d="M4 1H1v3M7 1h3v3M4 10H1V7M7 10h3V7" stroke="currentColor" fill="none" /></svg> <span className="zl">Tout voir</span></>
+          )}
         </button>
       </div>
 

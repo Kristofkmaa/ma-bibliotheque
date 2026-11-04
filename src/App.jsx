@@ -13,6 +13,7 @@ import { isDemoMode } from './lib/supabase'
 import { sortBooks, SORTS, spineColors } from './lib/bookUtils'
 import Shelf3D from './components/Shelf3D'
 import MyShelves from './components/MyShelves'
+import LibrarySearch from './components/LibrarySearch'
 import { webglAvailable } from './three/webgl'
 import DetailSheet from './components/DetailSheet'
 import SearchPanel from './components/SearchPanel'
@@ -204,6 +205,7 @@ function Library({ user, onSignOut }) {
           <svg width="13" height="11" viewBox="0 0 13 11" aria-hidden="true"><path d="M0.5 0.5h12M0.5 5.5h12M0.5 10.5h12M0.5 0.5v10M12.5 0.5v10" stroke="currentColor" fill="none" /></svg>
           Mes étagères
         </button>
+        <LibrarySearch books={books} shelves={effShelves} onPick={id => setFocusId(id)} />
         <label className="lbl scene-sort">
           <span>Ranger par</span>
           <select value={sort} onChange={e => setSort(e.target.value)}>
