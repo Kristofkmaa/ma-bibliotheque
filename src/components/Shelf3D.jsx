@@ -544,7 +544,7 @@ export default function Shelf3D({
         if (y < rc.top || y > rc.bottom || x < rc.left || x > rc.right) continue
         const meta = base[+el.dataset.r]
         if (!meta) return null
-        if (meta.free) return { shelfId: NEWSHELF }
+        if (meta.free) return null   // pas de nouvelle étagère en lâchant un livre
         const ox = l.w / 2
         const local = ox + (x - rc.left - ox) / l.kf
         const n = meta.books.length

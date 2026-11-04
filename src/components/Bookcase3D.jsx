@@ -3,7 +3,7 @@ import { toRoman, titleKey, authorKey, toDisplay } from '../lib/bookUtils'
 import { cursor } from '../lib/cursorState'
 import { resolveSkin, DEFAULT_SKIN } from '../lib/skins'
 import {
-  PH, NEWSHELF, effectiveShelves, previewDrag, moveBook, createShelf,
+  PH, effectiveShelves, previewDrag, moveBook, createShelf,
   renameShelf, setShelfSkin, applySkinToAll, moveShelf, deleteShelf, adoptLoose,
 } from '../lib/shelfOps'
 import { BookcaseScene, worldLayout } from '../three/BookcaseScene'
@@ -16,7 +16,8 @@ const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`
 
 /**
  * Tous les rayons du mur : les étagères (rangement manuel) ou la liste triée (autres tris).
- * En rangement manuel, un rayon libre au bas du mur accueille une nouvelle étagère (glisser un livre).
+ * Les rayons libres (bas du mur) ne reçoivent pas de livres : on ne crée une étagère que
+ * depuis « Mes étagères ».
  */
 function buildRows({ manual, shelves, autoBooks, byId, visible, canEdit, perRow, minRows }) {
   const rows = []
@@ -31,7 +32,6 @@ function buildRows({ manual, shelves, autoBooks, byId, visible, canEdit, perRow,
       const n = Math.max(1, Math.ceil(list.length / perRow))
       for (let j = 0; j < n; j++) rows.push({ key: `${s.id}:${j}`, shelf: s, start: j * perRow, books: list.slice(j * perRow, (j + 1) * perRow), cont: j > 0 })
     }
-    if (canEdit && !shelves.some(s => s.preview)) rows.push({ key: 'free-end', free: true, books: [] })
   } else {
     const n = Math.ceil(autoBooks.length / perRow)
     for (let j = 0; j < n; j++) rows.push({ key: `a${j}`, auto: j, books: autoBooks.slice(j * perRow, (j + 1) * perRow) })
@@ -172,7 +172,7 @@ export default function Bookcase3D({
           if (!t) return { ...v, target: null }
           const base = d.rowsWithout(v.id)[t.row]
           if (!base) return { ...v, target: null }
-          if (base.free) return { ...v, target: { shelfId: NEWSHELF } }
+          if (base.free) return { ...v, target: null }   // pas de nouvelle étagère en lâchant un livre
           return { ...v, target: { shelfId: base.shelf.id, index: base.start + t.index } }
         })
       },
@@ -220,7 +220,7 @@ export default function Bookcase3D({
         let target = null
         if (t) {
           const base = d.rowsWithout(id)[t.row]
-          if (base) target = base.free ? { shelfId: NEWSHELF } : { shelfId: base.shelf.id, index: base.start + t.index }
+          if (base && !base.free) target = { shelfId: base.shelf.id, index: base.start + t.index }
         }
         if (JSON.stringify(target) !== JSON.stringify(extTarget.current)) {
           extTarget.current = target

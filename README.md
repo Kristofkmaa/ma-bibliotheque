@@ -43,7 +43,7 @@ Aucun fondu : chaque apparition est un masque, un clip ou une mise à l'échelle
 - **Pas de « chargement » à l'ajout** : un livre ajouté se pose dans la rangée et la porte s'ajuste ; les portes ne se
   ferment que pour changer de page ou de tri
 - **Glisser-déposer** : attrape un livre (appui long au doigt) et dépose-le ailleurs, sur la même étagère ou une autre ;
-  les livres s'écartent pour lui faire de la place, et le lâcher dans une place libre crée une nouvelle étagère ; en
+  les livres s'écartent pour lui faire de la place, et en
   approchant le bord de l'écran, on passe à la page suivante
 - **Étagère vivante** : au survol le livre sort de l'étagère et ses voisins s'inclinent, le ruban se balance, les livres
   se posent un à un, et au clic le livre est tiré avant que la fiche s'ouvre
