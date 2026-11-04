@@ -23,6 +23,8 @@ import Cursor from './components/Cursor'
 const Scanner = lazy(() => import('./components/Scanner'))
 // La bibliothèque en vraie 3D (Three.js) est chargée à part ; sans WebGL, étagère dessinée à plat
 const Bookcase3D = lazy(() => import('./components/Bookcase3D'))
+// Le salon d'accueil (3D), chargé à part lui aussi
+const LivingRoom = lazy(() => import('./components/LivingRoom'))
 const HAS_WEBGL = typeof window !== 'undefined' && webglAvailable()
 function Bookcase(props) {
   if (!HAS_WEBGL) return <Shelf3D {...props} />
@@ -31,6 +33,14 @@ function Bookcase(props) {
       <Bookcase3D {...props} />
     </Suspense>
   )
+}
+
+const SALON_SEEN = 'levana.salon.vu'
+function salonSeen() {
+  try { return !!sessionStorage.getItem(SALON_SEEN) } catch { return false }
+}
+function markSalonSeen() {
+  try { sessionStorage.setItem(SALON_SEEN, '1') } catch { /* ignore */ }
 }
 
 function readPref(key, fallback) {
@@ -63,6 +73,8 @@ function Library({ user, onSignOut }) {
   const [search, setSearch] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [scanner, setScanner] = useState(false)
+  // salon d'accueil : 'first' à l'arrivée, 'back' quand on y retourne, null dans la bibliothèque
+  const [salon, setSalon] = useState(() => (HAS_WEBGL && !salonSeen() ? 'first' : null))
   const basket = useBasket(user.id)
   const mobile = useIsMobile()
   const [bump, setBump] = useState(0)
@@ -80,7 +92,7 @@ function Library({ user, onSignOut }) {
     return sortBooks(books, sort)
   }, [books, sort])
 
-  const overlay = !!detail || search || scanner || !!shelvesOpen
+  const overlay = !!detail || search || scanner || !!shelvesOpen || !!salon
   const effShelves = useMemo(() => effectiveShelves(shelves, books), [shelves, books])
 
   const openBook = useCallback((book, el) => {
@@ -197,7 +209,14 @@ function Library({ user, onSignOut }) {
           <button type="button" className="lbl box" onClick={() => openSearch()}>+ Ajouter un livre</button>
         </div>
         <Logo />
-        <div className="top-right" />
+        <div className="top-right">
+          {HAS_WEBGL && (
+            <button type="button" className="lbl box salon-btn" onClick={e => { e.currentTarget.blur(); setSalon('back') }} aria-label="Retour au salon">
+              <svg width="13" height="12" viewBox="0 0 13 12" aria-hidden="true"><path d="M1 6L6.5 1.2 12 6M2.6 4.8V11h7.8V4.8" stroke="currentColor" fill="none" strokeWidth="1.1" /></svg>
+              <span className="salon-btn-l">Salon</span>
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="scene-tabs">
@@ -282,6 +301,17 @@ function Library({ user, onSignOut }) {
 
       {shelvesOpen && (
         <MyShelves eff={effShelves} commit={commitShelves} onDeleteBooks={removeBooks} initialId={shelvesOpen.id} onClose={() => setShelvesOpen(null)} />
+      )}
+
+      {salon && (
+        <Suspense fallback={<div className="salon" />}>
+          <LivingRoom
+            from={salon} books={books} shelves={effShelves} basketItems={basket.items}
+            onEntered={() => { markSalonSeen(); setSalon(null) }}
+            onOpenBook={b => (b ? openBook(b, null) : openSearch())}
+            onAddBooks={() => openSearch()}
+          />
+        </Suspense>
       )}
 
       {scanner && <Suspense fallback={null}><Scanner onBookFound={onScanFound} onClose={() => setScanner(false)} /></Suspense>}

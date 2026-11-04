@@ -25,7 +25,7 @@ class Spring {
 }
 
 let weaveTex = null, ropeTex = null
-function weaveTexture() {
+export function weaveTexture() {
   if (weaveTex) return weaveTex
   const c = document.createElement('canvas'); c.width = 256; c.height = 128
   const g = c.getContext('2d')
@@ -50,7 +50,7 @@ function weaveTexture() {
   weaveTex.repeat.set(7, 3.2)
   return weaveTex
 }
-function ropeTexture() {
+export function ropeTexture() {
   if (ropeTex) return ropeTex
   const c = document.createElement('canvas'); c.width = 128; c.height = 32
   const g = c.getContext('2d')
