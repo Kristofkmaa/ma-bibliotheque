@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { noTouchSelect } from './webgl'
 import { hashString } from '../lib/bookUtils'
 import { spineTexture, withCover, pagesTexture } from './textures'
 import { basketScale } from '../lib/basketSize'
@@ -85,6 +86,7 @@ export class BasketScene {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     this.renderer.domElement.className = 'basket-canvas'
     container.appendChild(this.renderer.domElement)
+    noTouchSelect(this.renderer.domElement)
 
     this.scene = new THREE.Scene()
     this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 60)

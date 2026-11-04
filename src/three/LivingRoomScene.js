@@ -6,6 +6,7 @@ import { spineColors, toDisplay } from '../lib/bookUtils'
 import { preloadCover } from '../lib/covers'
 import { resolveSkin } from '../lib/skins'
 import { RH, PT, SD, ST } from './BookcaseScene'
+import { noTouchSelect } from './webgl'
 
 /**
  * Le salon d'accueil : une pièce en maquette (sol + deux murs), vue de trois quarts,
@@ -249,6 +250,7 @@ export class LivingRoomScene {
     this.renderer.localClippingEnabled = true   // portes du meuble (copie du mur)
     this.renderer.domElement.className = 'salon-canvas'
     container.appendChild(this.renderer.domElement)
+    noTouchSelect(this.renderer.domElement)
 
     this.scene = new THREE.Scene()
     this.camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 80)

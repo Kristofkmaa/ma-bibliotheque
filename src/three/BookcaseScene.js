@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { spineSize, spineColors } from '../lib/bookUtils'
 import { spineTexture, withCover, pagesTexture, grainTexture, doorTexture, setAnisotropy, bookmarkTexture } from './textures'
 import { getBookStatuses } from '../hooks/useLibrary'
+import { noTouchSelect } from './webgl'
 
 /*
  * Bibliothèque en vraie 3D (Three.js), vue de trois quarts : un seul grand mur.
@@ -77,6 +78,7 @@ export class BookcaseScene {
     this.renderer.localClippingEnabled = true
     setAnisotropy(Math.min(8, this.renderer.capabilities.getMaxAnisotropy()))
     container.appendChild(this.renderer.domElement)
+    noTouchSelect(this.renderer.domElement)
     this.renderer.domElement.className = 'shelf-canvas'
 
     this.scene = new THREE.Scene()

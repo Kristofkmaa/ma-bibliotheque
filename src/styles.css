@@ -1098,3 +1098,10 @@ body.is-dragging .custom-cursor { display: none; }
 @media (max-width: 380px) {
   .salon-btn-l { display: none; }
 }
+
+/* iPhone : pas de sélection de texte, de loupe ni de menu « Copier » sur un appui long ---- */
+html { -webkit-tap-highlight-color: transparent; }
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+img { -webkit-user-drag: none; }
+input, textarea, select, [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+canvas { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
