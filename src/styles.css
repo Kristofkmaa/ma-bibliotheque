@@ -1044,3 +1044,15 @@ body.is-dragging .custom-cursor { display: none; }
   .rail-tick { width: 9px; height: 9px; margin-top: -4.5px; left: 2.5px; }
   .wall-rail { right: 0; top: 4%; bottom: 4%; }
 }
+
+/* Mes étagères : suppression (que faire des livres ?) */
+.ms-danger.open { align-items: stretch; }
+.ms-del { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid #E3C3BE; background: rgba(184, 50, 43, 0.04); animation: msDelIn 0.35s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes msDelIn { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+.ms-del-q { font-family: var(--serif); font-size: 16px; line-height: 1.35; }
+.ms-del-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.ms-del-dest { display: flex; flex-direction: column; gap: 4px; }
+.ms-del-dest select { height: 32px; padding: 0 8px; border: 1px solid var(--rule); background: var(--sheet); font-family: var(--serif); font-size: 15px; color: var(--ink); }
+.ms-del-purge { align-self: flex-start; padding: 0; font-family: var(--serif); font-style: italic; font-size: 14px; color: #B8322B; text-decoration: underline; text-underline-offset: 3px; }
+.ms-del-purge:hover { color: #7A1F1A; }
+.ms-err { color: #B8322B; }

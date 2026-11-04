@@ -118,7 +118,26 @@ export function useLibrary(userId) {
     setBooks(prev => prev.filter(b => b.id !== id))
   }
 
+  /** Retire plusieurs livres d'un coup (suppression d'une étagère avec ses livres). */
+  const removeBooks = async (ids) => {
+    if (!ids.length) return
+    const gone = new Set(ids)
+    if (isDemoMode) {
+      const next = demoLoad().filter(b => !gone.has(b.id))
+      demoSave(next)
+      setBooks(next)
+      return
+    }
+    const { error } = await supabase
+      .from('user_books')
+      .delete()
+      .in('id', ids)
+      .eq('user_id', userId)
+    if (error) throw error
+    setBooks(prev => prev.filter(b => !gone.has(b.id)))
+  }
+
   const isInLibrary = (googleId) => books.some(b => b.google_id === googleId)
 
-  return { books, loading, error, addBook, updateBook, removeBook, isInLibrary, refresh: fetchBooks }
+  return { books, loading, error, addBook, updateBook, removeBook, removeBooks, isInLibrary, refresh: fetchBooks }
 }

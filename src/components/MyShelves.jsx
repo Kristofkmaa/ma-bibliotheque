@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { MATERIALS, WALLS, DOOR_STYLES, resolveSkin, skinVars } from '../lib/skins'
-import { LOOSE, createShelf, renameShelf, setShelfSkin, applySkinToAll, moveShelf, deleteShelf, adoptLoose } from '../lib/shelfOps'
+import { LOOSE, createShelf, renameShelf, setShelfSkin, applySkinToAll, moveShelf, deleteShelf, deleteShelfMoving, adoptLoose } from '../lib/shelfOps'
 
 const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`
 
@@ -9,13 +9,16 @@ const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`
  * et à côté le réglage de l'étagère choisie : nom, matière, fond, portes, ordre, suppression.
  * Chaque changement s'applique en direct à la bibliothèque 3D derrière.
  */
-export default function MyShelves({ eff, commit, onClose, initialId }) {
+export default function MyShelves({ eff, commit, onClose, initialId, onDeleteBooks }) {
   const real = eff.filter(s => !s.pseudo)
   const loose = eff.find(s => s.id === LOOSE)
   const [sel, setSel] = useState(() => (initialId && real.some(s => s.id === initialId) ? initialId : real[0]?.id || null))
   const shelf = real.find(s => s.id === sel) || null
   const [name, setName] = useState(shelf?.name || '')
-  const [confirm, setConfirm] = useState(false)
+  const [del, setDel] = useState(null)        // null | 'ask' (que faire des livres ?) | 'purge' (confirmer)
+  const [dest, setDest] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
   const [fresh, setFresh] = useState(null)
   const [leaving, setLeaving] = useState(null)
   const [closing, setClosing] = useState(false)
@@ -27,7 +30,7 @@ export default function MyShelves({ eff, commit, onClose, initialId }) {
   useEffect(() => {
     if (!shelf && real.length) setSel(real[0].id)
   }, [shelf, real])
-  useEffect(() => { setName(shelf?.name || ''); setConfirm(false) }, [sel]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setName(shelf?.name || ''); setDel(null); setErr('') }, [sel]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // FLIP : les étagères glissent vers leur nouvelle place quand on change l'ordre
   const remember = () => {
@@ -84,18 +87,56 @@ export default function MyShelves({ eff, commit, onClose, initialId }) {
     }, 420)
   }
 
-  const remove = () => {
+  // voisine (en dessous, sinon au-dessus) : destination proposée pour les livres
+  const neighbour = () => {
+    const i = real.findIndex(s => s.id === shelf?.id)
+    return real[i + 1] || real[i - 1] || null
+  }
+
+  const askDelete = () => {
     if (!shelf || real.length < 2) return
-    if (!confirm) { setConfirm(true); return }
-    const i = real.findIndex(s => s.id === shelf.id)
-    const next = real[i + 1] || real[i - 1]
-    setLeaving(shelf.id)
-    setTimeout(() => {
-      commit(deleteShelf(eff, shelf.id).list)
-      setLeaving(null)
-      setSel(next?.id || null)
+    setErr('')
+    setDest(neighbour()?.id || '')
+    setDel('ask')
+  }
+
+  // l'étagère se replie, puis on enregistre
+  const leaveThen = fn => {
+    const id = shelf.id
+    setBusy(true)
+    setLeaving(id)
+    setTimeout(async () => {
+      try {
+        await fn(id)
+        setDel(null)
+      } catch (e) {
+        setErr("Ça n'a pas marché : " + (e?.message || e))
+      } finally {
+        setLeaving(null)
+        setBusy(false)
+      }
     }, 320)
   }
+
+  const deleteEmpty = () => leaveThen(id => {
+    const next = neighbour()
+    commit(deleteShelf(eff, id).list)
+    setSel(next?.id || null)
+  })
+
+  const deleteAndMove = () => leaveThen(id => {
+    const res = deleteShelfMoving(eff, id, dest || neighbour()?.id)
+    commit(res.list)
+    if (res.id) setSel(res.id)
+  })
+
+  const deleteWithBooks = () => leaveThen(async id => {
+    const next = neighbour()
+    const ids = [...shelf.book_ids]
+    if (onDeleteBooks) await onDeleteBooks(ids)
+    commit(deleteShelf(eff, id).list)
+    setSel(next?.id || null)
+  })
 
   const index = shelf ? real.findIndex(s => s.id === shelf.id) : -1
 
@@ -204,16 +245,59 @@ export default function MyShelves({ eff, commit, onClose, initialId }) {
                   <button type="button" className="lbl box" disabled={index < 0 || index >= real.length - 1} onClick={() => run(moveShelf(eff, shelf.id, 1), { anim: true })}>↓ Descendre</button>
                   <button type="button" className="lbl box" onClick={() => run(applySkinToAll(eff, shelf.id))}>Ce style partout</button>
                 </div>
-                <div className="ms-danger">
-                  <button
-                    type="button" className={'lbl box ' + (confirm ? 'danger' : 'muted')}
-                    disabled={real.length < 2} onClick={remove}
-                    title={real.length < 2 ? 'Il faut garder au moins une étagère' : undefined}
-                  >
-                    {confirm ? 'Oui, supprimer' : 'Supprimer cette étagère'}
-                  </button>
-                  {confirm && <p className="se-note">Ses {plural(shelf.book_ids.length, 'livre')} iront dans « À ranger ».</p>}
+                <div className={'ms-danger' + (del ? ' open' : '')}>
+                  {!del && (
+                    <button
+                      type="button" className="lbl box muted"
+                      disabled={real.length < 2} onClick={askDelete}
+                      title={real.length < 2 ? 'Il faut garder au moins une étagère' : undefined}
+                    >
+                      Supprimer cette étagère
+                    </button>
+                  )}
                   {real.length < 2 && <p className="se-note">Il faut garder au moins une étagère.</p>}
+
+                  {del && !shelf.book_ids.length && (
+                    <div className="ms-del">
+                      <p className="ms-del-q">Supprimer « {shelf.name} » ? Elle est vide.</p>
+                      <div className="ms-del-row">
+                        <button type="button" className="lbl box danger" disabled={busy} onClick={deleteEmpty}>Oui, supprimer</button>
+                        <button type="button" className="lbl box" disabled={busy} onClick={() => setDel(null)}>Annuler</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {del === 'ask' && shelf.book_ids.length > 0 && (
+                    <div className="ms-del">
+                      <p className="ms-del-q">Que faire de ses {plural(shelf.book_ids.length, 'livre')} ?</p>
+                      <label className="ms-del-dest">
+                        <span className="lbl se-lbl">Les ranger sur</span>
+                        <select value={dest} onChange={e => setDest(e.target.value)} disabled={busy}>
+                          {real.filter(s => s.id !== shelf.id).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </label>
+                      <div className="ms-del-row">
+                        <button type="button" className="lbl box danger" disabled={busy} onClick={deleteAndMove}>Ranger et supprimer l'étagère</button>
+                        <button type="button" className="lbl box" disabled={busy} onClick={() => setDel(null)}>Annuler</button>
+                      </div>
+                      {onDeleteBooks && (
+                        <button type="button" className="ms-del-purge" disabled={busy} onClick={() => setDel('purge')}>
+                          … ou supprimer aussi ses livres de ma bibliothèque
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {del === 'purge' && shelf.book_ids.length > 0 && (
+                    <div className="ms-del">
+                      <p className="ms-del-q">Supprimer l'étagère <em>et</em> ses {plural(shelf.book_ids.length, 'livre')} ? On ne pourra pas revenir en arrière.</p>
+                      <div className="ms-del-row">
+                        <button type="button" className="lbl box danger" disabled={busy} onClick={deleteWithBooks}>Oui, tout supprimer</button>
+                        <button type="button" className="lbl box" disabled={busy} onClick={() => setDel('ask')}>Retour</button>
+                      </div>
+                    </div>
+                  )}
+                  {err && <p className="se-note ms-err">{err}</p>}
                 </div>
               </>
             ) : (

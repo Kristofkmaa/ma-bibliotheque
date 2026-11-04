@@ -50,7 +50,7 @@ function Logo({ sub = 'Bibliothèque' }) {
 }
 
 function Library({ user, onSignOut }) {
-  const { books, loading, addBook, updateBook, removeBook, isInLibrary } = useLibrary(user.id)
+  const { books, loading, addBook, updateBook, removeBook, removeBooks, isInLibrary } = useLibrary(user.id)
   const { shelves, commit: commitShelves, storage } = useShelves(user.id)
   const [sort, setSortState] = useState(() => readPref('levana.sort2', 'manual'))
   const [newShelfSignal] = useState(0)
@@ -281,7 +281,7 @@ function Library({ user, onSignOut }) {
       )}
 
       {shelvesOpen && (
-        <MyShelves eff={effShelves} commit={commitShelves} initialId={shelvesOpen.id} onClose={() => setShelvesOpen(null)} />
+        <MyShelves eff={effShelves} commit={commitShelves} onDeleteBooks={removeBooks} initialId={shelvesOpen.id} onClose={() => setShelvesOpen(null)} />
       )}
 
       {scanner && <Suspense fallback={null}><Scanner onBookFound={onScanFound} onClose={() => setScanner(false)} /></Suspense>}

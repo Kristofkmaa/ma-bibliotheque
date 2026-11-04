@@ -35,7 +35,8 @@ export function effectiveShelves(shelves, allBooks) {
   }))
   const loose = allBooks.filter(b => !seen.has(b.id)).map(b => b.id)
   if (!loose.length) return clean
-  return [{ id: LOOSE, name: 'À ranger', ...skinOf(clean[0]), book_ids: loose, pseudo: true }, ...clean]
+  // tout en bas du meuble, pour qu'on voie bien qu'ils ont quitté leur étagère
+  return [...clean, { id: LOOSE, name: 'À ranger', ...skinOf(clean[clean.length - 1]), book_ids: loose, pseudo: true }]
 }
 
 /** Liste réelle à enregistrer (l'étagère virtuelle reçoit un vrai identifiant). */
@@ -114,13 +115,28 @@ export function deleteShelf(eff, id) {
   return { list: list.filter(s => s.id !== tid) } // ses livres repassent dans « À ranger »
 }
 
+/** Supprime une étagère en rangeant ses livres à la fin d'une autre. */
+export function deleteShelfMoving(eff, id, destId) {
+  const { list, map } = materialize(eff)
+  const tid = map[id] || id
+  const did = map[destId] || destId
+  const src = list.find(s => s.id === tid)
+  if (!src || tid === did) return { list }
+  return {
+    list: list
+      .filter(s => s.id !== tid)
+      .map(s => (s.id === did ? { ...s, book_ids: [...s.book_ids, ...src.book_ids.filter(x => !s.book_ids.includes(x))] } : s)),
+    id: did,
+  }
+}
+
 /** Transforme « À ranger » en vraie étagère. */
 export function adoptLoose(eff) {
   const loose = eff.find(s => s.id === LOOSE)
   const { list } = materialize(eff)
   if (!loose) return { list }
   const id = uid()
-  return { list: [{ id, name: 'Nouvelle étagère', ...skinOf(list[0]), book_ids: loose.book_ids }, ...list], id }
+  return { list: [...list, { id, name: 'Nouvelle étagère', ...skinOf(list[list.length - 1]), book_ids: loose.book_ids }], id }
 }
 
 /** Aperçu pendant un glisser-déposer : le livre quitte sa place, un emplacement s'ouvre à la cible. */
