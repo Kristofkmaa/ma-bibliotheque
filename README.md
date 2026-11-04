@@ -23,9 +23,12 @@ Aucun fondu : chaque apparition est un masque, un clip ou une mise à l'échelle
   de la renommer, de la monter/descendre, de la supprimer et de changer son apparence : **matière** (chêne clair, noyer,
   laque noire, bois blanc, acier), **couleur du fond** (8 teintes) et **portes** (panneau, cannage, lattes), avec
   « Ce style partout »
-- **Panier** : dans la recherche, le petit « + » envoie le livre dans un panier en osier (il y vole, le panier
-  sautille, le livre dépasse du bord). De retour à la bibliothèque, le panier s'ouvre : on glisse chaque livre sur
-  l'étagère voulue (un emplacement s'ouvre dans la rangée), ou on range tout d'un coup ; retirer un livre, vider
+- **Panier en osier** : dans la recherche, un grand panier est posé à côté des résultats ; le « + » d'un livre l'y fait
+  voler et il s'y tient debout, de travers, comme dans un vrai panier. De retour à la bibliothèque, le panier est posé à
+  côté du meuble : on attrape un livre dedans et on le pose sur l'étagère voulue (un emplacement s'ouvre dans la rangée),
+  ou « Tout ranger » sur une étagère ; retirer un livre, vider le panier
+- **Pas de « chargement » à l'ajout** : un livre ajouté se pose dans la rangée et la porte s'ajuste ; les portes ne se
+  ferment que pour changer de page ou de tri
 - **Glisser-déposer** : attrape un livre (appui long au doigt) et dépose-le ailleurs, sur la même étagère ou une autre ;
   les livres s'écartent pour lui faire de la place, et le lâcher dans une place libre crée une nouvelle étagère ; en
   approchant le bord de l'écran, on passe à la page suivante
@@ -107,7 +110,7 @@ src/
 ├── components/
 │   ├── Bookcase3D.jsx    # Bibliothèque 3D : étagères, pages, portes, glisser-déposer, éditeur
 │   ├── Shelf3D.jsx       # Version dessinée à plat (navigateurs sans WebGL)
-│   ├── Basket.jsx        # Panier : icône, tiroir, glisser vers une étagère
+│   ├── Basket.jsx        # Grand panier en osier (recherche et bibliothèque), glisser vers une étagère
 │   ├── ShelfEditor.jsx   # Carte d'édition d'une étagère (nom, matière, fond, portes, ordre)
 │   ├── Caption.jsx       # Légende : titre / auteur qui glissent dans des masques
 │   ├── StatusTabs.jsx    # Onglets avec indicateur cobalt glissant

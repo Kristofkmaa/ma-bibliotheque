@@ -62,7 +62,7 @@ function autoLabel(row, n, sort) {
  */
 export default function Bookcase3D({
   books, allBooks, sort, viewKey, manual, canEdit, shelves, commitShelves, newShelfSignal,
-  onOpen, onAdd, locked, focusId, onFocused, emptyText, apiRef,
+  onOpen, onAdd, locked, focusId, onFocused, emptyText, apiRef, aside,
 }) {
   const caseRef = useRef(null)
   const sceneRef = useRef(null)
@@ -131,8 +131,9 @@ export default function Bookcase3D({
   }, [focusId, rowsAll, L.rows, current, onFocused])
 
   // ---- Portes : on ne change de page que portes fermées ----------------------------------
-  // un simple changement de taille (tiroir du panier, rotation) ne ferme pas les portes : les livres glissent
-  const key = `${viewKey}|${sort}|${current}|${books.length}`
+  // Les portes ne se ferment que pour changer de page, de tri ou de vue. Un livre ajouté ou retiré,
+  // un changement de taille : les livres glissent et la porte s'ajuste, sans « chargement ».
+  const key = `${viewKey}|${sort}|${current}`
   const [shownKey, setShownKey] = useState(key)
   const [frozen, setFrozen] = useState(null)
   const [doorsOpen, setDoorsOpen] = useState(false)
@@ -380,6 +381,7 @@ export default function Bookcase3D({
 
   return (
     <>
+      <div className="case-row">
       <div className={'case3d webgl' + (manual && canEdit ? ' editable' : '')} ref={caseRef}>
         {overlay.map((o, r) => {
           const meta = displayRows[r]
@@ -417,6 +419,8 @@ export default function Bookcase3D({
             </div>
           )
         })}
+      </div>
+      {aside}
       </div>
 
       <div className="scene-bottom">

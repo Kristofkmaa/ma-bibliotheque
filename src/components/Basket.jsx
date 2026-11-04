@@ -1,128 +1,199 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { spineColors } from '../lib/bookUtils'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { spineColors, hashString } from '../lib/bookUtils'
 
-/** Petit panier en osier ; les livres qu'il contient dépassent du bord. */
-export function BasketIcon({ items, size = 46 }) {
-  const peek = items.slice(-3)
-  const xs = [15.5, 21.5, 27.5]
-  return (
-    <svg className="basket-svg" width={size} height={size * 44 / 48} viewBox="0 0 48 44" aria-hidden="true">
-      <path d="M11.5 19 C 11.5 3.5, 36.5 3.5, 36.5 19" fill="none" stroke="#8A6235" strokeWidth="2.6" strokeLinecap="round" />
-      {peek.map((b, i) => {
-        const [bg] = spineColors({ google_id: b.googleId, title: b.title })
-        const h = [11, 13, 9.5][i]
-        return <rect key={b.googleId} className="basket-book" x={xs[i]} y={20 - h} width="5.2" height={h + 4} rx="0.8" fill={bg} stroke="rgba(0,0,0,0.35)" strokeWidth="0.6" />
-      })}
-      <path d="M6 19.5 H42 L38.2 37.6 Q37.7 40 35.4 40 H12.6 Q10.3 40 9.8 37.6 Z" fill="#D9A866" stroke="#8A6235" strokeWidth="1.4" />
-      <path d="M8 26 H40 M9.2 32 H38.8" stroke="#A97A42" strokeWidth="1.2" />
-      {[12, 17, 22, 27, 32, 37].map(x => <path key={x} d={`M${x} 21.5 V38.5`} stroke="#B98950" strokeWidth="0.9" strokeDasharray="2.2 2.2" />)}
-      <rect x="4.5" y="17" width="39" height="4.2" rx="2.1" fill="#C48A45" stroke="#8A6235" strokeWidth="1.2" />
-    </svg>
-  )
-}
+const colorOf = b => spineColors({ google_id: b.googleId, title: b.title })[0]
 
-/** Bouton du panier, en haut à droite (visible aussi par-dessus la recherche). */
-export function BasketButton({ items, onClick, bump }) {
+/**
+ * Un vrai panier en osier, en grand. Les livres sont debout dedans, un peu de travers,
+ * le bas caché par la vannerie. Au survol un livre sort un peu ; on peut le toucher (fiche),
+ * le retirer (×) ou, à côté de la bibliothèque, l'attraper pour le poser sur une étagère.
+ */
+export function BigBasket({ items, width = 280, bump, onBookDown, onBookClick, onRemove, dragging }) {
   const ref = useRef(null)
+  const W = width
+  const H = Math.round(W * 0.95)
+  const rimY = W * 0.475
+
   useEffect(() => {
     if (!bump || !ref.current) return
     ref.current.animate([
-      { transform: 'scale(1) rotate(0)' }, { transform: 'scale(1.18, 0.86) rotate(-6deg)', offset: 0.25 },
-      { transform: 'scale(0.94, 1.08) rotate(5deg)', offset: 0.55 }, { transform: 'scale(1) rotate(0)' },
-    ], { duration: 520, easing: 'cubic-bezier(.3, 1.4, .5, 1)' })
+      { transform: 'rotate(0) scale(1)' }, { transform: 'rotate(-2.5deg) scale(1.03, 0.97)', offset: 0.25 },
+      { transform: 'rotate(2deg) scale(0.99, 1.02)', offset: 0.55 }, { transform: 'rotate(0) scale(1)' },
+    ], { duration: 560, easing: 'cubic-bezier(.3, 1.3, .5, 1)' })
   }, [bump])
+
+  // Place de chaque livre dans l'ouverture du panier (deux rangs quand il se remplit)
+  const placed = useMemo(() => {
+    const n = items.length
+    const bw = W * 0.19, bh = bw * 1.48
+    const left = W * 0.13, inner = W * 0.74
+    const rows = n > 7 ? [items.slice(0, Math.ceil(n / 2)), items.slice(Math.ceil(n / 2))] : [[], items]
+    const out = []
+    rows.forEach((row, ri) => {
+      const k = row.length
+      if (!k) return
+      const step = k > 1 ? Math.min(bw * 0.82, (inner - bw) / (k - 1)) : 0
+      const span = step * (k - 1) + bw
+      const x0 = left + (inner - span) / 2
+      row.forEach((b, i) => {
+        const h = hashString(b.googleId)
+        const rot = ((h % 17) - 8) * 1.1
+        const lift = (h >> 5) % 9
+        const back = ri === 0 && rows[0].length
+        out.push({
+          b, rot,
+          x: x0 + i * step,
+          y: rimY + bh * 0.42 - bh - lift - (back ? W * 0.07 : 0),
+          w: bw * (back ? 0.92 : 1), h: bh * (back ? 0.92 : 1),
+          z: back ? 1 : 2,
+        })
+      })
+    })
+    return out
+  }, [items, W, rimY])
+
   return (
-    <button type="button" className={'basket-fab' + (items.length ? ' full' : '')} onClick={onClick} aria-label={`Mon panier, ${items.length} livre${items.length > 1 ? 's' : ''}`}>
-      <span className="basket-wrap" ref={ref}><BasketIcon items={items} /></span>
-      {items.length > 0 && <span className="basket-badge" key={items.length}>{items.length}</span>}
-    </button>
+    <div className="big-basket" ref={ref} style={{ width: W, height: H }}>
+      {/* arrière : anse et fond du panier */}
+      <svg className="bb-back" viewBox="0 0 100 95" width={W} height={H} aria-hidden="true">
+        <path d="M15 48 C 15 2, 85 2, 85 48" fill="none" stroke="#8A5E31" strokeWidth="5.2" strokeLinecap="round" />
+        <path d="M15 48 C 15 2, 85 2, 85 48" fill="none" stroke="#C48A45" strokeWidth="2.6" strokeLinecap="round" strokeDasharray="3 2.2" />
+        <ellipse cx="50" cy="48.5" rx="41" ry="7.5" fill="#5E3E1F" />
+        <ellipse cx="50" cy="49.5" rx="37" ry="5.5" fill="#3E2914" />
+      </svg>
+      <span className="bb-target" style={{ left: W * 0.3, top: rimY - W * 0.1, width: W * 0.4, height: W * 0.12 }} />
+
+      {/* les livres, debout dans le panier */}
+      {placed.map(({ b, x, y, w, h, rot, z }) => (
+        <div
+          key={b.googleId}
+          className={'bb-book' + (dragging === b.googleId ? ' out' : '')}
+          style={{ left: x, top: y, width: w, height: h, zIndex: z, '--rot': `${rot}deg`, background: colorOf(b) }}
+          onPointerDown={onBookDown ? e => onBookDown(e, b) : undefined}
+          onClick={!onBookDown && onBookClick ? () => onBookClick(b) : undefined}
+          title={b.title}
+        >
+          {b.cover ? <img src={b.cover} alt="" draggable="false" /> : <span className="bb-book-title">{b.title}</span>}
+          {onRemove && (
+            <button type="button" className="bb-remove" aria-label={`Retirer ${b.title} du panier`}
+              onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onRemove(b.googleId) }}>×</button>
+          )}
+        </div>
+      ))}
+
+      {/* avant : vannerie, bord tressé, étiquette */}
+      <svg className="bb-front" viewBox="0 0 100 95" width={W} height={H} aria-hidden="true">
+        <defs>
+          <pattern id="bb-weave" width="8" height="6" patternUnits="userSpaceOnUse">
+            <rect width="8" height="6" fill="#D9A866" />
+            <path d="M0 1.5 Q2 0 4 1.5 T8 1.5" fill="none" stroke="#B9844A" strokeWidth="1.1" />
+            <path d="M0 4.5 Q2 6 4 4.5 T8 4.5" fill="none" stroke="#E7BF83" strokeWidth="1.1" />
+          </pattern>
+          <linearGradient id="bb-shade" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#000" stopOpacity="0.22" />
+            <stop offset="0.25" stopColor="#000" stopOpacity="0" />
+            <stop offset="0.75" stopColor="#000" stopOpacity="0" />
+            <stop offset="1" stopColor="#000" stopOpacity="0.28" />
+          </linearGradient>
+        </defs>
+        <path d="M9 49 Q50 60 91 49 L83.5 89 Q82.5 93.5 78 93.5 H22 Q17.5 93.5 16.5 89 Z" fill="url(#bb-weave)" stroke="#8A5E31" strokeWidth="0.9" />
+        <path d="M9 49 Q50 60 91 49 L83.5 89 Q82.5 93.5 78 93.5 H22 Q17.5 93.5 16.5 89 Z" fill="url(#bb-shade)" />
+        {[22, 32, 42, 50, 58, 68, 78].map(x => <path key={x} d={`M${x} ${x < 50 ? 55 + (50 - x) * 0.12 : 55 + (x - 50) * 0.12} L${x + (x - 50) * -0.12} 92`} stroke="#A8743C" strokeWidth="0.8" opacity="0.6" />)}
+        <path d="M7.5 47.5 Q50 59 92.5 47.5 L92.5 52 Q50 63.5 7.5 52 Z" fill="#B57A3D" stroke="#8A5E31" strokeWidth="0.8" />
+        <path d="M7.5 49.8 Q50 61.3 92.5 49.8" fill="none" stroke="#E2B272" strokeWidth="0.9" strokeDasharray="2.4 1.6" />
+        <path d="M12 89 Q50 97 88 89" fill="none" stroke="#000" strokeOpacity="0.18" strokeWidth="2.5" />
+      </svg>
+      <div className="bb-tag" style={{ left: W * 0.38, top: rimY + W * 0.13 }}>
+        {items.length ? `${items.length} livre${items.length > 1 ? 's' : ''}` : 'vide'}
+      </div>
+    </div>
+  )
+}
+
+/** Le panier dans la recherche, posé à côté des résultats. */
+export function SearchBasket({ items, bump, onBookClick, onRemove, onDone, mobile }) {
+  return (
+    <div className="sb">
+      <div className="sb-title">Mon panier</div>
+      <BigBasket items={items} width={mobile ? 120 : 270} bump={bump} onBookClick={onBookClick} onRemove={mobile ? null : onRemove} />
+      <div className="sb-side">
+        {items.length
+          ? <p className="sb-hint">Continue tes trouvailles, puis va les ranger sur tes étagères.</p>
+          : <p className="sb-hint">Appuie sur <b>+</b> à côté d'un livre pour le mettre dans le panier.</p>}
+        {items.length > 0 && (
+          <button type="button" className="lbl box cobalt sb-go" onClick={onDone}>
+            Ranger mes {items.length} livre{items.length > 1 ? 's' : ''} →
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
 /**
- * Le panier ouvert, en bas de l'écran : on glisse chaque livre sur l'étagère voulue
+ * Le panier posé à côté de la bibliothèque : on attrape un livre et on le pose sur une étagère
  * (un emplacement s'ouvre dans la rangée), ou on range tout d'un coup.
  */
-export function BasketTray({ items, shelves, defaultShelf, canDrop, api, onDropBook, onPlaceAll, onOpenBook, onRemove, onClear, onClose }) {
+export function ShelfBasket({ items, shelves, defaultShelf, canDrop, api, mobile, onDropBook, onPlaceAll, onOpenBook, onRemove, onClear }) {
   const [target, setTarget] = useState(defaultShelf || shelves[0]?.id || '')
   const [confirmClear, setConfirmClear] = useState(false)
   const [busy, setBusy] = useState(false)
   const [dragging, setDragging] = useState(null)
-  const ref = useRef(null)
 
   useEffect(() => { if (!shelves.some(s => s.id === target)) setTarget(shelves[0]?.id || '') }, [shelves, target])
 
-  // Le tiroir réserve sa place : la bibliothèque se réduit au-dessus de lui au lieu d'être cachée
-  useLayoutEffect(() => {
-    const el = ref.current
-    const root = document.documentElement
-    const set = () => root.style.setProperty('--tray-h', `${Math.ceil(el.offsetHeight)}px`)
-    set()
-    document.body.classList.add('tray-open')
-    const ro = new ResizeObserver(set)
-    ro.observe(el)
-    return () => { ro.disconnect(); document.body.classList.remove('tray-open'); root.style.removeProperty('--tray-h') }
-  }, [])
-
-  // Glisser un livre du panier vers l'étagère
   const startPress = (e, book) => {
     if (e.button > 0) return
-    const item = e.currentTarget
+    const el = e.currentTarget
     const start = { x: e.clientX, y: e.clientY }
-    let ghost = null, over = null, moved = false
-    const cover = item.querySelector('.bt-cover')
-    const rc = cover.getBoundingClientRect()
+    const rc = el.getBoundingClientRect()
     const fx = (e.clientX - rc.left) / rc.width, fy = (e.clientY - rc.top) / rc.height
     const id = `basket:${book.googleId}`
+    let ghost = null
 
     const begin = () => {
-      ghost = cover.cloneNode(true)
-      ghost.className = 'bt-cover bt-ghost'
-      ghost.style.width = rc.width + 'px'; ghost.style.height = rc.height + 'px'
+      ghost = document.createElement('div')
+      ghost.className = 'bb-ghost'
+      ghost.style.cssText = `width:${rc.width}px;height:${rc.height}px;background:${colorOf(book)}`
+      if (book.cover) { const img = new Image(); img.src = book.cover; img.alt = ''; ghost.appendChild(img) }
       document.body.appendChild(ghost)
       document.body.classList.add('is-dragging')
       setDragging(book.googleId)
       navigator.vibrate?.(8)
     }
-    const place = (x, y) => {
-      ghost.style.transform = `translate(${x - fx * rc.width}px, ${y - fy * rc.height}px) scale(1.12)`
-    }
     const onMove = ev => {
-      const dx = ev.clientX - start.x, dy = ev.clientY - start.y
       if (!ghost) {
-        // vers le haut = on attrape le livre ; de côté = on fait défiler le panier
-        if (dy < -8 && Math.abs(dy) > Math.abs(dx) * 0.8 && canDrop) begin()
-        else if (Math.hypot(dx, dy) > 10) moved = true
+        if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 6 && canDrop) begin()
         if (!ghost) return
       }
       ev.preventDefault()
-      place(ev.clientX, ev.clientY)
-      over = api.current?.previewExternal(id, ev.clientX, ev.clientY) || null
+      ghost.style.transform = `translate(${ev.clientX - fx * rc.width}px, ${ev.clientY - fy * rc.height}px) scale(1.1)`
+      const over = api.current?.previewExternal(id, ev.clientX, ev.clientY)
       ghost.classList.toggle('on-shelf', !!over)
     }
-    const end = async ev => {
-      item.removeEventListener('pointermove', onMove)
-      item.removeEventListener('pointerup', end)
-      item.removeEventListener('pointercancel', end)
+    const end = ev => {
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerup', end)
+      el.removeEventListener('pointercancel', end)
       if (!ghost) {
-        if (!moved && ev.type === 'pointerup') onOpenBook(book)
+        if (ev.type === 'pointerup') onOpenBook(book)
         return
       }
       const t = api.current?.endExternal() || null
       document.body.classList.remove('is-dragging')
       setDragging(null)
       if (t && ev.type === 'pointerup') {
-        ghost.animate([{ opacity: 1 }, { opacity: 0, transform: ghost.style.transform.replace('scale(1.12)', 'scale(0.6)') }], { duration: 260, easing: 'ease-in' }).onfinish = () => ghost.remove()
+        ghost.animate([{ opacity: 1 }, { opacity: 0, transform: ghost.style.transform.replace('scale(1.1)', 'scale(0.55)') }], { duration: 240, easing: 'ease-in' }).onfinish = () => ghost.remove()
         onDropBook(book, t)
       } else {
-        const back = item.querySelector('.bt-cover').getBoundingClientRect()
-        ghost.animate([{ transform: ghost.style.transform }, { transform: `translate(${back.left}px, ${back.top}px) scale(1)` }], { duration: 380, easing: 'cubic-bezier(.3, 1.2, .5, 1)' }).onfinish = () => ghost.remove()
+        // pas d'étagère sous le doigt : le livre retombe dans le panier
+        ghost.animate([{ transform: ghost.style.transform }, { transform: `translate(${rc.left}px, ${rc.top}px) scale(1)` }], { duration: 420, easing: 'cubic-bezier(.3, 1.25, .5, 1)' }).onfinish = () => ghost.remove()
       }
     }
-    item.setPointerCapture(e.pointerId)
-    item.addEventListener('pointermove', onMove)
-    item.addEventListener('pointerup', end)
-    item.addEventListener('pointercancel', end)
+    el.setPointerCapture(e.pointerId)
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerup', end)
+    el.addEventListener('pointercancel', end)
   }
 
   const placeAll = async () => {
@@ -132,55 +203,24 @@ export function BasketTray({ items, shelves, defaultShelf, canDrop, api, onDropB
   }
 
   return (
-    <div className="basket-tray grain" ref={ref} role="dialog" aria-label="Mon panier">
-      <div className="bt-head">
-        <BasketIcon items={items} size={34} />
-        <div className="bt-title">Mon panier <span>{items.length} {items.length > 1 ? 'livres' : 'livre'}</span></div>
-        <div className="bt-head-actions">
-          {items.length > 0 && (
-            <button type="button" className={'lbl box ' + (confirmClear ? 'danger' : 'muted')}
-              onClick={() => { if (!confirmClear) { setConfirmClear(true); return } onClear(); setConfirmClear(false) }}>
-              {confirmClear ? 'Vraiment vider ?' : 'Vider'}
-            </button>
-          )}
-          <button type="button" className="lbl box" onClick={onClose}>Fermer</button>
-        </div>
+    <aside className="shelf-basket" aria-label="Mon panier">
+      <p className="sh-hint">{canDrop ? 'Attrape un livre et pose-le sur une étagère' : 'Range-les tous d’un coup'}</p>
+      <BigBasket
+        items={items} width={mobile ? 128 : 236} dragging={dragging}
+        onBookDown={startPress} onRemove={mobile ? null : onRemove}
+      />
+      <div className="sh-controls">
+        {shelves.length > 0 && (
+          <select className="sh-select" value={target} onChange={e => setTarget(e.target.value)} aria-label="Étagère où tout ranger">
+            {shelves.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+        <button type="button" className="lbl box cobalt" onClick={placeAll} disabled={busy}>{busy ? 'Rangement…' : 'Tout ranger'}</button>
+        <button type="button" className={'lbl box ' + (confirmClear ? 'danger' : 'muted')}
+          onClick={() => { if (!confirmClear) { setConfirmClear(true); return } onClear(); setConfirmClear(false) }}>
+          {confirmClear ? 'Vraiment ?' : 'Vider'}
+        </button>
       </div>
-
-      {items.length ? (
-        <>
-          <p className="bt-hint">
-            {canDrop ? 'Attrape un livre et pose-le sur l’étagère de ton choix.' : 'Choisis « Mon rangement » pour poser les livres où tu veux, ou range-les tous d’un coup.'}
-          </p>
-          <div className="bt-items">
-            {items.map(b => (
-              <div key={b.googleId} className={'bt-item' + (dragging === b.googleId ? ' lifted' : '')} onPointerDown={e => startPress(e, b)} title={b.title}>
-                <div className="bt-cover" style={{ background: spineColors({ google_id: b.googleId, title: b.title })[0] }}>
-                  {b.cover && <img src={b.cover} alt="" draggable="false" />}
-                </div>
-                <div className="bt-name">{b.title}</div>
-                <button type="button" className="bt-remove" aria-label={`Retirer ${b.title} du panier`}
-                  onPointerDown={e => e.stopPropagation()} onClick={() => onRemove(b.googleId)}>×</button>
-              </div>
-            ))}
-          </div>
-          <div className="bt-foot">
-            {shelves.length > 0 && (
-              <label className="lbl bt-select">
-                <span>Tout ranger sur</span>
-                <select value={target} onChange={e => setTarget(e.target.value)}>
-                  {shelves.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </label>
-            )}
-            <button type="button" className="lbl box cobalt" onClick={placeAll} disabled={busy}>
-              {busy ? 'Rangement…' : shelves.length ? 'Ranger tout' : 'Tout ajouter à la bibliothèque'}
-            </button>
-          </div>
-        </>
-      ) : (
-        <p className="bt-empty">Ton panier est vide. Dans la recherche, appuie sur « + » pour y mettre des livres.</p>
-      )}
-    </div>
+    </aside>
   )
 }

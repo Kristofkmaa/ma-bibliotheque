@@ -4,7 +4,8 @@ import { useLibrary } from './hooks/useLibrary'
 import { useShelves } from './hooks/useShelves'
 import { effectiveShelves, placeBook, moveBook } from './lib/shelfOps'
 import { useBasket } from './hooks/useBasket'
-import { BasketButton, BasketTray } from './components/Basket'
+import { SearchBasket, ShelfBasket } from './components/Basket'
+import { useIsMobile } from './hooks/useIsMobile'
 import { flyTo } from './lib/fly'
 import { isDemoMode } from './lib/supabase'
 import { sortBooks, SORTS, spineColors } from './lib/bookUtils'
@@ -58,7 +59,7 @@ function Library({ user, onSignOut }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [scanner, setScanner] = useState(false)
   const basket = useBasket(user.id)
-  const [trayOpen, setTrayOpen] = useState(false)
+  const mobile = useIsMobile()
   const [bump, setBump] = useState(0)
   const [flying, setFlying] = useState(() => new Set())
   const bookcaseApi = useRef(null)
@@ -88,17 +89,13 @@ function Library({ user, onSignOut }) {
     setSearch(true); setSearchOpen(true)
   }, [])
   const closeSearch = useCallback(() => setSearchOpen(false), [])
-  const basketCount = basket.items.length
-  const onSearchClosed = useCallback(() => {
-    setSearch(false)
-    if (basketCount) setTrayOpen(true) // retour à la bibliothèque : on vide le panier
-  }, [basketCount])
+  const onSearchClosed = useCallback(() => setSearch(false), [])
 
   // « + » dans la recherche : la couverture vole jusqu'au panier
   const addToBasket = useCallback((book, coverEl) => {
     setFlying(f => new Set(f).add(book.googleId))
     const img = coverEl?.querySelector('img')
-    flyTo(coverEl?.getBoundingClientRect(), img?.src, document.querySelector('.basket-fab .basket-wrap'), () => {
+    flyTo(coverEl?.getBoundingClientRect(), img?.src, document.querySelector('.search-basket .bb-target'), () => {
       basket.add(book)
       setFlying(f => { const n = new Set(f); n.delete(book.googleId); return n })
       setBump(n => n + 1)
@@ -130,7 +127,6 @@ function Library({ user, onSignOut }) {
       commitShelves(list)
     }
     basket.clear()
-    setTrayOpen(false)
     if (ids.length) setFocusId(ids[ids.length - 1])
   }, [basket, addBook, commitShelves])
 
@@ -154,11 +150,10 @@ function Library({ user, onSignOut }) {
       if (scanner) setScanner(false)
       else if (detailOpen) closeDetail()
       else if (searchOpen) closeSearch()
-      else if (trayOpen) setTrayOpen(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [scanner, detailOpen, searchOpen, trayOpen, closeDetail, closeSearch])
+  }, [scanner, detailOpen, searchOpen, closeDetail, closeSearch])
 
   const emptyText = 'Le premier rayon attend son livre'
 
@@ -191,6 +186,14 @@ function Library({ user, onSignOut }) {
           books={filtered} allBooks={books} sort={sort} viewKey="all" manual={manual} canEdit={canEdit}
           shelves={shelves} commitShelves={commitShelves} newShelfSignal={newShelfSignal}
           onOpen={openBook} onAdd={openSearch} locked={overlay} apiRef={bookcaseApi}
+          aside={basket.items.length > 0 ? (
+            <ShelfBasket
+              items={basket.items} shelves={shelves.map(s => ({ id: s.id, name: s.name }))} defaultShelf={addTarget}
+              canDrop={HAS_WEBGL && manual} api={bookcaseApi} mobile={mobile}
+              onDropBook={dropFromBasket} onPlaceAll={placeAllFromBasket}
+              onOpenBook={b => onPick(b, null)} onRemove={basket.remove} onClear={basket.clear}
+            />
+          ) : null}
           highlightId={highlightId} focusId={focusId} onFocused={onFocused} emptyText={emptyText}
         />
       )}
@@ -209,7 +212,8 @@ function Library({ user, onSignOut }) {
 
       {search && (
         <>
-          <SearchPanel open={searchOpen} onClosed={onSearchClosed} onPick={onPick} isInLibrary={isInLibrary} onScan={() => setScanner(true)} inBasket={inBasket} onBasket={addToBasket} />
+          <SearchPanel open={searchOpen} onClosed={onSearchClosed} onPick={onPick} isInLibrary={isInLibrary} onScan={() => setScanner(true)} inBasket={inBasket} onBasket={addToBasket}
+            basketSlot={<SearchBasket items={basket.items} bump={bump} mobile={mobile} onBookClick={b => onPick(b, null)} onRemove={basket.remove} onDone={closeSearch} />} />
           <button type="button" className="lbl box search-close-btn" style={{ zIndex: 59, position: 'fixed' }} onClick={closeSearch}>Fermer</button>
         </>
       )}
@@ -238,17 +242,6 @@ function Library({ user, onSignOut }) {
           </button>
         </>
       )}
-
-      {trayOpen && !search && (
-        <BasketTray
-          items={basket.items} shelves={shelves.map(s => ({ id: s.id, name: s.name }))} defaultShelf={addTarget}
-          canDrop={HAS_WEBGL && manual} api={bookcaseApi}
-          onDropBook={dropFromBasket} onPlaceAll={placeAllFromBasket}
-          onOpenBook={b => onPick(b, null)} onRemove={basket.remove} onClear={basket.clear}
-          onClose={() => setTrayOpen(false)}
-        />
-      )}
-      <BasketButton items={basket.items} bump={bump} onClick={() => { if (search) closeSearch(); else setTrayOpen(o => !o) }} />
 
       {scanner && <Suspense fallback={null}><Scanner onBookFound={onScanFound} onClose={() => setScanner(false)} /></Suspense>}
     </div>

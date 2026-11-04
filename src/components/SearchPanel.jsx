@@ -7,7 +7,7 @@ const EASE_SHEET = 'cubic-bezier(.76, 0, .18, 1)'
 const HAS_VISION = !!import.meta.env.VITE_GOOGLE_VISION_API_KEY
 
 /** Panneau de recherche Google Books, plein écran, même papier que la fiche. */
-export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onScan, inBasket, onBasket }) {
+export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onScan, inBasket, onBasket, basketSlot }) {
   const panel = useRef(null)
   const inputRef = useRef(null)
   const fileRef = useRef(null)
@@ -76,6 +76,8 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
     <div className="search-panel grain" ref={panel} role="dialog" aria-modal="true" aria-label="Ajouter un livre">
       <div className="detail-top-logo"><div className="logo"><div className="logo-name">Levana</div><div className="logo-sub">Bibliothèque</div></div></div>
       <div className="search-inner">
+        <div className="search-layout">
+        <div className="search-main">
         <div className="search-head">
           <input
             ref={inputRef} className="search-input" type="search" value={query}
@@ -124,6 +126,9 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
         ) : (
           !query.trim() && <p className="search-empty">Cherche dans des millions de livres, ou scanne le code-barres au dos d'un livre.</p>
         )}
+        </div>
+        <aside className="search-basket">{basketSlot}</aside>
+        </div>
       </div>
     </div>
   )

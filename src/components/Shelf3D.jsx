@@ -327,7 +327,7 @@ function autoLabel(row, n, sort) {
  */
 export default function Shelf3D({
   books, allBooks, sort, viewKey, manual, canEdit, shelves, commitShelves, newShelfSignal,
-  onOpen, onAdd, locked, highlightId, focusId, onFocused, emptyText,
+  onOpen, onAdd, locked, highlightId, focusId, onFocused, emptyText, aside,
 }) {
   const caseRef = useRef(null)
   const [size, setSize] = useState({ w: 0, h: 0, mobile: false })
@@ -397,7 +397,7 @@ export default function Shelf3D({
   }, [focusId, rowsAll, L.rows, current, onFocused])
 
   // ---- Portes : on ne change de page que portes fermées ----------------------------------
-  const key = `${viewKey}|${sort}|${current}|${L.perPage}|${books.length}`
+  const key = `${viewKey}|${sort}|${current}`
   const [shownKey, setShownKey] = useState(key)
   const [frozen, setFrozen] = useState(null)
   const [doorsOpen, setDoorsOpen] = useState(false)
@@ -744,6 +744,7 @@ export default function Shelf3D({
 
   return (
     <>
+      <div className="case-row">
       <div
         className={'case3d' + (manual && canEdit ? ' editable' : '')} ref={caseRef}
         style={{ '--H': `${L.H}px`, '--ws': `${L.ws}px`, '--gap': `${L.gap}px`, '--padx': `${L.padX}px` }}
@@ -785,6 +786,8 @@ export default function Shelf3D({
           })}
           {!books.length && !(manual && canEdit) && doorsOpen && <p className="row-empty">{emptyText}</p>}
         </div>
+      </div>
+      {aside}
       </div>
 
       <div className="scene-bottom">
