@@ -210,6 +210,7 @@ export default function Bookcase3D({
   useLayoutEffect(() => {
     if (!apiRef) return
     apiRef.current = {
+      scene: () => sceneRef.current,   // le salon en fait une copie fidèle
       previewExternal: (id, x, y) => {
         const d = dataRef.current
         const sc = sceneRef.current

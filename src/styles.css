@@ -1063,8 +1063,6 @@ body.is-dragging .custom-cursor { display: none; }
   background-color: var(--paper);
   background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="matrix" values="0 0 0 0 0.45 0 0 0 0 0.42 0 0 0 0 0.38 0 0 0 0.12 0"/></filter><rect width="100%" height="100%" filter="url(%23g)"/></svg>');
 }
-.salon.mood-soir { background-color: #EAE3D8; }
-.salon.mood-nuit { background-color: #DDD8D0; }
 .salon-stage { position: absolute; inset: 0; }
 .salon-canvas { display: block; width: 100%; height: 100%; touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; }
 .salon-top {
@@ -1084,7 +1082,7 @@ body.is-dragging .custom-cursor { display: none; }
 .salon-go span { transition: transform 0.3s var(--ease); }
 .salon-go:hover span { transform: translateX(4px); }
 .salon-hint { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--muted); animation: salonFade 0.8s 0.9s both; }
-.salon.going .salon-top, .salon.going .salon-bottom { transition: transform 0.6s cubic-bezier(.6, 0, .4, 1); }
+.salon-top, .salon-bottom { transition: transform 0.6s cubic-bezier(.6, 0, .4, 1); }
 .salon.going .salon-top { transform: translateY(-130%); }
 .salon.going .salon-bottom { transform: translateY(130%); }
 .salon-chip {

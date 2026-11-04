@@ -5,6 +5,7 @@ import { weaveTexture, ropeTexture } from './BasketScene'
 import { spineColors, toDisplay } from '../lib/bookUtils'
 import { preloadCover } from '../lib/covers'
 import { resolveSkin } from '../lib/skins'
+import { RH, PT, SD, ST } from './BookcaseScene'
 
 /**
  * Le salon d'accueil : une pièce en maquette (sol + deux murs), vue de trois quarts,
@@ -41,6 +42,8 @@ const COL = {
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
 const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t) }
+const isUnder = (o, root) => { for (let p = o; p; p = p.parent) if (p === root) return true; return false }
 
 class Spring {
   constructor(v = 0, k = 120, damp = 0.6) { this.v = v; this.t = v; this.vel = 0; this.k = k; this.c = 2 * Math.sqrt(k) * damp }
@@ -243,6 +246,7 @@ export class LivingRoomScene {
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     this.renderer.shadowMap.autoUpdate = false
+    this.renderer.localClippingEnabled = true   // portes du meuble (copie du mur)
     this.renderer.domElement.className = 'salon-canvas'
     container.appendChild(this.renderer.domElement)
 
@@ -342,6 +346,18 @@ export class LivingRoomScene {
     this.fill = new THREE.DirectionalLight(0xe8eeff, 0.3)
     this.fill.position.set(5, 2.5, 3)
     this.scene.add(this.hemi, key, key.target, this.fill)
+
+    // lumières de la bibliothèque : elles prennent le relais pendant l'entrée (même rendu exact)
+    this.libHemi = new THREE.HemisphereLight(0xfff8ec, 0xb4a58a, 0)
+    const lk = new THREE.DirectionalLight(0xfff3e2, 0)
+    lk.castShadow = true
+    lk.shadow.mapSize.set(s, s)
+    lk.shadow.radius = 5
+    lk.shadow.camera.layers.set(1)      // seul le meuble projette ces ombres
+    this.libKey = lk
+    this.libFill = new THREE.DirectionalLight(0xe8eeff, 0)
+    this.libFill.position.set(5, 2, 3)
+    this.scene.add(this.libHemi, lk, lk.target, this.libFill, this.libFill.target)
   }
 
   _applyMood() {
@@ -349,6 +365,8 @@ export class LivingRoomScene {
     this.hemi.color.set(m.hemi[0]); this.hemi.groundColor.set(m.hemi[1]); this.hemi.intensity = m.hemi[2]
     this.key.color.set(m.key[0]); this.key.intensity = m.key[1]
     this.fill.intensity = m.fill
+    this.baseLights = { hemi: m.hemi[2], key: m.key[1], fill: m.fill }
+    this.mix = 0     // 0 : lumière du salon ; 1 : lumière de la bibliothèque
     this.firePower = new Spring(m.fire, 30, 0.5)
     this.firePower.base = m.fire
     this.setLamp(m.lamp)
@@ -1105,27 +1123,242 @@ export class LivingRoomScene {
     c.lookAt(target)
   }
 
-  /** Vue rapprochée de la bibliothèque (début du retour, fin de l'entrée). */
-  _bookcaseView() {
-    // tout près des livres, entre le canapé et la bibliothèque (rien ne passe devant)
-    const center = new THREE.Vector3(BOOKCASE.x + BOOKCASE.d / 2, 1.12, BOOKCASE.z)
-    return { target: center, az: Math.PI / 2, el: 0.05, dist: 2.3 }
+  // ---- Le vrai mur de livres, en miniature ----------------------------------------------
+  /**
+   * Copie fidèle du mur de la bibliothèque : mêmes rayons, mêmes livres, mêmes matières,
+   * portes dans le même état. Les objets (géométries, matières, couvertures) sont partagés ;
+   * seules leurs positions sont recopiées à chaque image.
+   */
+  setWall(lib) {
+    this._clearMirror()
+    if (!lib?.layout || !lib.caseParts || !lib.rowCount || !lib.root) return false
+    const src = lib.root
+    const copy = src.clone(true)
+    const pairs = [], map = new Map()
+    const walk = (a, b) => { pairs.push([a, b]); map.set(a, b); a.children.forEach((c, i) => walk(c, b.children[i])) }
+    walk(src, copy)
+    const { CW } = lib.layout
+    const totalH = lib.rowCount * (RH + PT) + PT
+    const sc = Math.min(2.45 / (totalH + 0.1), 2.1 / (CW + 2 * ST + 0.06))
+    const hw = (CW / 2 + ST + 0.04) * sc
+    const g = new THREE.Group()
+    g.position.set(-R + 0.012 + (SD / 2 + 0.02) * sc, 0, clamp(-0.6, -1.92 + hw, 0.32 - hw))
+    g.rotation.y = Math.PI / 2
+    g.scale.setScalar(sc)
+    g.add(copy)
+    this.room.add(g)
+    g.updateMatrixWorld(true)
+    // portes : les plans qui les découpent suivent le meuble
+    const doors = []
+    lib.caseParts.forEach(p => [p.doorL, p.doorR].forEach(o => {
+      const c = map.get(o)
+      if (!c) return
+      const m = o.material.clone()
+      m.clippingPlanes = (o.material.clippingPlanes || []).map(pl => pl.clone().applyMatrix4(g.matrixWorld))
+      c.material = m
+      doors.push([o.material, m])
+    }))
+    const hits = []
+    copy.traverse(o => {
+      o.layers.enable(1)
+      if (o.isMesh) { o.userData = { ...o.userData, kind: 'bookcase' }; hits.push(o) }
+    })
+    // lumières de la bibliothèque, attachées au meuble (même direction par rapport aux livres)
+    const lk = this.libKey
+    g.add(lk, lk.target, this.libFill, this.libFill.target)
+    lk.position.copy(lib.key.position); lk.target.position.copy(lib.key.target.position)
+    const sh = lib.key.shadow
+    Object.assign(lk.shadow.camera, { left: sh.camera.left * sc, right: sh.camera.right * sc, top: sh.camera.top * sc, bottom: sh.camera.bottom * sc, near: sh.camera.near * sc, far: sh.camera.far * sc })
+    lk.shadow.camera.updateProjectionMatrix()
+    lk.shadow.bias = sh.bias
+    lk.shadow.normalBias = sh.normalBias * sc
+    this.libFill.position.set(5, 2, 3); this.libFill.target.position.set(0, 0, 0)
+    this.mirror = { lib, g, copy, pairs, doors, hits, sc, sig: this._wallSig(lib) }
+    this.bookcase.visible = false
+    this.shadowDirty = 2
+    return true
   }
 
-  /** On s'approche de la bibliothèque, puis on y entre. */
+  _clearMirror() {
+    const m = this.mirror
+    if (!m) return
+    this.scene.add(this.libKey, this.libKey.target, this.libFill, this.libFill.target)
+    this.room.remove(m.g)
+    m.doors.forEach(([, c]) => c.dispose())
+    this.mirror = null
+    this.bookcase.visible = true
+  }
+
+  _wallSig(lib) {
+    const ids = [lib.rowCount, lib.layout?.CW]
+    for (const grp of [lib.caseGroup, lib.doorsGroup, lib.booksGroup]) {
+      ids.push('|')
+      for (const c of grp.children) ids.push(c.id, c.children[0]?.children.length || 0)
+    }
+    return ids.join(',')
+  }
+
+  /** Suit le mur de la bibliothèque (positions, portes, couvertures arrivées). */
+  _syncMirror() {
+    const lib = this.cb.getLibrary?.()
+    if (!lib || lib.disposed) return
+    const m = this.mirror
+    if (!m || m.lib !== lib) {
+      if (this.time >= (this.nextWallTry || 0)) { this.nextWallTry = this.time + 0.3; this.setWall(lib) }
+      return
+    }
+    if (this._wallSig(lib) !== m.sig) { this.setWall(lib); return }
+    for (const [o, c] of m.pairs) {
+      if (o === lib.root) continue
+      c.position.copy(o.position); c.quaternion.copy(o.quaternion); c.scale.copy(o.scale); c.visible = o.visible
+    }
+    for (const [om, cm] of m.doors) {
+      cm.color.copy(om.color)
+      if (cm.map !== om.map) { cm.map = om.map; cm.needsUpdate = true }
+    }
+    if (lib.running) this.shadowDirty = Math.max(this.shadowDirty, 1)
+  }
+
+  _hits() {
+    if (!this.mirror) return this.hitMeshes
+    return this.hitMeshes.filter(h => !isUnder(h, this.bookcase)).concat(this.mirror.hits)
+  }
+
+  // ---- Caméra : du salon à la vue exacte de la bibliothèque ------------------------------
+  _salonPose(az, el, dist, target) {
+    const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2)), a = this.camera.aspect
+    return { target: target.clone(), az, el, dist, fr: { l: -t * a, r: t * a, t, b: -t } }
+  }
+
+  /** La caméra de la bibliothèque, transposée sur le meuble du salon, cadrée sur sa toile. */
+  _libraryPose() {
+    const { lib, g } = this.mirror
+    const lc = lib.camera
+    lc.updateMatrixWorld()
+    g.updateMatrixWorld(true)
+    const pos = lc.position.clone().applyMatrix4(g.matrixWorld)
+    const target = lib.key.target.position.clone().applyMatrix4(g.matrixWorld)   // point visé par la bibliothèque
+    const off = pos.clone().sub(target)
+    const dist = off.length()
+    const az = Math.atan2(off.x, off.z), el = Math.asin(clamp(off.y / dist, -1, 1))
+    const R = lib.renderer.domElement.getBoundingClientRect()
+    const S = this.renderer.domElement.getBoundingClientRect()
+    const u = (2 * Math.tan(THREE.MathUtils.degToRad(lc.fov / 2))) / Math.max(1, R.height)
+    const cx = R.left + R.width / 2, cy = R.top + R.height / 2
+    return { target, az, el, dist, fr: { l: (S.left - cx) * u, r: (S.right - cx) * u, t: (cy - S.top) * u, b: (cy - S.bottom) * u }, R, S }
+  }
+
+  /** Entre deux vues : le point visé glisse, la caméra tourne autour de lui (jamais à travers les murs). */
+  _applyPose(a, b, e) {
+    const c = this.camera
+    const tgt = a.target.clone().lerp(b.target, e)
+    const az = a.az + (b.az - a.az) * e
+    const el = a.el + (b.el - a.el) * e
+    const dist = Math.exp(Math.log(a.dist) + (Math.log(b.dist) - Math.log(a.dist)) * e)
+    this._placeCamera(az, el, dist, tgt)
+    const f = k => a.fr[k] + (b.fr[k] - a.fr[k]) * e
+    const n = 0.05
+    c.projectionMatrix.makePerspective(f('l') * n, f('r') * n, f('t') * n, f('b') * n, n, 80)
+    c.projectionMatrixInverse.copy(c.projectionMatrix).invert()
+    c.updateMatrixWorld()
+  }
+
+  /** Le salon s'efface autour du meuble (0 : salon entier, 1 : il ne reste que la bibliothèque). */
+  _setFade(d) {
+    if (d <= 0) {
+      if (this.fadeList) {
+        for (const f of this.fadeList) { f.m.opacity = f.op; f.m.depthWrite = f.dw; if (f.m.transparent !== f.tr) { f.m.transparent = f.tr; f.m.needsUpdate = true } }
+        this.fadeList = null
+      }
+      this.fade = 0
+      return
+    }
+    if (!this.fadeList) {
+      const skip = new Set([this.ember.material, this.lampGlow.material, ...this.steam.map(x => x.material), ...this.flames.map(x => x.material), ...this.candles.map(x => x.material)])
+      const seen = new Set(), list = []
+      this.scene.traverse(o => {
+        if (!o.isMesh || (this.mirror && isUnder(o, this.mirror.g))) return
+        for (const m of [].concat(o.material)) {
+          if (seen.has(m) || skip.has(m)) continue
+          seen.add(m); list.push({ m, op: m.opacity, tr: m.transparent, dw: m.depthWrite })
+        }
+      })
+      this.fadeList = list
+    }
+    for (const f of this.fadeList) {
+      if (!f.m.transparent) { f.m.transparent = true; f.m.needsUpdate = true }
+      f.m.depthWrite = false
+      f.m.opacity = f.op * (1 - d)
+    }
+    this.fade = d
+  }
+
+  /** Découpe la vue au cadre exact de la bibliothèque (0 : plein écran, 1 : son cadre). */
+  _setClip(c, R, S) {
+    const st = this.container.style
+    if (c <= 0 || !R) { if (st.clipPath) st.clipPath = ''; return }
+    st.clipPath = `inset(${(R.top - S.top) * c}px ${(S.right - R.right) * c}px ${(S.bottom - R.bottom) * c}px ${(R.left - S.left) * c}px)`
+  }
+
+  /** On s'approche de la bibliothèque jusqu'à la voir exactement comme dans la bibliothèque. */
   enter(onDone) {
     if (this.fly) return
-    const from = { target: this.target.clone(), az: this.az.v, el: this.el.v, dist: this.dist * (this.zoomK || 1) }
-    this.wave(0)
-    this.fly = { from, to: this._bookcaseView(), t: 0, dur: 1.15, onDone }
+    const lib = this.cb.getLibrary?.()
+    if (lib && (!this.mirror || this.mirror.lib !== lib)) this.setWall(lib)
+    const start = { az: this.az.v + (this.lastDrift || 0), el: this.el.v, dist: this.dist, target: this.target.clone() }
+    if (!this.mirror) {
+      // bibliothèque pas encore prête : simple approche
+      this.fly = { legacy: true, from: start, to: this._bookcaseView(), t: 0, dur: 1.15, onDone }
+      return
+    }
+    this.fly = { dir: 'in', start, t: 0, dur: 1.7, onDone }
+    this._setHover(null)
   }
 
-  /** Arrivée depuis la bibliothèque : on recule jusqu'au salon. */
+  /** Retour depuis la bibliothèque : on part de sa vue exacte et le salon apparaît autour. */
   arriveFromLibrary() {
-    const to = { target: TARGET0.clone(), az: AZ0, el: EL0, dist: this.dist }
-    const from = this._bookcaseView()
-    this.fly = { from, to, t: 0, dur: 1.3, back: true }
-    this._applyFly(0)
+    const lib = this.cb.getLibrary?.()
+    if (lib) this.setWall(lib)
+    if (!this.mirror) return
+    this.fly = { dir: 'out', start: { az: AZ0, el: EL0, dist: this.dist, target: TARGET0.clone() }, t: 0, dur: 1.6 }
+    this._stepFly(0)
+  }
+
+  _stepFly(dt) {
+    const f = this.fly
+    if (f.legacy) {
+      f.t += dt / f.dur
+      const k = Math.min(1, f.t)
+      this._applyFly(k)
+      this._placeCamera(this.az.v, this.el.v, this.flyDist, this.target)
+      if (k >= 1 && !f.called) { f.called = true; f.onDone?.() }
+      return
+    }
+    f.t += dt / f.dur
+    const k = Math.min(1, f.t)
+    const p = f.dir === 'in' ? k : 1 - k          // 0 : salon ; 1 : bibliothèque
+    const a = this._salonPose(f.start.az, f.start.el, f.start.dist, f.start.target)
+    const b = this._libraryPose()
+    this._applyPose(a, b, ease(p))
+    this._setFade(sstep(0.06, 0.55, p))
+    this.mix = sstep(0.2, 0.8, p)
+    this._setClip(sstep(0.62, 1, p), b.R, b.S)
+    this.shadowDirty = Math.max(this.shadowDirty, 1)
+    if (k >= 1) {
+      if (f.dir === 'in') { if (!f.called) { f.called = true; f.onDone?.() } return }
+      // arrivé dans le salon : on rend la main
+      this.fly = null
+      this.az.snap(AZ0); this.el.snap(EL0); this.target.copy(TARGET0)
+      this.camera.updateProjectionMatrix()
+      this._setFade(0); this.mix = 0; this._setClip(0)
+      this.idleAt = this.time
+    }
+  }
+
+  /** Vue rapprochée (secours, quand la bibliothèque n'est pas encore là). */
+  _bookcaseView() {
+    const center = new THREE.Vector3(BOOKCASE.x + BOOKCASE.d / 2, 1.12, BOOKCASE.z)
+    return { target: center, az: Math.PI / 2, el: 0.05, dist: 2.3 }
   }
 
   _applyFly(k) {
@@ -1133,9 +1366,7 @@ export class LivingRoomScene {
     const e = ease(k)
     this.target.lerpVectors(from.target, to.target, e)
     this.az.snap(from.az + (to.az - from.az) * e)
-    // au retour, la caméra monte d'abord (elle passe au-dessus du canapé)
-    const ee = this.fly.back ? ease(Math.min(1, k * 1.6)) : e
-    this.el.snap(from.el + (to.el - from.el) * ee)
+    this.el.snap(from.el + (to.el - from.el) * e)
     this.flyDist = from.dist + (to.dist - from.dist) * e
   }
 
@@ -1147,7 +1378,7 @@ export class LivingRoomScene {
       const r = el.getBoundingClientRect()
       this.ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1)
       this.raycaster.setFromCamera(this.ndc, this.camera)
-      const hit = this.raycaster.intersectObjects(this.hitMeshes, false)[0]
+      const hit = this.raycaster.intersectObjects(this._hits(), false)[0]
       return hit ? hit.object.userData.kind : null
     }
     this._pick = pick
@@ -1233,25 +1464,30 @@ export class LivingRoomScene {
     this._adapt(dt)
     const sub = 3, h = dt / sub
 
+    // le mur de la bibliothèque, recopié
+    this._syncMirror()
     // caméra
     if (this.fly) {
-      this.fly.t += dt / this.fly.dur
-      const k = Math.min(1, this.fly.t)
-      this._applyFly(k)
-      if (k >= 1) {
-        const f = this.fly
-        if (f.back) { this.fly = null; this.flyDist = null } else if (!f.called) { f.called = true; f.onDone?.() }
-      }
+      this._stepFly(dt)
     } else {
       if (!this.pointer) {
         this.az.t = clamp(this.az.t, AZ_MIN, AZ_MAX)
         this.el.t = clamp(this.el.t, EL_MIN, EL_MAX)
       }
       for (let i = 0; i < sub; i++) { this.az.step(h); this.el.step(h) }
+      const idle = this.pointer ? 0 : clamp((this.time - (this.idleAt || 0) - 2) / 3, 0, 1)
+      this.lastDrift = Math.sin(this.time * 0.23) * 0.035 * idle
+      this._placeCamera(this.az.v + this.lastDrift, this.el.v, this.dist, this.target)
     }
-    const idle = this.fly || this.pointer ? 0 : clamp((this.time - (this.idleAt || 0) - 2) / 3, 0, 1)
-    const drift = Math.sin(this.time * 0.23) * 0.035 * idle
-    this._placeCamera(this.az.v + drift, this.el.v + Math.sin(this.time * 0.17) * 0.01 * idle, this.flyDist ?? this.dist, this.target)
+    // lumières : salon → bibliothèque
+    const sal = 1 - this.mix
+    this.hemi.intensity = this.baseLights.hemi * sal
+    this.key.intensity = this.baseLights.key * sal
+    this.fill.intensity = this.baseLights.fill * sal
+    this.libHemi.intensity = 1.35 * this.mix
+    this.libKey.intensity = 1.55 * this.mix
+    this.libFill.intensity = 0.35 * this.mix
+    const vis = 1 - (this.fade || 0)
 
     // survol à la souris
     if (this.hoverXY && !this.pointer && !this.fly) {
@@ -1314,25 +1550,26 @@ export class LivingRoomScene {
     const cam = this.camera.position
     for (const f of this.flames) {
       f.material.uniforms.uTime.value = this.time
-      f.material.uniforms.uPower.value = Math.min(1.6, fp)
+      f.material.uniforms.uPower.value = Math.min(1.6, fp) * vis
       f.scale.set(1, 0.85 + 0.25 * fp, 1)
       f.getWorldPosition(tmp)
       f.rotation.y = Math.atan2(cam.x - tmp.x, cam.z - tmp.z)
     }
     for (const f of this.candles) {
       f.material.uniforms.uTime.value = this.time * 1.3
+      f.material.uniforms.uPower.value = vis
       f.getWorldPosition(tmp)
       f.rotation.y = Math.atan2(cam.x - tmp.x, cam.z - tmp.z)
     }
-    this.fireLight.intensity = 3.2 * fp * flick
-    this.ember.material.opacity = 0.65 + 0.25 * flick
+    this.fireLight.intensity = 3.2 * fp * flick * sal
+    this.ember.material.opacity = (0.65 + 0.25 * flick) * vis
     // lampe
     for (let i = 0; i < sub; i++) this.lampOn.step(h)
     const lo = clamp(this.lampOn.v, 0, 1.2)
-    this.lampLight.intensity = 2.6 * lo
-    this.shadeMat.emissiveIntensity = 0.75 * lo
+    this.lampLight.intensity = 2.6 * lo * sal
+    this.shadeMat.emissiveIntensity = 0.75 * lo * sal
     this.bulbMat.color.setRGB(0.55 + 0.45 * lo, 0.52 + 0.42 * lo, 0.45 + 0.35 * lo)
-    this.lampGlow.material.opacity = 0.28 * lo
+    this.lampGlow.material.opacity = 0.28 * lo * vis
     this.lampGlow.quaternion.copy(this.camera.quaternion)
     if (!this.lampOn.done) moving = true
     // vapeur de la tasse
@@ -1340,7 +1577,7 @@ export class LivingRoomScene {
       const t = (this.time * 0.35 + s.userData.phase) % 1
       s.position.y = 0.5 + t * 0.22
       s.position.x = -0.22 + Math.sin(t * 6 + s.userData.phase * 9) * 0.02
-      s.material.opacity = Math.sin(t * Math.PI) * 0.22
+      s.material.opacity = Math.sin(t * Math.PI) * 0.22 * vis
       s.scale.setScalar(0.6 + t * 1.2)
       s.quaternion.copy(this.camera.quaternion)
     }
@@ -1393,7 +1630,9 @@ export class LivingRoomScene {
     window.removeEventListener('pointerup', this._up)
     window.removeEventListener('pointercancel', this._up)
     el.removeEventListener('pointerleave', this._leave)
+    this._clearMirror()      // les objets du mur appartiennent à la bibliothèque : on ne les libère pas
     this.disposables.forEach(d => d.dispose?.())
+    this.libKey.dispose?.(); this.key.dispose?.()
     this.renderer.dispose()
     el.remove()
   }

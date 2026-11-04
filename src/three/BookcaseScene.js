@@ -16,7 +16,7 @@ import { getBookStatuses } from '../hooks/useLibrary'
 export const RH = 1.22     // hauteur utile d'un rayon
 export const PT = 0.07     // épaisseur d'une planche
 export const SD = 0.92     // profondeur du meuble
-const ST = 0.08            // épaisseur des montants
+export const ST = 0.08     // épaisseur des montants
 const PADX = 0.16          // marge intérieure gauche
 export const BETA = 0.4    // rotation des livres (rad) : on voit la moitié de la couverture
 export const GAP = 0.105   // espace ajouté entre deux livres

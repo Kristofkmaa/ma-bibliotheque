@@ -310,6 +310,7 @@ function Library({ user, onSignOut }) {
             onEntered={() => { markSalonSeen(); setSalon(null) }}
             onOpenBook={b => (b ? openBook(b, null) : openSearch())}
             onAddBooks={() => openSearch()}
+            getLibrary={() => bookcaseApi.current?.scene?.()}
           />
         </Suspense>
       )}

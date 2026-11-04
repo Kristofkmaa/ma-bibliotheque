@@ -13,14 +13,14 @@ function greeting(hour) {
  * L'accueil : le salon. La bibliothèque du salon mène au mur de livres ;
  * la télé montre les lectures en cours, le panier sur la table basse ouvre la recherche.
  */
-export default function LivingRoom({ books, shelves, basketItems, from, onEntered, onOpenBook, onAddBooks }) {
+export default function LivingRoom({ books, shelves, basketItems, from, onEntered, onOpenBook, onAddBooks, getLibrary }) {
   const rootRef = useRef(null)
   const hostRef = useRef(null)
   const topRef = useRef(null)
   const bottomRef = useRef(null)
   const sceneRef = useRef(null)
   const [hover, setHover] = useState(null)
-  const [going, setGoing] = useState(false)
+  const [going, setGoing] = useState(from === 'back')
   const mobile = useIsMobile()
   const cb = useRef({})
   const hour = useMemo(() => {
@@ -30,7 +30,7 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
   }, [])
   const mode = dayMode(hour)
 
-  // entrer : la caméra s'approche de la bibliothèque, puis le salon s'efface
+  // entrer : la caméra rejoint la vue exacte de la bibliothèque, le salon s'efface autour
   const go = () => {
     const s = sceneRef.current
     if (!s || cb.current.going) return
@@ -41,13 +41,15 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
       const el = rootRef.current
       const done = () => cb.current.onEntered?.()
       if (!el?.animate) { done(); return }
-      el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 380, easing: 'ease-in', fill: 'forwards' }).finished.then(done, done)
+      // les deux vues sont identiques : on retire simplement le salon (les menus apparaissent)
+      el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: 'ease-out', fill: 'forwards' }).finished.then(done, done)
     })
   }
   cb.current.go = go
   cb.current.onEntered = onEntered
   cb.current.onOpenBook = onOpenBook
   cb.current.onAddBooks = onAddBooks
+  cb.current.getLibrary = getLibrary
 
   useEffect(() => {
     const host = hostRef.current
@@ -56,6 +58,7 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
       onEnter: () => cb.current.go(),
       onTv: b => cb.current.onOpenBook?.(b),
       onBasket: () => cb.current.onAddBooks?.(),
+      getLibrary: () => cb.current.getLibrary?.(),
       margins: () => {
         const h = host.clientHeight || 1
         return {
@@ -67,11 +70,13 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
     })
     sceneRef.current = s
     if (import.meta.env.DEV || location.search.includes('debug')) window.__salon = s
+    let t
     if (from === 'back') {
       s.arriveFromLibrary()
-      rootRef.current?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 320, easing: 'ease-out' })
+      rootRef.current?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: 'ease-out' })
+      t = setTimeout(() => setGoing(false), 1100)
     }
-    return () => { s.dispose(); sceneRef.current = null }
+    return () => { clearTimeout(t); s.dispose(); sceneRef.current = null }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // les livres, dans l'ordre des étagères ; l'habillage de la première étagère
