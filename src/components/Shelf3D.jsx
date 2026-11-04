@@ -43,7 +43,7 @@ function fitTitle(title, ws, H, hasArt) {
   return { fs: Math.max(7.5, fs), lines }
 }
 
-const Book3D = memo(function Book3D({ book, L, highlight, onOpen, onHover }) {
+const Book3D = memo(function Book3D({ book, L, side, z, delay, highlight, onOpen, onHover }) {
   const d = toDisplay(book)
   const [bg, ink] = spineColors(book)
   const statuses = getBookStatuses(book)
@@ -52,17 +52,33 @@ const Book3D = memo(function Book3D({ book, L, highlight, onOpen, onHover }) {
   const hasArt = !!d.cover && L.ws >= 24
   const { fs, lines } = fitTitle(d.title, L.ws, L.H, hasArt)
 
+  // On tire le livre de l'étagère, puis la fiche s'ouvre depuis lui
+  const take = e => {
+    const el = e.currentTarget
+    const wrap = el.parentElement
+    if (wrap.classList.contains('taking')) return
+    wrap.classList.add('taking')
+    setTimeout(() => onOpen(book, el), 230)
+    setTimeout(() => wrap.classList.remove('taking'), 1400)
+  }
+
   return (
     <div
-      className={'b3' + (wish ? ' wish' : '') + (highlight ? ' fresh' : '')}
+      className={'b3' + (wish ? ' wish' : '') + (highlight ? ' fresh' : '') + (side ? ' ' + side.dir : '')}
       data-id={book.id}
-      style={{ '--bg': bg, '--ink': ink }}
+      style={{ '--bg': bg, '--ink': ink, zIndex: z, animationDelay: `${delay}ms` }}
       onPointerEnter={() => { cursor.state = 'open'; onHover(book) }}
       onPointerLeave={() => { cursor.state = 'default'; onHover(null) }}
     >
+      {side && !wish && (
+        <span
+          className="f-side" aria-hidden="true"
+          style={{ left: side.left, top: side.top, width: side.width, height: side.height, clipPath: side.clip }}
+        />
+      )}
       <button
         type="button" className="f-spine" style={{ '--fs': `${fs.toFixed(1)}px` }}
-        onClick={e => onOpen(book, e.currentTarget)}
+        onClick={take}
         onFocus={() => onHover(book)} onBlur={() => onHover(null)}
         aria-label={`${d.title}, ${d.authors.join(', ')}`}
       >
@@ -79,8 +95,9 @@ const isWish = statuses => statuses.includes('souhaite') && !statuses.some(s => 
 
 /**
  * Un rayon vu en perspective. La 3D est calculée une seule fois (projection), puis dessinée
- * en 2D : fond, côtés, plafond, dessus de planche et tranches des livres dans un SVG statique,
- * dos des livres et chant de la planche dans des calques simplement agrandis.
+ * en 2D : fond, côtés, plafond et dessus de planche dans un SVG statique ; livres (dos +
+ * tranche) et chant de la planche dans des calques simplement agrandis. Les livres peuvent
+ * donc bouger (survol, prise en main) sans aucun recalcul de la scène.
  * Résultat identique à une vraie scène 3D, sans aucun coût à l'affichage.
  */
 const Row = memo(function Row({ row, r, label, L, z, first, highlightId, onOpen, onHover }) {
@@ -94,17 +111,28 @@ const Row = memo(function Row({ row, r, label, L, z, first, highlightId, onOpen,
   const poly = pts => pts.join(' ')
   const id = `r${r}`
 
-  // Tranches visibles : à gauche du centre on voit le côté droit, à droite le côté gauche.
-  // Ordre de peinture : des bords vers le centre (le plus proche du centre recouvre l'autre).
-  const left = [], right = []
-  row.forEach((b, i) => {
-    if (isWish(getBookStatuses(b))) return
-    const x0 = X0 + padX + i * (ws + gap), x1 = x0 + ws
-    const [bg] = spineColors(b)
-    if (x0 + ws / 2 < ox) left.push({ key: b.id || i, bg, pts: poly([pr(x1, ytop, zf), pr(x1, ytop, zb), pr(x1, yp, zb), pr(x1, yp, zf)]) })
-    else right.unshift({ key: b.id || i, bg, pts: poly([pr(x0, ytop, zf), pr(x0, ytop, zb), pr(x0, yp, zb), pr(x0, yp, zf)]) })
+  // Tranche visible de chaque livre (côté droit à gauche du centre, côté gauche à droite),
+  // exprimée dans le repère du livre pour qu'elle le suive quand il bouge.
+  // Ordre d'empilement : des bords vers le centre (le plus proche du centre recouvre l'autre).
+  const kf = k(zf)
+  const toLocal = (x, y, zz, bx) => {
+    const kk = k(zz) / kf
+    return [ox + (x - ox) * kk - bx, oy + (y - oy) * kk - ytop]
+  }
+  const books = row.map((b, i) => {
+    const bx = X0 + padX + i * (ws + gap)
+    const leftOfCenter = bx + ws / 2 < ox
+    const ex = leftOfCenter ? bx + ws : bx // arête de la tranche visible
+    const pts = [toLocal(ex, ytop, zf, bx), toLocal(ex, ytop, zb, bx), toLocal(ex, yp, zb, bx), toLocal(ex, yp, zf, bx)]
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1])
+    const minX = Math.min(...xs), minY = Math.min(...ys)
+    const width = Math.max(1, Math.max(...xs) - minX), height = Math.max(1, Math.max(...ys) - minY)
+    const clip = `polygon(${pts.map(([x, y]) => `${(x - minX).toFixed(1)}px ${(y - minY).toFixed(1)}px`).join(',')})`
+    return {
+      b, side: { dir: leftOfCenter ? 'l' : 'r', left: minX, top: minY, width, height, clip },
+      z: leftOfCenter ? i + 1 : row.length - i + 1,
+    }
   })
-  const sides = [...left, ...right]
   const [bx0, by0] = pr(X0, 0, zw).split(',').map(Number)
   const [bx1, by1] = pr(X1, yp, zw).split(',').map(Number)
 
@@ -140,18 +168,15 @@ const Row = memo(function Row({ row, r, label, L, z, first, highlightId, onOpen,
             fill="#000" fillOpacity="0.07"
           />
         )}
-        {sides.map(sd => (
-          <g key={sd.key}>
-            <polygon points={sd.pts} fill={sd.bg} />
-            <polygon points={sd.pts} fill="#000" fillOpacity="0.36" />
-          </g>
-        ))}
       </svg>
 
       <div className="layer" style={{ transformOrigin: `${ox}px ${oy}px`, transform: `scale(${k(zf).toFixed(4)})` }}>
         <div className="row-books" style={{ left: X0 + padX, top: ytop, height: H }}>
-          {row.map(b => (
-            <Book3D key={b.id || b.google_id} book={b} L={L} highlight={highlightId && b.id === highlightId} onOpen={onOpen} onHover={onHover} />
+          {books.map(({ b, side, z }, i) => (
+            <Book3D
+              key={b.id || b.google_id} book={b} L={L} side={side} z={z} delay={Math.min(r * 60 + i * 14, 700)}
+              highlight={highlightId && b.id === highlightId} onOpen={onOpen} onHover={onHover}
+            />
           ))}
         </div>
       </div>

@@ -179,7 +179,47 @@ a { color: inherit; }
 
 /* Rangée de livres (dans le plan avant) */
 .row-books { position: absolute; right: 0; display: flex; align-items: flex-end; gap: var(--gap); }
-.b3 { position: relative; flex: none; width: var(--ws); height: var(--H); }
+/* Un livre vivant : il se pose sur la planche, sort un peu quand on le survole,
+   ses voisins s'écartent, et on le tire de l'étagère quand on l'ouvre. */
+.b3 {
+  position: relative; flex: none; width: var(--ws); height: var(--H);
+  transform-origin: 50% 100%;
+  transition: transform 0.55s cubic-bezier(.34, 1.56, .64, 1);
+  animation: settle 0.8s cubic-bezier(.3, 1.35, .5, 1) backwards;
+}
+@keyframes settle {
+  0% { transform: translateY(-38px) rotate(-2.5deg); }
+  55% { transform: translateY(3px) rotate(0.4deg); }
+  100% { transform: none; }
+}
+.b3:hover, .b3:focus-within { z-index: 999 !important; transform: translateY(-14px) scale(1.06); }
+.b3:hover + .b3 { transform: translateX(3px) rotate(2.6deg); }
+.b3:hover + .b3 + .b3 { transform: translateX(1px) rotate(1deg); }
+.b3:has(+ .b3:hover) { transform: translateX(-3px) rotate(-2.6deg); }
+.b3:has(+ .b3 + .b3:hover) { transform: translateX(-1px) rotate(-1deg); }
+.b3:hover .f-spine { box-shadow: 0 16px 20px -12px rgba(20, 16, 10, 0.5); }
+.b3.taking {
+  z-index: 1000 !important;
+  transform: translateY(-34px) scale(1.12) rotate(-1.5deg) !important;
+  transition: transform 0.26s cubic-bezier(.2, .8, .2, 1);
+}
+@media (hover: none) {
+  .b3:active { z-index: 999 !important; transform: translateY(-10px) scale(1.05); }
+}
+
+/* Tranche visible (calculée par la perspective), attachée au livre */
+.f-side {
+  position: absolute; z-index: -1; pointer-events: none;
+  background-color: var(--bg);
+}
+.b3.l .f-side { background-image: linear-gradient(90deg, rgba(0,0,0,0.3), rgba(0,0,0,0.46)); }
+.b3.r .f-side { background-image: linear-gradient(270deg, rgba(0,0,0,0.3), rgba(0,0,0,0.46)); }
+.f-side { transition: transform 0.55s cubic-bezier(.34, 1.56, .64, 1); }
+.b3.l .f-side { transform-origin: 0 50%; }
+.b3.r .f-side { transform-origin: 100% 50%; }
+/* Un livre tiré de quelques centimètres ne montre qu'une bande de sa tranche */
+.b3:hover .f-side, .b3:focus-within .f-side { transform: scaleX(0.16); }
+.b3.taking .f-side { transform: scaleX(0.28); transition-duration: 0.26s; }
 .f-spine {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center;
@@ -218,7 +258,13 @@ a { color: inherit; }
 .ribbon {
   position: absolute; top: -11px; left: 24%; width: max(5px, calc(var(--ws) * 0.17)); height: 24px;
   background: var(--cobalt); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
-  pointer-events: none;
+  pointer-events: none; transform-origin: 50% 0;
+}
+.b3:hover .ribbon { animation: sway 1.5s ease-in-out infinite; }
+@keyframes sway {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(9deg); }
+  70% { transform: rotate(-7deg); }
 }
 .b3[style*="#1F3FB0"] .ribbon { background: #B8322B; }
 
