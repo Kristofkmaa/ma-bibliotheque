@@ -7,6 +7,7 @@ import { useBasket } from './hooks/useBasket'
 import { SearchBasket, ShelfBasket } from './components/Basket'
 import { useIsMobile } from './hooks/useIsMobile'
 import { flyTo } from './lib/fly'
+import { preloadCover } from './lib/covers'
 import { isDemoMode } from './lib/supabase'
 import { sortBooks, SORTS, spineColors } from './lib/bookUtils'
 import Shelf3D from './components/Shelf3D'
@@ -91,8 +92,13 @@ function Library({ user, onSignOut }) {
   const closeSearch = useCallback(() => setSearchOpen(false), [])
   const onSearchClosed = useCallback(() => setSearch(false), [])
 
+  // Précharge les couvertures de la bibliothèque et du panier dès l'ouverture
+  useEffect(() => { books.forEach(b => preloadCover(b)) }, [books])
+  useEffect(() => { basket.items.forEach(b => preloadCover(b)) }, [basket.items])
+
   // « + » dans la recherche : la couverture vole jusqu'au panier
   const addToBasket = useCallback((book, coverEl) => {
+    preloadCover(book)
     setFlying(f => new Set(f).add(book.googleId))
     const img = coverEl?.querySelector('img')
     flyTo(coverEl?.getBoundingClientRect(), img?.src, document.querySelector('.search-basket .bb-target'), () => {

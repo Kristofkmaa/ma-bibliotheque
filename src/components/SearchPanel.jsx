@@ -2,6 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { searchBooks } from '../lib/googleBooks'
 import { analyzeBookImage } from '../lib/visionApi'
 import { searchByISBN } from '../lib/googleBooks'
+import { preloadCover, relayUrl } from '../lib/covers'
+
+/** Couverture via le relais (même image que la 3D, déjà en cache), sinon l'adresse directe. */
+function CoverImg({ src }) {
+  const [fallback, setFallback] = useState(false)
+  if (!src) return null
+  const https = src.replace('http://', 'https://')
+  return fallback
+    ? <img src={https} alt="" loading="lazy" />
+    : <img src={relayUrl(https)} alt="" crossOrigin="anonymous" onError={() => setFallback(true)} />
+}
 
 const EASE_SHEET = 'cubic-bezier(.76, 0, .18, 1)'
 const HAS_VISION = !!import.meta.env.VITE_GOOGLE_VISION_API_KEY
@@ -43,6 +54,7 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
       try {
         const books = await searchBooks(query, { maxResults: 24 })
         setResults(books)
+        books.forEach(b => preloadCover(b)) // les couvertures sont prêtes avant même le « + »
         setStatus(books.length ? `${books.length} résultats` : 'Aucun résultat')
       } catch (e) {
         setStatus('Erreur de recherche')
@@ -105,7 +117,7 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
                 <div key={b.googleId} className="result-card">
                   <button type="button" className="result-open" onClick={e => onPick(b, e.currentTarget.querySelector('.result-cover')?.getBoundingClientRect())}>
                     <div className="result-cover">
-                      {b.cover ? <img src={b.cover} alt="" loading="lazy" /> : null}
+                      <CoverImg src={b.cover} />
                       {here && <span className="in-lib">Déjà là</span>}
                     </div>
                     <div className="result-title">{b.title}</div>

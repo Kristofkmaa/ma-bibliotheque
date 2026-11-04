@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { spineSize, spineColors } from '../lib/bookUtils'
-import { spineTexture, coverTexture, pagesTexture, grainTexture, doorTexture, setAnisotropy } from './textures'
+import { spineTexture, withCover, pagesTexture, grainTexture, doorTexture, setAnisotropy } from './textures'
 
 /*
  * Bibliothèque en vraie 3D (Three.js), vue de trois quarts.
@@ -263,7 +263,6 @@ export class BookcaseScene {
     const spine = new THREE.MeshStandardMaterial({ map: spineTexture(book), roughness: 0.6 })
     const cover = new THREE.MeshStandardMaterial({ roughness: 0.55 })
     const entry = { id: book.id, book, h, t, d }
-    cover.map = coverTexture(book, tex => { cover.map = tex; cover.needsUpdate = true; this.kick() })
     // ordre des faces : +x couverture, -x 4e de couverture, +y/-y tête et pied, +z dos, -z gouttière
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(t, h, d), [cover, back, this.pagesMat, this.pagesMat, spine, this.pagesMat])
     mesh.castShadow = mesh.receiveShadow = true
@@ -277,6 +276,20 @@ export class BookcaseScene {
       yaw: new Spring(-BETA, 150, 0.8), tilt: new Spring(0, 160, 0.75),
     })
     this.books.set(book.id, entry)
+    // Le livre n'apparaît qu'avec sa vraie couverture (préchargée) : jamais d'image par défaut
+    entry.waiting = true
+    wrap.visible = false
+    withCover(book, tex => {
+      cover.map = tex; cover.needsUpdate = true
+      if (!entry.waiting) return
+      entry.waiting = false
+      wrap.visible = true
+      if (entry.base) {
+        entry.y.snap(entry.base.y + Math.min(0.2, RH - entry.h - 0.02))
+        entry.y.t = entry.base.y + (entry.waveLift || 0)
+      }
+      this.kick()
+    }, tex => { cover.map = tex; cover.needsUpdate = true; this.kick() })
     return entry
   }
 
@@ -435,7 +448,7 @@ export class BookcaseScene {
     const rc = this.renderer.domElement.getBoundingClientRect()
     this.ndc.set(((e.clientX - rc.left) / rc.width) * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1)
     this.raycaster.setFromCamera(this.ndc, this.camera)
-    const meshes = [...this.books.values()].filter(b => !this.drag || b.id !== this.drag.id).map(b => b.mesh)
+    const meshes = [...this.books.values()].filter(b => !b.waiting && (!this.drag || b.id !== this.drag.id)).map(b => b.mesh)
     const doors = this.caseParts?.flatMap(p => [p.doorL, p.doorR]) || []
     const hits = this.raycaster.intersectObjects([...meshes, ...doors], false)
     if (!hits.length) return null
@@ -613,7 +626,7 @@ export class BookcaseScene {
     this.pointerDirty = false
     if (ptrChanged && this.pointer && !this.drag) {
       this.raycaster.setFromCamera(this.ndc, this.camera)
-      const meshes = [...this.books.values()].map(b => b.mesh)
+      const meshes = [...this.books.values()].filter(b => !b.waiting).map(b => b.mesh)
       const doors = this.caseParts?.flatMap(p => [p.doorL, p.doorR]) || []
       const hits = this.raycaster.intersectObjects([...meshes, ...doors], false)
       const top = hits[0]?.object
@@ -625,6 +638,7 @@ export class BookcaseScene {
     let moving = false
     const sub = 4, h = dt / sub
     for (const e of this.books.values()) {
+      if (e.waiting) { e.wrap.position.set(e.x.v, e.y.v, e.z.v); continue }
       if (e.delay > 0) { e.delay -= dt * 1000; moving = true; e.wrap.position.set(e.x.v, e.y.v, e.z.v); continue }
       for (let i = 0; i < sub; i++) { e.x.step(h); e.y.step(h); e.z.step(h); e.yaw.step(h) }
       e.wrap.position.set(e.x.v, e.y.v, e.z.v)

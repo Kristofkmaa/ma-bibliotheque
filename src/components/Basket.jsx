@@ -134,7 +134,7 @@ export function SearchBasket({ items, bump, onBookClick, onRemove, onDone, mobil
   return (
     <div className="sb">
       <div className="sb-title">Mon panier</div>
-      <AnyBasket items={items} width={mobile ? 124 : 280} bump={bump} onBookClick={onBookClick} onRemove={mobile ? null : onRemove} />
+      <AnyBasket items={items} width={mobile ? 160 : 400} bump={bump} onBookClick={onBookClick} onRemove={mobile ? null : onRemove} />
       <div className="sb-side">
         {items.length
           ? <p className="sb-hint">Continue tes trouvailles, puis va les ranger sur tes étagères.</p>
@@ -225,7 +225,7 @@ export function ShelfBasket({ items, shelves, defaultShelf, canDrop, api, mobile
     <aside className="shelf-basket" aria-label="Mon panier">
       <p className="sh-hint">{canDrop ? 'Attrape un livre et pose-le sur une étagère' : 'Range-les tous d’un coup'}</p>
       <AnyBasket
-        items={items} width={mobile ? 132 : 244} dragging={dragging}
+        items={items} width={mobile ? 170 : 350} dragging={dragging}
         onBookDown={startPress} onRemove={mobile ? null : onRemove}
       />
       <div className="sh-controls">

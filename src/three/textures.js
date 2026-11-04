@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { spineColors, authorInitials, toDisplay } from '../lib/bookUtils'
+import { coverKey, preloadCover } from '../lib/covers'
 
 /**
  * Textures dessinées sur canvas pour la scène 3D : dos des livres (titre vertical),
@@ -154,42 +155,56 @@ export function doorTexture(style) {
 
 // ---- Couvertures réelles -------------------------------------------------------------------
 
-const coverCache = new Map()
-const loader = new THREE.TextureLoader()
-loader.setCrossOrigin('anonymous')
+const texCache = new Map()   // clé de couverture → texture prête
 
-function candidates(book) {
-  const d = toDisplay(book)
-  const out = []
-  if (d.cover) out.push(`/api/cover?url=${encodeURIComponent(d.cover.replace('http://', 'https://'))}`, d.cover)
-  if (d.isbn) out.push(`https://covers.openlibrary.org/b/isbn/${d.isbn}-M.jpg?default=false`)
-  return out
+function toTexture(img) {
+  const tex = new THREE.Texture(img)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = anisotropy
+  tex.needsUpdate = true
+  return tex
+}
+
+/** Texture de la vraie couverture si elle est déjà prête, sinon null (sans attendre). */
+export function cachedCover(book) {
+  const key = coverKey(book)
+  return key ? texCache.get(key) || null : null
+}
+
+/** Promesse de la vraie couverture (texture), ou null si elle n'existe pas. */
+export function loadCover(book) {
+  const key = coverKey(book)
+  if (!key) return Promise.resolve(null)
+  if (texCache.has(key)) return Promise.resolve(texCache.get(key))
+  return preloadCover(book).then(res => {
+    if (!res) return null
+    if (!texCache.has(key)) texCache.set(key, toTexture(res.img))
+    return texCache.get(key)
+  })
 }
 
 /**
- * Charge la couverture réelle (via le relais /api/cover, puis en direct, puis Open Library),
- * et appelle onReady(texture) quand elle arrive. Retourne tout de suite la couverture générée.
+ * Pour un nouveau livre : appelle show(texture) dès que la vraie couverture est prête
+ * (tout de suite si elle l'est déjà). Si elle tarde trop, show(couverture générée), puis on
+ * remplace par la vraie si elle finit par arriver (via swap).
+ * Retourne true si la couverture était déjà prête.
  */
+export function withCover(book, show, swap, waitMs = 1800) {
+  const ready = cachedCover(book)
+  if (ready) { show(ready); return true }
+  let shown = false
+  const timer = setTimeout(() => { shown = true; show(fallbackCover(book)) }, waitMs)
+  loadCover(book).then(tex => {
+    if (!shown) { clearTimeout(timer); shown = true; show(tex || fallbackCover(book)) }
+    else if (tex) swap?.(tex)
+  })
+  return false
+}
+
+/** Ancienne interface : couverture générée tout de suite, vraie couverture quand elle arrive. */
 export function coverTexture(book, onReady) {
-  const key = book.id
-  const hit = coverCache.get(key)
-  if (hit?.tex) return hit.tex
-  const fallback = fallbackCover(book)
-  if (hit) { hit.waiters.push(onReady); return fallback }
-  const entry = { tex: null, waiters: [onReady] }
-  coverCache.set(key, entry)
-  const list = candidates(book)
-  const tryNext = i => {
-    if (i >= list.length) return
-    loader.load(list[i], tex => {
-      if (tex.image && tex.image.width < 20) { tryNext(i + 1); return } // image vide d'Open Library
-      tex.colorSpace = THREE.SRGBColorSpace
-      tex.anisotropy = anisotropy
-      entry.tex = tex
-      entry.waiters.forEach(fn => fn?.(tex))
-      entry.waiters = []
-    }, undefined, () => tryNext(i + 1))
-  }
-  tryNext(0)
-  return fallback
+  const ready = cachedCover(book)
+  if (ready) return ready
+  loadCover(book).then(tex => { if (tex) onReady?.(tex) })
+  return fallbackCover(book)
 }

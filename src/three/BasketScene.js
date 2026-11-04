@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { hashString } from '../lib/bookUtils'
-import { spineTexture, coverTexture, pagesTexture } from './textures'
+import { spineTexture, withCover, pagesTexture } from './textures'
 
 /*
  * Panier en osier en vraie 3D : corbeille ovale tressée, bord en tresse, anse,
@@ -209,14 +209,13 @@ export class BasketScene {
       added = true
     })
     this._layout()
-    if (added && this.ready) { this.wobble.vel += 0.9 }
     this.ready = true
     this.kick()
   }
 
   setHidden(googleId) {
     this.hiddenId = googleId
-    for (const b of this.books.values()) b.wrap.visible = b.item.googleId !== googleId
+    for (const b of this.books.values()) b.wrap.visible = !b.waiting && b.item.googleId !== googleId
     this.kick()
   }
 
@@ -225,7 +224,6 @@ export class BasketScene {
     const h = hashString(item.googleId)
     const t = 0.13 + ((h >> 3) % 6) * 0.012
     const cover = new THREE.MeshStandardMaterial({ roughness: 0.55 })
-    cover.map = coverTexture(book, tex => { cover.map = tex; cover.needsUpdate = true; this.kick() })
     const back = new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 })
     const spine = new THREE.MeshStandardMaterial({ map: spineTexture(book), roughness: 0.6 })
     // faces : +x tranche, -x dos, +y/-y tête/pied, +z couverture, -z 4e de couverture
@@ -241,6 +239,23 @@ export class BasketScene {
       rz: new Spring(0, 140, 0.6), ry: new Spring(0, 140, 0.7), fresh: true,
     }
     this.books.set(item.googleId, b)
+    // Le livre n'apparaît qu'avec sa vraie couverture, puis tombe dans le panier
+    b.waiting = true
+    b.dropOnReveal = !!this.ready
+    wrap.visible = false
+    withCover(book, tex => {
+      cover.map = tex; cover.needsUpdate = true
+      if (!b.waiting) return
+      b.waiting = false
+      wrap.visible = b.item.googleId !== this.hiddenId
+      if (b.dropOnReveal && b.base) {
+        b.y.snap(b.base.y + 2.2)
+        b.rz.snap(b.base.rz * -2.5)
+        this._target(b)
+        setTimeout(() => { this.wobble.vel += 0.9; this.kick() }, 280)
+      }
+      this.kick()
+    }, tex => { cover.map = tex; cover.needsUpdate = true; this.kick() })
     return b
   }
 
@@ -275,6 +290,8 @@ export class BasketScene {
           b.x.snap(b.base.x); b.z.snap(b.base.z); b.ry.snap(b.base.ry)
           b.y.snap(this.ready ? b.base.y + 2.2 : b.base.y)
           b.rz.snap(this.ready ? b.base.rz * -2.5 : b.base.rz)
+          // couverture déjà prête : il tombe tout de suite, et le panier se balance à l'arrivée
+          if (this.ready && !b.waiting) setTimeout(() => { this.wobble.vel += 0.9; this.kick() }, 280)
           b.fresh = false
         }
         this._target(b)
@@ -300,7 +317,7 @@ export class BasketScene {
   _pick() {
     if (!this.ndcValid) return null
     this.raycaster.setFromCamera(this.ndc, this.camera)
-    const meshes = [...this.books.values()].filter(b => b.wrap.visible).map(b => b.mesh)
+    const meshes = [...this.books.values()].filter(b => b.wrap.visible && !b.waiting).map(b => b.mesh)
     const hit = this.raycaster.intersectObjects(meshes, false)[0]
     return hit ? hit.object.userData.id : null
   }
@@ -349,6 +366,7 @@ export class BasketScene {
     let moving = false
     const sub = 4, h = dt / sub
     for (const b of this.books.values()) {
+      if (b.waiting) continue
       for (let i = 0; i < sub; i++) { b.x.step(h); b.y.step(h); b.z.step(h); b.rz.step(h); b.ry.step(h) }
       b.wrap.position.set(b.x.v, b.y.v, b.z.v)
       b.wrap.rotation.set(0, b.ry.v, b.rz.v)
