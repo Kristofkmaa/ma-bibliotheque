@@ -396,6 +396,11 @@ a { color: inherit; }
 .scanner-msg { font-family: var(--serif); font-size: 16px; color: var(--ink); text-align: center; max-width: 40ch; }
 .scanner-msg.error { color: #B8322B; }
 
+/* Chargement ---------------------------------------------------------------- */
+.loading-screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
+.loading-screen .lbl { color: var(--muted); animation: pulse 1.6s var(--ease) infinite; }
+@keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+
 /* Connexion ---------------------------------------------------------------- */
 .login { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 34px; text-align: center; padding: 24px; z-index: 10; }
 .login-shelf { display: flex; align-items: flex-end; gap: 4px; height: 150px; perspective: 800px; }
