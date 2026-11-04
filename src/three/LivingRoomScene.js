@@ -731,6 +731,7 @@ export class LivingRoomScene {
     const screen = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(1.01, 0.57)), new THREE.MeshBasicMaterial({ map: this.tvTex, toneMapped: false }))
     screen.position.set(0, 0.42, 0.0235)
     tv.add(screen)
+    this.tvScreen = screen
     this.tvList = []
     this.tvIndex = 0
     this.tvSwitch = 1
@@ -760,8 +761,32 @@ export class LivingRoomScene {
 
   /** L'écran de la télé : le tuto, en boucle. */
   _drawTv() {
-    this.tut.draw(this.tvCanvas.getContext('2d'))
+    this.tut.draw(this.tvCanvas.getContext('2d'), TV_W, TV_H)
     this.tvTex.needsUpdate = true
+  }
+
+  /**
+   * Zoom terminé : un calque net (à la définition de l'écran du téléphone) se pose exactement
+   * sur l'écran de la télé. La texture 3D suffit de loin, pas de près.
+   */
+  _placeTvOverlay() {
+    const el = this.cb.tvOverlay?.()
+    if (!el) return false
+    const on = !!this.tvZoom && this.tvZoom.dir > 0 && this.tvZoom.k >= 1
+    if (!on) { if (el.style.display !== 'none') el.style.display = 'none'; return false }
+    const S = this.renderer.domElement.getBoundingClientRect()
+    const pts = [[-0.505, 0.285], [0.505, -0.285]].map(([x, y]) => {
+      const v = this.tvScreen.localToWorld(new THREE.Vector3(x, y, 0.001)).project(this.camera)
+      return { x: S.left + ((v.x + 1) / 2) * S.width, y: S.top + ((1 - v.y) / 2) * S.height }
+    })
+    const x = Math.min(pts[0].x, pts[1].x), y = Math.min(pts[0].y, pts[1].y)
+    const w = Math.abs(pts[1].x - pts[0].x), h = Math.abs(pts[1].y - pts[0].y)
+    const dpr = Math.min(3, window.devicePixelRatio || 1)
+    const cw = Math.round(w * dpr), ch = Math.round(h * dpr)
+    if (el.width !== cw || el.height !== ch) { el.width = cw; el.height = ch }
+    Object.assign(el.style, { display: 'block', left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` })
+    this.tut.draw(el.getContext('2d'), cw, ch)
+    return true
   }
 
   // ---- Zoom sur la télé (le tuto en grand) -------------------------------------------------
@@ -1710,7 +1735,8 @@ export class LivingRoomScene {
     // télé : le tuto tourne en boucle (plus fluide quand on le regarde en grand)
     if (this.tut.update(dt)) this.cb.onTutSlide?.(this.tut.i)
     this.tvAcc = (this.tvAcc || 0) + dt
-    if (this.tvAcc >= (this.tvZoom ? 1 / 30 : 1 / 12)) { this.tvAcc = 0; this._drawTv() }
+    const sharp = this._placeTvOverlay()
+    if (!sharp && this.tvAcc >= (this.tvZoom ? 1 / 30 : 1 / 12)) { this.tvAcc = 0; this._drawTv() }
     this._placeBubbles()
 
     if (moving) this.shadowDirty = Math.max(this.shadowDirty, 1)

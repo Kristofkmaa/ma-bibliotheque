@@ -1256,3 +1256,5 @@ canvas { -webkit-user-select: none; user-select: none; -webkit-touch-callout: no
 @media (min-width: 768px) { .tv-caption { display: none; } }
 
 .tv-step { padding: 7px 10px; background-color: var(--sheet); border: 1px solid var(--rule-soft); color: var(--ink); }
+
+.tv-overlay { position: fixed; z-index: 2; pointer-events: none; border-radius: 2px; }

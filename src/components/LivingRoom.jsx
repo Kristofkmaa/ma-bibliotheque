@@ -29,6 +29,7 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
   const [slide, setSlide] = useState(0)
   const tvBubble = useRef(null)
   const basketBubble = useRef(null)
+  const tvOverlay = useRef(null)
   const count = basketItems?.length || 0
   const mobile = useIsMobile()
   const cb = useRef({})
@@ -71,6 +72,7 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
       onTvZoom: setTv,
       onTutSlide: setSlide,
       bubble: kind => (kind === 'tv' ? tvBubble.current : basketBubble.current),
+      tvOverlay: () => tvOverlay.current,
       getLibrary: () => cb.current.getLibrary?.(),
       margins: () => {
         const h = host.clientHeight || 1
@@ -128,6 +130,7 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
   return (
     <div className={`salon mood-${mode}` + (going || tv ? ' going' : '') + (tv ? ' tv-mode' : '')} ref={rootRef}>
       <div className="salon-stage" ref={hostRef} />
+      <canvas className="tv-overlay" ref={tvOverlay} style={{ display: 'none' }} aria-hidden="true" />
 
       {/* bulles au-dessus de la télé et du panier (placées par la scène) */}
       <button type="button" className="salon-bubble tv-bubble off" ref={tvBubble} onClick={() => sceneRef.current?.zoomTv()}>
