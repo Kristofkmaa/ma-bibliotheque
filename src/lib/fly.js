@@ -71,3 +71,27 @@ export function flyIntoBasket({ from, src, color, target, ready, onLand, onDone 
   }
   requestAnimationFrame(step)
 }
+
+/**
+ * Une couverture vole d'un rectangle à un autre en gardant ses proportions (rangement guidé :
+ * du panier jusqu'à sa place sur l'étagère). Rend l'élément volant, à retirer par l'appelant.
+ */
+export function flyToRect(from, src, to, color = '#C7692A') {
+  return new Promise(resolve => {
+    if (!from || !to || matchMedia('(prefers-reduced-motion: reduce)').matches) { resolve(null); return }
+    const el = document.createElement('div')
+    el.className = 'fly-cover'
+    el.style.cssText = `left:${from.left}px;top:${from.top}px;width:${from.width}px;height:${from.height}px;background:${color};transform-origin:0 0`
+    if (src) { const img = new Image(); img.src = src; img.alt = ''; el.appendChild(img) }
+    document.body.appendChild(el)
+    const sx = to.width / from.width, sy = to.height / from.height
+    const dx = to.left - from.left, dy = to.top - from.top
+    const lift = Math.min(150, Math.abs(dy) * 0.22 + 60)
+    const a = el.animate([
+      { transform: 'translate(0px, 0px) scale(1, 1) rotate(0deg)' },
+      { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - lift}px) scale(${(1 + sx) / 2}, ${(1 + sy) / 2}) rotate(-7deg)`, offset: 0.5 },
+      { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy}) rotate(0deg)` },
+    ], { duration: 720, easing: 'cubic-bezier(.45, 0, .25, 1)', fill: 'forwards' })
+    a.onfinish = () => resolve(el)
+  })
+}

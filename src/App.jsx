@@ -6,7 +6,7 @@ import { effectiveShelves, placeBook, moveBook } from './lib/shelfOps'
 import { useBasket } from './hooks/useBasket'
 import { SearchBasket, ShelfBasket } from './components/Basket'
 import { useIsMobile } from './hooks/useIsMobile'
-import { flyTo, flyIntoBasket } from './lib/fly'
+import { flyTo, flyIntoBasket, flyToRect } from './lib/fly'
 import { MAX_BASKET } from './lib/basketSize'
 import { preloadCover } from './lib/covers'
 import { isDemoMode } from './lib/supabase'
@@ -14,6 +14,7 @@ import { sortBooks, SORTS, spineColors } from './lib/bookUtils'
 import Shelf3D from './components/Shelf3D'
 import MyShelves from './components/MyShelves'
 import LibrarySearch from './components/LibrarySearch'
+import GuidedPlacement from './components/GuidedPlacement'
 import { webglAvailable } from './three/webgl'
 import DetailSheet from './components/DetailSheet'
 import SearchPanel from './components/SearchPanel'
@@ -73,6 +74,7 @@ function Library({ user, onSignOut }) {
   const [search, setSearch] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [scanner, setScanner] = useState(false)
+  const [guide, setGuide] = useState(false)     // rangement du panier, un livre à la fois
   // salon d'accueil : 'first' à l'arrivée, 'back' quand on y retourne, null dans la bibliothèque
   const [salon, setSalon] = useState(() => (HAS_WEBGL && !salonSeen() ? 'first' : null))
   const basket = useBasket(user.id)
@@ -92,7 +94,7 @@ function Library({ user, onSignOut }) {
     return sortBooks(books, sort)
   }, [books, sort])
 
-  const overlay = !!detail || search || scanner || !!shelvesOpen || !!salon
+  const overlay = !!detail || search || scanner || !!shelvesOpen || !!salon || guide
   const effShelves = useMemo(() => effectiveShelves(shelves, books), [shelves, books])
 
   const openBook = useCallback((book, el) => {
@@ -175,6 +177,23 @@ function Library({ user, onSignOut }) {
     if (ids.length) setFocusId(ids[ids.length - 1])
   }, [basket, addBook, commitShelves])
 
+  // Rangement guidé : le mur va jusqu'à l'étagère, la couverture s'y envole, le livre s'y pose
+  const placeGuided = useCallback(async (book, shelfId, fromRect, src) => {
+    const api = bookcaseApi.current
+    const r = api?.showShelf?.(shelfId) ?? -1
+    if (r >= 0) await new Promise(res => setTimeout(res, 560))
+    const to = r >= 0 ? api.slotRect(shelfId) : null
+    preloadCover(book)
+    const ghost = await flyToRect(fromRect, src, to, spineColors({ google_id: book.googleId, title: book.title })[0])
+    await dropFromBasket(book, { shelfId, index: Infinity })
+    if (ghost) setTimeout(() => { ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: 'forwards' }).onfinish = () => ghost.remove() }, 420)
+  }, [dropFromBasket])
+
+  const openGuide = useCallback(() => {
+    if (salon) { markSalonSeen(); setSalon(null) }
+    setGuide(true)
+  }, [salon])
+
   const onPick = useCallback((book, rect) => {
     setScanner(false)
     setDetail({ book, mode: 'add', rect: rect || null })
@@ -241,12 +260,13 @@ function Library({ user, onSignOut }) {
           shelves={shelves} commitShelves={commitShelves} newShelfSignal={newShelfSignal}
           onOpen={openBook} onAdd={openSearch} locked={overlay} apiRef={bookcaseApi}
           onShelfClick={id => setShelvesOpen({ id })}
-          aside={basket.items.length > 0 ? (
+          aside={basket.items.length > 0 && !guide ? (
             <ShelfBasket
               items={basket.items} shelves={shelves.map(s => ({ id: s.id, name: s.name }))} defaultShelf={addTarget}
               canDrop={HAS_WEBGL && manual} api={bookcaseApi} mobile={mobile}
               onDropBook={dropFromBasket} onPlaceAll={placeAllFromBasket}
               onOpenBook={b => onPick(b, null)} onRemove={basket.remove} onClear={basket.clear}
+              onGuide={manual ? openGuide : null}
             />
           ) : null}
           highlightId={highlightId} focusId={focusId} onFocused={onFocused} emptyText={emptyText}
@@ -269,7 +289,7 @@ function Library({ user, onSignOut }) {
         <>
           <SearchPanel open={searchOpen} onClosed={onSearchClosed} onPick={onPick} isInLibrary={isInLibrary} onScan={() => setScanner(true)} inBasket={inBasket} onBasket={addToBasket} basketFull={basketFull} basketCount={basket.items.length} basketBusy={flying.size > 0}
             onBasketDrop={(b, rect, src) => addToBasket(b, null, rect, src)}
-            basketSlot={<SearchBasket items={basket.items} bump={bump} mobile={mobile} apiRef={searchBasketApi} onBookClick={b => onPick(b, null)} onRemove={basket.remove} onDone={closeSearch} />} />
+            basketSlot={<SearchBasket items={basket.items} bump={bump} mobile={mobile} apiRef={searchBasketApi} onBookClick={b => onPick(b, null)} onRemove={basket.remove} onDone={() => { closeSearch(); if (manual && effShelves.some(s => !s.pseudo)) openGuide() }} />} />
           <button type="button" className="lbl box search-close-btn" style={{ zIndex: 59, position: 'fixed' }} onClick={closeSearch}>Fermer</button>
         </>
       )}
@@ -301,6 +321,13 @@ function Library({ user, onSignOut }) {
 
       {shelvesOpen && (
         <MyShelves eff={effShelves} commit={commitShelves} onDeleteBooks={removeBooks} initialId={shelvesOpen.id} onClose={() => setShelvesOpen(null)} />
+      )}
+
+      {guide && (
+        <GuidedPlacement
+          items={basket.items} shelves={effShelves} books={books}
+          onPlace={placeGuided} onPlaceRest={placeAllFromBasket} onClose={() => setGuide(false)}
+        />
       )}
 
       {salon && (

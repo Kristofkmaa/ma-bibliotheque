@@ -157,7 +157,7 @@ export function SearchBasket({ items, bump, onBookClick, onRemove, onDone, mobil
  * Le panier posé à côté de la bibliothèque : on attrape un livre et on le pose sur une étagère
  * (un emplacement s'ouvre dans la rangée), ou on range tout d'un coup.
  */
-export function ShelfBasket({ items, shelves, defaultShelf, canDrop, api, mobile, onDropBook, onPlaceAll, onOpenBook, onRemove, onClear }) {
+export function ShelfBasket({ items, shelves, defaultShelf, canDrop, api, mobile, onDropBook, onPlaceAll, onOpenBook, onRemove, onClear, onGuide }) {
   const [target, setTarget] = useState(defaultShelf || shelves[0]?.id || '')
   const [confirmClear, setConfirmClear] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -233,6 +233,9 @@ export function ShelfBasket({ items, shelves, defaultShelf, canDrop, api, mobile
         onBookDown={startPress} onRemove={mobile ? null : onRemove}
       />
       <div className="sh-controls">
+        {onGuide && shelves.length > 0 && (
+          <button type="button" className="lbl box filled sh-guide" onClick={onGuide}>Ranger un par un →</button>
+        )}
         {shelves.length > 0 && (
           <select className="sh-select" value={target} onChange={e => setTarget(e.target.value)} aria-label="Étagère où tout ranger">
             {shelves.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}

@@ -276,6 +276,22 @@ export class BookcaseScene {
     this.setZoom(true)
     this.kick()
   }
+  /** À l'écran : la place du prochain livre au bout d'un rayon (un livre du panier s'y envole). */
+  slotRect(r) {
+    if (!this.layout || r == null || r < 0 || r >= this.rowCount) return null
+    const { CW } = this.layout
+    const end = this.rowEnds?.[r] ?? (-CW / 2 + PADX)
+    const x = Math.min(CW / 2 - 0.35, end + 0.4)
+    const y0 = this.rowBase(r)
+    const rc = this.renderer.domElement.getBoundingClientRect()
+    const proj = (px, py) => {
+      const v = new THREE.Vector3(px, py, SD / 2).project(this.camera)
+      return { x: rc.left + ((v.x + 1) / 2) * rc.width, y: rc.top + ((1 - v.y) / 2) * rc.height }
+    }
+    const top = proj(x, y0 + RH * 0.86), bot = proj(x, y0)
+    const h = Math.abs(bot.y - top.y)
+    return { left: top.x - h * 0.33, top: Math.min(top.y, bot.y), width: h * 0.66, height: h }
+  }
   scrollBy(rows) { this.scroll.t = this._clampScroll(this.scroll.t - rows * (RH + PT)); this.kick() }
   scrollToTop() { this.scroll.t = this._clampScroll(Infinity); this.kick() }
   scrollToBottom() { this.scroll.t = this._clampScroll(-Infinity); this.kick() }

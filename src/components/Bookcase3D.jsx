@@ -211,6 +211,18 @@ export default function Bookcase3D({
     if (!apiRef) return
     apiRef.current = {
       scene: () => sceneRef.current,   // le salon en fait une copie fidèle
+      // rangement guidé : aller jusqu'à une étagère, et la place de son prochain livre
+      showShelf: shelfId => {
+        let r = -1
+        dataRef.current.displayRows.forEach((row, i) => { if (row.shelf?.id === shelfId) r = i })
+        if (r >= 0) sceneRef.current?.scrollToRow(r)
+        return r
+      },
+      slotRect: shelfId => {
+        let r = -1
+        dataRef.current.displayRows.forEach((row, i) => { if (row.shelf?.id === shelfId) r = i })
+        return r >= 0 ? sceneRef.current?.slotRect(r) || null : null
+      },
       previewExternal: (id, x, y) => {
         const d = dataRef.current
         const sc = sceneRef.current
