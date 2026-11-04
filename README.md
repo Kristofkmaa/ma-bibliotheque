@@ -3,12 +3,13 @@
 Une étagère de livres en ligne, à feuilleter comme une archive : les livres lus, ceux qu'on possède, ceux qu'on attend encore.
 
 Direction artistique « archive papier » : fond papier grainé, encre noire, cobalt, typographies Newsreader + Inter Tight.
-Les livres sont des volumes posés sur les planches d'un meuble vu en perspective (fond, côtés, dessus des planches,
-tranches des livres). Ils restent à leur place : on change d'étagère avec les flèches, la molette ou un glissé du doigt,
-et un clic sur un livre ouvre sa fiche, une feuille qui grandit depuis le dos, l'encre qui s'étale sur la couverture.
+La bibliothèque est une vraie scène 3D (Three.js) vue de trois quarts : un meuble en bois avec ses planches, son fond et
+ses portes coulissantes, et des livres reliés en volume (couverture, dos titré, tranche des pages), légèrement tournés
+pour montrer la moitié de leur couverture. Chaque livre est monté sur ressort : le curseur fait passer une vague dans la
+rangée, le livre survolé sort de l'étagère, un clic le tire puis ouvre sa fiche (une feuille qui grandit depuis le livre).
+La scène ne se redessine que lorsque quelque chose bouge. Sans WebGL, une étagère dessinée à plat prend le relais.
 
-La perspective est calculée une seule fois en JavaScript puis dessinée à plat (SVG + calques agrandis) : même rendu
-qu'une vraie scène 3D, sans aucun coût d'affichage, même avec des centaines de livres.
+Les couvertures passent par un petit relais Vercel (`api/cover.js`) pour pouvoir être utilisées en 3D.
 Aucun fondu : chaque apparition est un masque, un clip ou une mise à l'échelle.
 
 ## ✨ Fonctionnalités
@@ -90,7 +91,9 @@ VITE_GOOGLE_VISION_API_KEY=AIzaSyxxxx   # optionnel
 | Technologie | Usage |
 |---|---|
 | React 19 + Vite | Frontend |
-| SVG + CSS + Web Animations API | Perspective, fiches, masques (aucune lib d'animation) |
+| Three.js | Bibliothèque 3D (livres, meuble, portes, ombres) |
+| CSS + Web Animations API | Fiches, masques, transitions |
+| Fonction Vercel `api/cover` | Relais des couvertures pour la 3D |
 | Supabase | Base de données + Auth Google |
 | Google Books API | Catalogue de livres |
 | Google Vision API | Reconnaissance de couverture |
@@ -101,7 +104,8 @@ VITE_GOOGLE_VISION_API_KEY=AIzaSyxxxx   # optionnel
 ```
 src/
 ├── components/
-│   ├── Shelf3D.jsx       # Meuble en perspective : étagères, portes, glisser-déposer, création animée
+│   ├── Bookcase3D.jsx    # Bibliothèque 3D : étagères, pages, portes, glisser-déposer, éditeur
+│   ├── Shelf3D.jsx       # Version dessinée à plat (navigateurs sans WebGL)
 │   ├── ShelfEditor.jsx   # Carte d'édition d'une étagère (nom, matière, fond, portes, ordre)
 │   ├── Caption.jsx       # Légende : titre / auteur qui glissent dans des masques
 │   ├── StatusTabs.jsx    # Onglets avec indicateur cobalt glissant
@@ -124,6 +128,10 @@ src/
 │   ├── skins.js          # Matières, couleurs de fond, styles de portes
 │   ├── demoStore.js      # Livres d'exemple du mode démo
 │   └── cursorState.js
+├── three/
+│   ├── BookcaseScene.js  # Scène Three.js : meuble, livres sur ressorts, portes, vague, glisser-déposer
+│   ├── textures.js       # Dos titrés, couvertures, pages, bois, portes (canvas)
+│   └── webgl.js
 ├── App.jsx
 ├── main.jsx
 └── styles.css

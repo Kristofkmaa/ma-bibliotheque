@@ -6,6 +6,7 @@ import { effectiveShelves, placeBook } from './lib/shelfOps'
 import { isDemoMode } from './lib/supabase'
 import { sortBooks, SORTS } from './lib/bookUtils'
 import Shelf3D from './components/Shelf3D'
+import { webglAvailable } from './three/webgl'
 import StatusTabs from './components/StatusTabs'
 import DetailSheet from './components/DetailSheet'
 import SearchPanel from './components/SearchPanel'
@@ -13,6 +14,17 @@ import LoginPage from './components/LoginPage'
 import Cursor from './components/Cursor'
 
 const Scanner = lazy(() => import('./components/Scanner'))
+// La bibliothèque en vraie 3D (Three.js) est chargée à part ; sans WebGL, étagère dessinée à plat
+const Bookcase3D = lazy(() => import('./components/Bookcase3D'))
+const HAS_WEBGL = typeof window !== 'undefined' && webglAvailable()
+function Bookcase(props) {
+  if (!HAS_WEBGL) return <Shelf3D {...props} />
+  return (
+    <Suspense fallback={<div className="case3d" />}>
+      <Bookcase3D {...props} />
+    </Suspense>
+  )
+}
 
 function readPref(key, fallback) {
   try { return localStorage.getItem(key) || fallback } catch { return fallback }
@@ -131,7 +143,7 @@ function Library({ user, onSignOut }) {
       {loading && !books.length ? (
         <p className="scene-loading lbl">Ouverture des rayons…</p>
       ) : (
-        <Shelf3D
+        <Bookcase
           books={filtered} allBooks={books} sort={sort} viewKey={filter} manual={manual} canEdit={canEdit}
           shelves={shelves} commitShelves={commitShelves} newShelfSignal={newShelfSignal}
           onOpen={openBook} onAdd={openSearch} locked={overlay}

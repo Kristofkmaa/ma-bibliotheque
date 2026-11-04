@@ -378,6 +378,15 @@ body.is-dragging .custom-cursor { display: none; }
   background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.14));
 }
 
+/* Bibliothèque 3D (WebGL) : la toile remplit la zone, étiquettes et porte-étiquettes en calque */
+.case3d.webgl { position: relative; overflow: hidden; }
+.shelf-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.plank-label.over { position: absolute; z-index: 2; transform: translate(0, -50%); max-width: 40%; }
+button.plank-label.over.editable:hover { transform: translate(0, calc(-50% - 1px)); }
+.plank-label.over.born { animation: bornLabel 0.6s 0.7s cubic-bezier(.2, .8, .2, 1) both; }
+.door-card.over { position: absolute; z-index: 2; animation: cardIn 0.45s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes cardIn { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+
 /* Rangée de livres (dans le plan avant) */
 .row-books { position: absolute; right: 0; display: flex; align-items: flex-end; gap: var(--gap); }
 /* Les livres restent droits. Au survol, le livre sort légèrement de l'étagère :
@@ -490,9 +499,11 @@ body.is-dragging .custom-cursor { display: none; }
 .subtitle-mask { height: 18px; }
 .year-mask { height: 18px; }
 .caption-line {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  position: absolute; inset: 0; display: block; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px;
 }
+.title-mask .caption-line { line-height: 38px; }
+.subtitle-mask .caption-line, .year-mask .caption-line { line-height: 18px; }
 .caption-line.title { font-family: var(--serif); font-weight: 400; font-size: 31px; line-height: 1.12; letter-spacing: -0.01em; color: var(--ink); }
 .caption-line.subtitle { font-family: var(--sans); font-weight: 500; font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--cobalt); }
 .caption-line.year { font-family: var(--sans); font-weight: 500; font-size: 11px; letter-spacing: 0.08em; color: var(--ink); }
@@ -656,6 +667,7 @@ body.is-dragging .custom-cursor { display: none; }
   .scene-bottom { padding: 10px 6px 0; gap: 4px; }
   .caption-line.title { font-size: 23px; }
   .title-mask { height: 30px; }
+  .title-mask .caption-line { line-height: 30px; }
   .footer-bar { padding: 10px 16px 16px; }
   .footer-copy, .footer-mail, .footer-links > span[aria-hidden] { display: none; }
   .detail-grid { grid-template-columns: 1fr; padding: 84px 20px 40px; row-gap: 26px; align-items: start; }

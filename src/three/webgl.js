@@ -1,0 +1,7 @@
+/** Le navigateur sait-il afficher de la 3D (WebGL) ? Sinon on garde l'étagère dessinée à plat. */
+export function webglAvailable() {
+  try {
+    const c = document.createElement('canvas')
+    return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl')))
+  } catch { return false }
+}
