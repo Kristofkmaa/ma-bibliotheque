@@ -1105,3 +1105,36 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 img { -webkit-user-drag: none; }
 input, textarea, select, [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 canvas { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* Téléphone : le panier de la recherche monte quand on en a besoin ----------------------- */
+@media (max-width: 767px) {
+  .search-inner { padding-bottom: 90px; }
+  .search-basket {
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -18px 40px -24px rgba(20, 16, 10, 0.45);
+    transition: transform 0.55s cubic-bezier(.3, 1.25, .45, 1);
+    will-change: transform;
+  }
+  .search-basket.down { transform: translateY(100%); transition: transform 0.45s cubic-bezier(.6, 0, .7, .2); }
+  .search-basket .sb { flex-direction: column; align-items: center; gap: 8px; }
+  .search-basket .sb-side { width: 100%; align-items: center; padding-bottom: 0; }
+  .search-basket .sb-hint { text-align: center; }
+  .search-basket .sb-go { width: 100%; }
+  .search-basket.up .basket3d, .search-basket.up .big-basket { animation: sbRise 0.7s cubic-bezier(.3, 1.4, .5, 1) both; }
+  @keyframes sbRise { from { transform: translateY(40px) scale(0.86) rotate(-3deg); } }
+  .sb-tab {
+    position: absolute; right: 14px; bottom: 100%; height: 34px; padding: 0 12px; gap: 8px;
+    display: inline-flex; align-items: center;
+    background-color: var(--sheet); color: var(--cobalt); border: 1px solid var(--rule); border-bottom: none;
+    box-shadow: 0 -10px 20px -14px rgba(20, 16, 10, 0.4);
+    animation: cardIn 0.45s cubic-bezier(.2, .8, .2, 1) both;
+  }
+  .sb-count {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
+    border-radius: 9px; background: var(--cobalt); color: #fff; font-size: 9.5px; letter-spacing: 0;
+    animation: countPop 0.5s cubic-bezier(.3, 1.8, .5, 1);
+  }
+  @keyframes countPop { from { transform: scale(0.4); } }
+  .sb-chev { font-size: 9px; opacity: 0.7; }
+  .search-basket.drop-ready { background-color: #EEF0F8; }
+}

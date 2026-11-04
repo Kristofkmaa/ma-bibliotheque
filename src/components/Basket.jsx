@@ -136,7 +136,7 @@ export function SearchBasket({ items, bump, onBookClick, onRemove, onDone, mobil
   return (
     <div className="sb">
       <div className="sb-title">Mon panier</div>
-      <AnyBasket items={items} width={mobile ? 150 : 360} bump={bump} onBookClick={onBookClick} onRemove={mobile ? null : onRemove} apiRef={apiRef} />
+      <AnyBasket items={items} width={mobile ? 210 : 360} bump={bump} onBookClick={onBookClick} onRemove={mobile ? null : onRemove} apiRef={apiRef} />
       <div className="sb-side">
         {full
           ? <p className="sb-hint">Ton panier est plein ({MAX_BASKET} livres) : va les ranger sur tes étagères.</p>
@@ -145,7 +145,7 @@ export function SearchBasket({ items, bump, onBookClick, onRemove, onDone, mobil
           : <p className="sb-hint">Appuie sur <b>+</b>, ou glisse un livre jusqu'ici pour le mettre dans le panier.</p>}
         {items.length > 0 && (
           <button type="button" className="lbl box cobalt sb-go" onClick={onDone}>
-            Ranger mes {items.length} livre{items.length > 1 ? 's' : ''} →
+            {items.length > 1 ? `Ranger mes ${items.length} livres` : 'Ranger mon livre'} →
           </button>
         )}
       </div>

@@ -267,7 +267,7 @@ function Library({ user, onSignOut }) {
 
       {search && (
         <>
-          <SearchPanel open={searchOpen} onClosed={onSearchClosed} onPick={onPick} isInLibrary={isInLibrary} onScan={() => setScanner(true)} inBasket={inBasket} onBasket={addToBasket} basketFull={basketFull}
+          <SearchPanel open={searchOpen} onClosed={onSearchClosed} onPick={onPick} isInLibrary={isInLibrary} onScan={() => setScanner(true)} inBasket={inBasket} onBasket={addToBasket} basketFull={basketFull} basketCount={basket.items.length} basketBusy={flying.size > 0}
             onBasketDrop={(b, rect, src) => addToBasket(b, null, rect, src)}
             basketSlot={<SearchBasket items={basket.items} bump={bump} mobile={mobile} apiRef={searchBasketApi} onBookClick={b => onPick(b, null)} onRemove={basket.remove} onDone={closeSearch} />} />
           <button type="button" className="lbl box search-close-btn" style={{ zIndex: 59, position: 'fixed' }} onClick={closeSearch}>Fermer</button>

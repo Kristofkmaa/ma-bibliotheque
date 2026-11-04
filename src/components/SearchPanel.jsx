@@ -3,6 +3,7 @@ import { searchBooks } from '../lib/googleBooks'
 import { analyzeBookImage } from '../lib/visionApi'
 import { searchByISBN } from '../lib/googleBooks'
 import { preloadCover, relayUrl } from '../lib/covers'
+import { useIsMobile } from '../hooks/useIsMobile'
 
 /** Couverture via le relais (même image que la 3D, déjà en cache), sinon l'adresse directe. */
 function CoverImg({ src }) {
@@ -18,8 +19,20 @@ const EASE_SHEET = 'cubic-bezier(.76, 0, .18, 1)'
 const HAS_VISION = !!import.meta.env.VITE_GOOGLE_VISION_API_KEY
 
 /** Panneau de recherche Google Books, plein écran, même papier que la fiche. */
-export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onScan, inBasket, onBasket, onBasketDrop, basketSlot, basketFull }) {
+export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onScan, inBasket, onBasket, onBasketDrop, basketSlot, basketFull, basketCount = 0, basketBusy = false }) {
   const suppressClick = useRef(false)
+  const mobile = useIsMobile()
+  // Téléphone : le panier reste caché en bas ; il monte quand on prend un livre (appui long)
+  // ou qu'on touche « + », puis redescend une fois le livre arrivé dedans.
+  const [peek, setPeek] = useState(false)
+  const [sheet, setSheet] = useState(false)     // ouvert à la main (onglet « Panier »)
+  const [dragging, setDragging] = useState(false)
+  useEffect(() => {
+    if (!peek || dragging || basketBusy) return
+    const t = setTimeout(() => setPeek(false), 850)
+    return () => clearTimeout(t)
+  }, [peek, dragging, basketBusy])
+  const basketUp = !mobile || peek || sheet
 
   /**
    * Glisser une couverture des résultats jusqu'au panier (souris : on tire ; doigt : appui long).
@@ -47,6 +60,7 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
       if (src) { const img = new Image(); img.src = src; img.alt = ''; ghost.appendChild(img) }
       document.body.appendChild(ghost)
       document.body.classList.add('is-dragging')
+      setPeek(true); setDragging(true)
       cover.classList.add('lifted')
       suppressClick.current = true
       navigator.vibrate?.(8)
@@ -79,6 +93,7 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
       window.removeEventListener('pointercancel', finish)
       window.removeEventListener('touchmove', noScroll)
       if (!ghost) return
+      setDragging(false)
       document.body.classList.remove('is-dragging')
       zone()?.classList.remove('drop-ready')
       const g = ghost
@@ -218,7 +233,7 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
                       aria-label={picked ? `${b.title} est dans le panier` : basketFull ? 'Le panier est plein' : `Mettre ${b.title} dans le panier`}
                       title={!picked && basketFull ? 'Le panier est plein (20 livres)' : undefined}
                       disabled={picked || basketFull}
-                      onClick={e => onBasket(b, e.currentTarget.parentElement.querySelector('.result-cover'))}
+                      onClick={e => { setPeek(true); onBasket(b, e.currentTarget.parentElement.querySelector('.result-cover')) }}
                     >{picked ? '✓' : '+'}</button>
                   )}
                 </div>
@@ -229,7 +244,17 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
           !query.trim() && <p className="search-empty">Cherche dans des millions de livres, ou scanne le code-barres au dos d'un livre.</p>
         )}
         </div>
-        <aside className="search-basket">{basketSlot}</aside>
+        <aside className={'search-basket' + (mobile ? (basketUp ? ' up' : ' down') : '')}>
+          {mobile && (basketCount > 0 || basketUp) && (
+            <button type="button" className="sb-tab lbl" onClick={() => { setSheet(v => !(v || peek)); setPeek(false) }} aria-expanded={basketUp}>
+              <svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true"><path d="M1 4.5h12l-1.4 6.5H2.4L1 4.5zM4 4.5L6 1M10 4.5L8 1" stroke="currentColor" fill="none" strokeWidth="1.2" strokeLinejoin="round" /></svg>
+              Panier
+              <span className="sb-count" key={basketCount}>{basketCount}</span>
+              <span className="sb-chev" aria-hidden="true">{basketUp ? '▾' : '▴'}</span>
+            </button>
+          )}
+          {basketSlot}
+        </aside>
         </div>
       </div>
     </div>
