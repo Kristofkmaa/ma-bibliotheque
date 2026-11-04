@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from './hooks/useAuth'
 import { useLibrary, STATUSES, bookHasStatus } from './hooks/useLibrary'
+import { useShelves } from './hooks/useShelves'
+import { effectiveShelves, placeBook } from './lib/shelfOps'
 import { isDemoMode } from './lib/supabase'
 import { sortBooks, SORTS } from './lib/bookUtils'
 import Shelf3D from './components/Shelf3D'
@@ -31,7 +33,10 @@ function Logo({ sub = 'Bibliothèque' }) {
 function Library({ user, onSignOut }) {
   const { books, loading, addBook, updateBook, removeBook, isInLibrary } = useLibrary(user.id)
   const [filter, setFilter] = useState('tous')
-  const [sort, setSortState] = useState(() => readPref('levana.sort', 'recent'))
+  const { shelves, commit: commitShelves, storage } = useShelves(user.id)
+  const [sort, setSortState] = useState(() => readPref('levana.sort2', 'manual'))
+  const [newShelfSignal, setNewShelfSignal] = useState(0)
+  const [addTarget, setAddTarget] = useState(null)
   const [highlightId, setHighlightId] = useState(null)
   const [focusId, setFocusId] = useState(null)
   const [detail, setDetail] = useState(null)        // { book, mode, rect }
@@ -40,7 +45,9 @@ function Library({ user, onSignOut }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [scanner, setScanner] = useState(false)
 
-  const setSort = v => { setSortState(v); writePref('levana.sort', v) }
+  const setSort = v => { setSortState(v); writePref('levana.sort2', v) }
+  const manual = sort === 'manual'
+  const canEdit = manual && filter === 'tous'
 
   const filtered = useMemo(() => {
     const list = filter === 'tous' ? books : books.filter(b => bookHasStatus(b, filter))
@@ -62,7 +69,10 @@ function Library({ user, onSignOut }) {
   const closeDetail = useCallback(() => setDetailOpen(false), [])
   const onDetailClosed = useCallback(() => setDetail(null), [])
 
-  const openSearch = () => { setSearch(true); setSearchOpen(true) }
+  const openSearch = useCallback((target = null) => {
+    setAddTarget(typeof target === 'string' ? target : null)
+    setSearch(true); setSearchOpen(true)
+  }, [])
   const closeSearch = useCallback(() => setSearchOpen(false), [])
   const onSearchClosed = useCallback(() => setSearch(false), [])
 
@@ -97,7 +107,7 @@ function Library({ user, onSignOut }) {
     <div className="scene">
       <header className="top-bar">
         <div className="top-left">
-          <button type="button" className="lbl box" onClick={openSearch}>+ Ajouter un livre</button>
+          <button type="button" className="lbl box" onClick={() => openSearch()}>+ Ajouter un livre</button>
         </div>
         <Logo />
         <div className="top-right">
@@ -107,6 +117,9 @@ function Library({ user, onSignOut }) {
 
       <div className="scene-tabs">
         <StatusTabs tabs={tabs} value={filter} onChange={setFilter} />
+        {canEdit && (
+          <button type="button" className="lbl box cobalt" onClick={e => { e.currentTarget.blur(); setNewShelfSignal(n => n + 1) }}>+ Étagère</button>
+        )}
         <label className="lbl scene-sort">
           <span>Ranger par</span>
           <select value={sort} onChange={e => setSort(e.target.value)}>
@@ -119,13 +132,18 @@ function Library({ user, onSignOut }) {
         <p className="scene-loading lbl">Ouverture des rayons…</p>
       ) : (
         <Shelf3D
-          books={filtered} sort={sort} viewKey={filter} onOpen={openBook} onAdd={openSearch} locked={overlay}
+          books={filtered} allBooks={books} sort={sort} viewKey={filter} manual={manual} canEdit={canEdit}
+          shelves={shelves} commitShelves={commitShelves} newShelfSignal={newShelfSignal}
+          onOpen={openBook} onAdd={openSearch} locked={overlay}
           highlightId={highlightId} focusId={focusId} onFocused={onFocused} emptyText={emptyText}
         />
       )}
 
       <footer className="footer-bar">
-        <div className="lbl footer-copy">© Bibliothèque Levana{isDemoMode ? ' · Mode démo' : ''}</div>
+        <div className="lbl footer-copy">
+          © Bibliothèque Levana{isDemoMode ? ' · Mode démo' : ''}
+          {!isDemoMode && storage === 'local' && shelves.length > 0 && <span className="footer-note"> · Rangement gardé sur cet appareil</span>}
+        </div>
         <div className="lbl footer-links">
           <span className="footer-mail">{user.email}</span>
           <span aria-hidden="true">/</span>
@@ -151,6 +169,7 @@ function Library({ user, onSignOut }) {
             onRemove={async () => { await removeBook(detail.book.id); closeDetail() }}
             onAdd={async statuses => {
               const saved = await addBook(detail.book, statuses)
+              if (saved?.id && shelves.length) commitShelves(placeBook(effectiveShelves(shelves, books), saved.id, addTarget).list)
               setFilter('tous')
               if (saved?.id) setFocusId(saved.id)
               closeDetail()

@@ -17,6 +17,14 @@ Aucun fondu : chaque apparition est un masque, un clip ou une mise à l'échelle
 - **Portes coulissantes** : la bibliothèque s'ouvre portes fermées puis elles coulissent ; sur chaque rayon, une porte
   cache la place libre (avec « + Ajouter un livre ») ; changer d'étagère, de filtre ou de tri ferme les portes, échange
   les livres derrière et les rouvre
+- **Mes étagères** (tri « Mon rangement ») : « + Étagère » en crée une, qui se construit sous tes yeux (le fond se
+  dessine, la planche se pose, les portes arrivent) puis demande son nom ; un clic sur l'étiquette d'une planche permet
+  de la renommer, de la monter/descendre, de la supprimer et de changer son apparence : **matière** (chêne clair, noyer,
+  laque noire, bois blanc, acier), **couleur du fond** (8 teintes) et **portes** (panneau, cannage, lattes), avec
+  « Ce style partout »
+- **Glisser-déposer** : attrape un livre (appui long au doigt) et dépose-le ailleurs, sur la même étagère ou une autre ;
+  les livres s'écartent pour lui faire de la place, et le lâcher dans une place libre crée une nouvelle étagère ; en
+  approchant le bord de l'écran, on passe à la page suivante
 - **Étagère vivante** : au survol le livre sort de l'étagère et ses voisins s'inclinent, le ruban se balance, les livres
   se posent un à un, et au clic le livre est tiré avant que la fiche s'ouvre
 - **Tri** par ajout récent, titre (articles ignorés), auteur, année ou couleur
@@ -50,6 +58,9 @@ Sans `.env`, l'application démarre en **mode démo** avec quelques livres d'exe
    - Copier Client ID / Client Secret dans Supabase
    - Ajouter l'URL de callback Supabase dans les origines autorisées côté Google
 4. **Authentication → URL Configuration** : Site URL + Redirect URLs de ton domaine (`https://ton-app.vercel.app/**`)
+
+> Les étagères personnalisées utilisent la table `shelves` (fin de `supabase_schema.sql`). Si elle n'existe pas encore,
+> le rangement est gardé dans le navigateur, puis envoyé automatiquement vers Supabase dès que la table existe.
 
 ### 2. Google Books API
 
@@ -90,7 +101,8 @@ VITE_GOOGLE_VISION_API_KEY=AIzaSyxxxx   # optionnel
 ```
 src/
 ├── components/
-│   ├── Shelf3D.jsx       # Meuble en perspective : rayons, volumes, étagères successives
+│   ├── Shelf3D.jsx       # Meuble en perspective : étagères, portes, glisser-déposer, création animée
+│   ├── ShelfEditor.jsx   # Carte d'édition d'une étagère (nom, matière, fond, portes, ordre)
 │   ├── Caption.jsx       # Légende : titre / auteur qui glissent dans des masques
 │   ├── StatusTabs.jsx    # Onglets avec indicateur cobalt glissant
 │   ├── DetailSheet.jsx   # Fiche livre : feuille clip-path, encre, édition
@@ -101,12 +113,15 @@ src/
 ├── hooks/
 │   ├── useAuth.js        # Auth Supabase (ou démo)
 │   ├── useLibrary.js     # CRUD user_books (ou localStorage en démo)
+│   ├── useShelves.js     # Étagères (table shelves, ou navigateur en secours)
 │   └── useIsMobile.js
 ├── lib/
 │   ├── supabase.js       # Client Supabase + détection du mode démo
 │   ├── googleBooks.js    # Recherche, ISBN, couvertures HD
 │   ├── visionApi.js      # OCR de couverture
 │   ├── bookUtils.js      # Palette et tailles des dos, tris, normalisation des livres
+│   ├── shelfOps.js       # Opérations pures : déplacer, créer, renommer, habiller
+│   ├── skins.js          # Matières, couleurs de fond, styles de portes
 │   ├── demoStore.js      # Livres d'exemple du mode démo
 │   └── cursorState.js
 ├── App.jsx

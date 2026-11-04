@@ -89,6 +89,7 @@ export function authorKey(book) {
 }
 
 export const SORTS = [
+  { id: 'manual', label: 'Mon rangement' },
   { id: 'recent', label: 'Ajout récent' },
   { id: 'title', label: 'Titre' },
   { id: 'author', label: 'Auteur' },

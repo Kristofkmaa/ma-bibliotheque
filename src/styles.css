@@ -13,7 +13,6 @@
   --rule-soft: rgba(20, 20, 20, 0.22);
   --ease: cubic-bezier(.2, .8, .2, 1);
   --ease-sheet: cubic-bezier(.76, 0, .18, 1);
-  --plank: #D8CCB0;
   --sans: "Inter Tight", system-ui, -apple-system, sans-serif;
   --serif: "Newsreader", Georgia, "Times New Roman", serif;
 }
@@ -162,8 +161,8 @@ a { color: inherit; }
 /* Chant de la planche, couronne du meuble, montants */
 .plank-front, .crown {
   position: absolute;
-  background: linear-gradient(180deg, #E8DFCB 0%, var(--plank) 50%, #C4B594 100%);
-  border-top: 1px solid rgba(20, 16, 10, 0.3); border-bottom: 1px solid rgba(20, 16, 10, 0.45);
+  background: linear-gradient(180deg, var(--wood-hi) 0%, var(--wood-mid) 50%, var(--wood-lo) 100%);
+  border-top: 1px solid var(--wood-edge); border-bottom: 1px solid var(--wood-edge);
 }
 .plank-front { display: flex; align-items: center; padding-left: calc(var(--padx) + 4px); }
 .plank-label {
@@ -173,8 +172,8 @@ a { color: inherit; }
 }
 .row-post {
   position: absolute; top: 0; bottom: 0; width: 10px;
-  background: linear-gradient(90deg, #E6DCC6, #CFC2A3);
-  border-left: 1px solid rgba(20, 16, 10, 0.25); border-right: 1px solid rgba(20, 16, 10, 0.25);
+  background: linear-gradient(90deg, var(--wood-hi), var(--wood-lo));
+  border-left: 1px solid var(--wood-edge); border-right: 1px solid var(--wood-edge);
 }
 
 /* Portes coulissantes ------------------------------------------------------------ */
@@ -185,9 +184,9 @@ a { color: inherit; }
   position: absolute; top: 0; bottom: 0; left: 0;
   pointer-events: auto;
   background:
-    repeating-linear-gradient(90deg, rgba(110, 80, 30, 0.045) 0 1px, transparent 1px 6px, rgba(110, 80, 30, 0.03) 6px 7px, transparent 7px 13px),
-    linear-gradient(180deg, #E6DBC3 0%, #D9CBAD 55%, #CFBF9E 100%);
-  border-top: 1px solid rgba(20, 16, 10, 0.25); border-bottom: 1px solid rgba(20, 16, 10, 0.35);
+    repeating-linear-gradient(90deg, var(--grain) 0 1px, transparent 1px 6px, var(--grain) 6px 7px, transparent 7px 13px),
+    linear-gradient(180deg, var(--door-1) 0%, var(--door-2) 100%);
+  border-top: 1px solid var(--wood-edge); border-bottom: 1px solid var(--wood-edge);
   will-change: transform;
 }
 .doors.closing .door { transition: transform 0.64s cubic-bezier(.62, .02, .28, 1.06); }
@@ -203,9 +202,9 @@ a { color: inherit; }
 .door.right::after, .door.left::after {
   content: ''; position: absolute; top: 0; bottom: 0; width: 16px; pointer-events: none;
 }
-.door.right { border-left: 1px solid rgba(20, 16, 10, 0.4); }
+.door.right { border-left: 1px solid var(--wood-edge); }
 .door.right::after { left: -17px; background: linear-gradient(90deg, rgba(20, 16, 10, 0), rgba(20, 16, 10, 0.2)); }
-.door.left { border-right: 1px solid rgba(20, 16, 10, 0.4); }
+.door.left { border-right: 1px solid var(--wood-edge); }
 .door.left::after { right: -17px; background: linear-gradient(270deg, rgba(20, 16, 10, 0), rgba(20, 16, 10, 0.2)); }
 /* poignée encastrée */
 .pull {
@@ -229,6 +228,142 @@ button.door-card:hover { background: var(--cobalt); color: #fff; }
 /* une porte qui couvre une place libre s'entrouvre quand on s'approche de sa poignée */
 .door { transform: translateX(calc(var(--x, 0px) + var(--nudge, 0px))); }
 .doors.opening .door.right.free:hover { --nudge: 12px; }
+
+
+/* Styles de portes ------------------------------------------------------------------ */
+/* Cannage : treillis de rotin tendu dans le cadre */
+.door.s-cannage::before {
+  inset: 12px 14px;
+  border: 2px solid var(--wood-lo);
+  background:
+    repeating-linear-gradient(60deg, rgba(120, 85, 35, 0.55) 0 1.5px, transparent 1.5px 8px),
+    repeating-linear-gradient(-60deg, rgba(120, 85, 35, 0.55) 0 1.5px, transparent 1.5px 8px),
+    repeating-linear-gradient(0deg, rgba(120, 85, 35, 0.4) 0 1.5px, transparent 1.5px 8px),
+    repeating-linear-gradient(90deg, rgba(120, 85, 35, 0.4) 0 1.5px, transparent 1.5px 8px),
+    #E7D3A6;
+  box-shadow: inset 0 0 12px rgba(60, 35, 10, 0.35);
+}
+/* Lattes : panneau de lames verticales */
+.door.s-lattes {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 15px, rgba(0, 0, 0, 0.22) 15px 16px, rgba(255, 255, 255, 0.18) 16px 17px),
+    linear-gradient(180deg, var(--door-1) 0%, var(--door-2) 100%);
+}
+.door.s-lattes::before { inset: 0; border: none; box-shadow: inset 0 10px 0 -2px var(--wood-mid), inset 0 -10px 0 -2px var(--wood-mid); }
+
+/* Couleurs du meuble animées : changer de matière ou de fond fond les teintes */
+@property --wood-hi { syntax: '<color>'; inherits: true; initial-value: #E8DFCB; }
+@property --wood-mid { syntax: '<color>'; inherits: true; initial-value: #D8CCB0; }
+@property --wood-lo { syntax: '<color>'; inherits: true; initial-value: #C4B594; }
+@property --door-1 { syntax: '<color>'; inherits: true; initial-value: #E6DBC3; }
+@property --door-2 { syntax: '<color>'; inherits: true; initial-value: #CFBF9E; }
+@property --wall-1 { syntax: '<color>'; inherits: true; initial-value: #CFC9BC; }
+@property --wall-2 { syntax: '<color>'; inherits: true; initial-value: #DDD8CD; }
+@property --wall-3 { syntax: '<color>'; inherits: true; initial-value: #D1CBBD; }
+@property --top-1 { syntax: '<color>'; inherits: true; initial-value: #E4DAC4; }
+@property --top-2 { syntax: '<color>'; inherits: true; initial-value: #C9BC9E; }
+@property --ceil-1 { syntax: '<color>'; inherits: true; initial-value: #B9AC8E; }
+@property --ceil-2 { syntax: '<color>'; inherits: true; initial-value: #CDC1A6; }
+@property --side-1 { syntax: '<color>'; inherits: true; initial-value: #D8CBAD; }
+@property --side-2 { syntax: '<color>'; inherits: true; initial-value: #C6B897; }
+@property --wood-edge { syntax: '<color>'; inherits: true; initial-value: rgba(20, 16, 10, 0.35); }
+@property --grain { syntax: '<color>'; inherits: true; initial-value: rgba(110, 80, 30, 0.05); }
+.row3d {
+  transition:
+    --wood-hi 0.7s var(--ease), --wood-mid 0.7s var(--ease), --wood-lo 0.7s var(--ease),
+    --door-1 0.7s var(--ease), --door-2 0.7s var(--ease), --wood-edge 0.7s var(--ease), --grain 0.7s var(--ease),
+    --wall-1 0.8s var(--ease), --wall-2 0.8s var(--ease), --wall-3 0.8s var(--ease),
+    --top-1 0.7s var(--ease), --top-2 0.7s var(--ease), --ceil-1 0.7s var(--ease), --ceil-2 0.7s var(--ease),
+    --side-1 0.7s var(--ease), --side-2 0.7s var(--ease);
+}
+
+/* Étiquette de planche cliquable (renommer, habiller) */
+.plank-label { max-width: 46%; overflow: hidden; text-overflow: ellipsis; }
+button.plank-label.editable {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  transition: background-color 0.25s var(--ease), color 0.25s var(--ease), transform 0.35s cubic-bezier(.3, 1.4, .5, 1);
+}
+button.plank-label.editable .pl-name { overflow: hidden; text-overflow: ellipsis; }
+.pl-pen { font-size: 9px; opacity: 0; transform: translateX(-3px); transition: opacity 0.25s, transform 0.35s var(--ease); }
+button.plank-label.editable:hover { background: var(--cobalt); color: #fff; border-color: var(--cobalt); transform: translateY(-1px); }
+button.plank-label.editable:hover .pl-pen { opacity: 1; transform: none; }
+
+/* Glisser-déposer ------------------------------------------------------------------- */
+.case3d.editable .b3 { touch-action: none; }
+.b3.ph {
+  border: 1.5px dashed var(--cobalt); border-radius: 2px;
+  background: rgba(31, 63, 176, 0.08);
+  animation: phIn 0.45s cubic-bezier(.3, 1.3, .5, 1);
+}
+@keyframes phIn { from { transform: scaleY(0.2); } }
+.drag-ghost {
+  position: fixed; left: 0; top: 0; z-index: 120; pointer-events: none;
+  filter: drop-shadow(0 18px 18px rgba(20, 16, 10, 0.35));
+}
+.drag-ghost .f-spine { position: absolute; inset: 0; }
+body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
+body.is-dragging .b3:hover { transform: none; }
+body.is-dragging .b3:hover .f-side { transform: none; }
+body.is-dragging .custom-cursor { display: none; }
+
+/* Naissance d'une étagère : le fond se dessine, la planche se pose, les portes arrivent,
+   l'étiquette s'écrit */
+.row3d.born .row-svg { animation: bornWall 0.75s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes bornWall { from { clip-path: inset(0 50% 0 50%); } to { clip-path: inset(0 0 0 0); } }
+.row3d.born .plank-front { animation: bornPlank 0.7s 0.15s cubic-bezier(.3, 1.25, .45, 1) both; transform-origin: 50% 50%; }
+@keyframes bornPlank { from { transform: scaleX(0); } }
+.row3d.born .door.left { animation: bornDoorL 0.85s 0.4s cubic-bezier(.3, 1.2, .42, 1) both; }
+.row3d.born .door.right { animation: bornDoorR 0.85s 0.4s cubic-bezier(.3, 1.2, .42, 1) both; }
+@keyframes bornDoorL { from { transform: translateX(-102%); } }
+@keyframes bornDoorR { from { transform: translateX(102%); } }
+.row3d.born .plank-label { animation: bornLabel 0.6s 0.85s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes bornLabel { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+
+/* Carte d'édition d'une étagère ---------------------------------------------------- */
+.shelf-editor {
+  position: fixed; z-index: 70; width: 330px;
+  background-color: var(--sheet); border: 1px solid var(--rule);
+  box-shadow: 0 24px 40px -18px rgba(20, 16, 10, 0.45);
+  padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 14px;
+  animation: seIn 0.45s cubic-bezier(.2, .8, .2, 1);
+}
+@keyframes seIn { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
+.shelf-editor.sheet {
+  left: 0; right: 0; bottom: 0; top: auto; width: auto; border-left: none; border-right: none; border-bottom: none;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+.se-field { display: flex; flex-direction: column; gap: 8px; }
+.se-lbl { color: var(--muted); font-size: 9px; }
+.se-name {
+  width: 100%; background: transparent; border: none; border-bottom: 1px solid var(--rule);
+  font-family: var(--serif); font-size: 24px; letter-spacing: -0.01em; padding: 2px 0 6px; color: var(--ink);
+}
+.se-name:focus { outline: none; border-bottom-color: var(--cobalt); }
+.se-swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.se-wood {
+  height: 34px; border: 1px solid rgba(20, 20, 20, 0.35); position: relative;
+  display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+  transition: transform 0.3s cubic-bezier(.3, 1.4, .5, 1);
+}
+.se-wood span {
+  font-family: var(--sans); font-weight: 600; font-size: 7px; letter-spacing: 0.08em; text-transform: uppercase;
+  background: var(--sheet); padding: 1px 3px; line-height: 1.1; white-space: nowrap; max-width: 100%; overflow: hidden;
+}
+.se-wood:hover { transform: translateY(-2px); }
+.se-wood.on { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+.se-dots { display: flex; gap: 8px; flex-wrap: wrap; }
+.se-dot {
+  width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(20, 20, 20, 0.35);
+  transition: transform 0.3s cubic-bezier(.3, 1.4, .5, 1);
+}
+.se-dot:hover { transform: scale(1.12); }
+.se-dot.on { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+.se-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding-top: 4px; border-top: 1px solid var(--rule-soft); }
+.se-actions .box { height: 26px; }
+.se-ok { margin-left: auto; }
+.se-title { font-family: var(--serif); font-size: 24px; }
+.se-note { font-family: var(--serif); font-size: 14px; line-height: 1.4; color: var(--muted); }
+.footer-note { color: var(--muted); }
 
 /* Rangée de livres (dans le plan avant) */
 .row-books { position: absolute; right: 0; display: flex; align-items: flex-end; gap: var(--gap); }

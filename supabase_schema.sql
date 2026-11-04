@@ -67,3 +67,36 @@ create policy "Suppression de ses propres livres"
 
 create index if not exists idx_user_books_user_id on user_books(user_id);
 create index if not exists idx_user_books_added_at on user_books(user_id, added_at desc);
+
+-- =============================================
+-- Étagères personnalisées (nom, ordre, apparence, livres rangés)
+-- À exécuter une fois : tant que cette table n'existe pas, le site garde
+-- le rangement dans le navigateur, puis l'envoie ici dès qu'elle existe.
+-- =============================================
+create table if not exists shelves (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid references auth.users(id) on delete cascade not null,
+  name        text not null default 'Nouvelle étagère',
+  position    integer not null default 0,
+  material    text not null default 'chene',    -- chene | noyer | ebene | blanc | acier
+  wall        text not null default 'papier',   -- couleur du fond
+  doors       text not null default 'panneau',  -- panneau | cannage | lattes
+  book_ids    text[] not null default '{}',     -- identifiants user_books, dans l'ordre
+  created_at  timestamptz default now()
+);
+
+alter table shelves enable row level security;
+
+drop policy if exists "Lecture de ses étagères" on shelves;
+create policy "Lecture de ses étagères" on shelves for select using (auth.uid() = user_id);
+
+drop policy if exists "Ajout de ses étagères" on shelves;
+create policy "Ajout de ses étagères" on shelves for insert with check (auth.uid() = user_id);
+
+drop policy if exists "Modification de ses étagères" on shelves;
+create policy "Modification de ses étagères" on shelves for update using (auth.uid() = user_id);
+
+drop policy if exists "Suppression de ses étagères" on shelves;
+create policy "Suppression de ses étagères" on shelves for delete using (auth.uid() = user_id);
+
+create index if not exists idx_shelves_user on shelves(user_id, position);
