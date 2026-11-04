@@ -62,7 +62,7 @@ function autoLabel(row, n, sort) {
  */
 export default function Bookcase3D({
   books, allBooks, sort, viewKey, manual, canEdit, shelves, commitShelves, newShelfSignal,
-  onOpen, onAdd, locked, focusId, onFocused, emptyText,
+  onOpen, onAdd, locked, focusId, onFocused, emptyText, apiRef,
 }) {
   const caseRef = useRef(null)
   const sceneRef = useRef(null)
@@ -131,7 +131,8 @@ export default function Bookcase3D({
   }, [focusId, rowsAll, L.rows, current, onFocused])
 
   // ---- Portes : on ne change de page que portes fermées ----------------------------------
-  const key = `${viewKey}|${sort}|${current}|${L.perPage}|${books.length}`
+  // un simple changement de taille (tiroir du panier, rotation) ne ferme pas les portes : les livres glissent
+  const key = `${viewKey}|${sort}|${current}|${books.length}`
   const [shownKey, setShownKey] = useState(key)
   const [frozen, setFrozen] = useState(null)
   const [doorsOpen, setDoorsOpen] = useState(false)
@@ -237,6 +238,38 @@ export default function Bookcase3D({
       }
     }
   }
+
+  // ---- Livres venus du panier : on vise une étagère, un emplacement s'ouvre -----------------
+  const extTarget = useRef(null)
+  useLayoutEffect(() => {
+    if (!apiRef) return
+    apiRef.current = {
+      previewExternal: (id, x, y) => {
+        const d = dataRef.current
+        const sc = sceneRef.current
+        if (!sc || !d.manual || !d.canEdit) return null
+        edgeFlip(x, y)
+        const t = sc.targetAt(x, y)
+        let target = null
+        if (t) {
+          const base = d.rowsWithout(id)[t.row]
+          if (base) target = base.free ? { shelfId: NEWSHELF } : { shelfId: base.shelf.id, index: base.start + t.index }
+        }
+        if (JSON.stringify(target) !== JSON.stringify(extTarget.current)) {
+          extTarget.current = target
+          setDragView(target ? { id, target } : null)
+        }
+        return target
+      },
+      endExternal: () => {
+        clearTimeout(edge.current.timer); edge.current.dir = 0
+        const t = extTarget.current
+        extTarget.current = null
+        setDragView(null)
+        return t
+      },
+    }
+  })
 
   const realShelves = eff.filter(s => !s.pseudo)
   const fallbackSkin = resolveSkin(realShelves[realShelves.length - 1] || shelves[0] || DEFAULT_SKIN)

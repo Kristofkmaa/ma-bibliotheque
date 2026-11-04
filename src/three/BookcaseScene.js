@@ -25,7 +25,8 @@ const DOOR_T = 0.025
 export function worldLayout(wPx, hPx, mobile) {
   const rows = mobile ? (hPx > 520 ? 3 : 2) : (hPx > 760 ? 3 : 2)
   const caseH = rows * (RH + PT) + PT
-  const aspect = Math.max(0.45, wPx / Math.max(1, hPx))
+  // zone très large et basse (tiroir ouvert, grand écran) : le meuble ne s'étire pas, il garde de grands livres
+  const aspect = Math.max(0.45, Math.min(2.6, wPx / Math.max(1, hPx)))
   const CW = Math.max(2.1, Math.min(9.5, aspect * caseH * (mobile ? 1.12 : 1.02)))
   const step = AVG_T / Math.cos(BETA) + GAP
   const perRow = Math.max(3, Math.floor((CW - PADX - 0.3) / step))
@@ -496,6 +497,24 @@ export class BookcaseScene {
     const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -z)
     const p = new THREE.Vector3()
     return this.raycaster.ray.intersectPlane(plane, p) ? p : null
+  }
+
+  /** Rayon et position d'insertion sous un point de l'écran (livre venu du panier). */
+  targetAt(cx, cy) {
+    const rc = this.renderer.domElement.getBoundingClientRect()
+    if (cx < rc.left || cx > rc.right || cy < rc.top || cy > rc.bottom || !this.rowsData) return null
+    this.ndc.set(((cx - rc.left) / rc.width) * 2 - 1, -((cy - rc.top) / rc.height) * 2 + 1)
+    const q = this._frontPoint(SD / 2)
+    if (!q) return null
+    for (let r = 0; r < this.layout.rows; r++) {
+      const y0 = this.rowBase(r)
+      if (q.y < y0 - PT || q.y > y0 + RH) continue
+      const row = this.rowsData[r]
+      if (!row) return null
+      const xs = row.books.filter(b => !b.placeholder).map(b => this.books.get(b.id)?.base?.x ?? 0)
+      return { row: r, index: xs.filter(x => x < q.x).length }
+    }
+    return null
   }
 
   _dragMove() {

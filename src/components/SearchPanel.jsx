@@ -7,7 +7,7 @@ const EASE_SHEET = 'cubic-bezier(.76, 0, .18, 1)'
 const HAS_VISION = !!import.meta.env.VITE_GOOGLE_VISION_API_KEY
 
 /** Panneau de recherche Google Books, plein écran, même papier que la fiche. */
-export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onScan }) {
+export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onScan, inBasket, onBasket }) {
   const panel = useRef(null)
   const inputRef = useRef(null)
   const fileRef = useRef(null)
@@ -96,16 +96,30 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
 
         {results.length > 0 ? (
           <div className="results-grid">
-            {results.map(b => (
-              <button key={b.googleId} type="button" className="result-card" onClick={e => onPick(b, e.currentTarget.querySelector('.result-cover')?.getBoundingClientRect())}>
-                <div className="result-cover">
-                  {b.cover ? <img src={b.cover} alt="" loading="lazy" /> : null}
-                  {isInLibrary(b.googleId) && <span className="in-lib">Déjà là</span>}
+            {results.map(b => {
+              const here = isInLibrary(b.googleId)
+              const picked = inBasket(b.googleId)
+              return (
+                <div key={b.googleId} className="result-card">
+                  <button type="button" className="result-open" onClick={e => onPick(b, e.currentTarget.querySelector('.result-cover')?.getBoundingClientRect())}>
+                    <div className="result-cover">
+                      {b.cover ? <img src={b.cover} alt="" loading="lazy" /> : null}
+                      {here && <span className="in-lib">Déjà là</span>}
+                    </div>
+                    <div className="result-title">{b.title}</div>
+                    <div className="result-author">{b.authors.join(', ')}{b.publishedDate ? ` · ${b.publishedDate.slice(0, 4)}` : ''}</div>
+                  </button>
+                  {!here && (
+                    <button
+                      type="button" className={'result-plus' + (picked ? ' picked' : '')}
+                      aria-label={picked ? `${b.title} est dans le panier` : `Mettre ${b.title} dans le panier`}
+                      disabled={picked}
+                      onClick={e => onBasket(b, e.currentTarget.parentElement.querySelector('.result-cover'))}
+                    >{picked ? '✓' : '+'}</button>
+                  )}
                 </div>
-                <div className="result-title">{b.title}</div>
-                <div className="result-author">{b.authors.join(', ')}{b.publishedDate ? ` · ${b.publishedDate.slice(0, 4)}` : ''}</div>
-              </button>
-            ))}
+              )
+            })}
           </div>
         ) : (
           !query.trim() && <p className="search-empty">Cherche dans des millions de livres, ou scanne le code-barres au dos d'un livre.</p>
