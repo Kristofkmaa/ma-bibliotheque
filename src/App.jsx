@@ -2,8 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useAuth } from './hooks/useAuth'
 import { useLibrary, STATUSES, bookHasStatus } from './hooks/useLibrary'
 import { isDemoMode } from './lib/supabase'
-import { toDisplay } from './lib/bookUtils'
-import Shelf from './components/Shelf'
+import { toDisplay, sortBooks, SORTS } from './lib/bookUtils'
+import Bookcase from './components/Bookcase'
 import Caption from './components/Caption'
 import StatusTabs from './components/StatusTabs'
 import DetailSheet from './components/DetailSheet'
@@ -13,12 +13,22 @@ import Cursor from './components/Cursor'
 
 const Scanner = lazy(() => import('./components/Scanner'))
 
-const ArrowLeft = () => (
-  <svg viewBox="0 0 18 10" fill="none" stroke="currentColor" strokeWidth="1.2"><path d="M5 1 L1 5 L5 9 M1 5 L17 5" /></svg>
-)
-const ArrowRight = () => (
-  <svg viewBox="0 0 18 10" fill="none" stroke="currentColor" strokeWidth="1.2"><path d="M13 1 L17 5 L13 9 M17 5 L1 5" /></svg>
-)
+const TITLES = {
+  tous: ['Tous les', 'livres'],
+  en_cours: ['En cours de', 'lecture'],
+  lu: ['Les livres', 'lus'],
+  possede: ['Sur les', 'rayons'],
+  souhaite: ['La liste', "d'envies"],
+}
+
+const MONTH = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(new Date())
+
+function readPref(key, fallback) {
+  try { return localStorage.getItem(key) || fallback } catch { return fallback }
+}
+function writePref(key, value) {
+  try { localStorage.setItem(key, value) } catch { /* ignore */ }
+}
 
 function Logo({ sub = 'Bibliothèque' }) {
   return (
@@ -30,43 +40,76 @@ function Logo({ sub = 'Bibliothèque' }) {
 }
 
 function Library({ user, onSignOut }) {
-  const { books, addBook, updateBook, removeBook, isInLibrary } = useLibrary(user.id)
+  const { books, loading, addBook, updateBook, removeBook, isInLibrary } = useLibrary(user.id)
   const [filter, setFilter] = useState('tous')
-  const [active, setActive] = useState({ index: 0, dir: 1 })
+  const [sort, setSortState] = useState(() => readPref('levana.sort', 'recent'))
+  const [query, setQuery] = useState('')
+  const [hovered, setHovered] = useState(null)
+  const [highlightId, setHighlightId] = useState(null)
+  const [scrolled, setScrolled] = useState(false)
   const [detail, setDetail] = useState(null)        // { book, mode, rect }
   const [detailOpen, setDetailOpen] = useState(false)
-  const [search, setSearch] = useState(false)       // monté
+  const [search, setSearch] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [scanner, setScanner] = useState(false)
-  const shelfRef = useRef(null)
   const pendingFocus = useRef(null)
 
-  const filtered = useMemo(
-    () => (filter === 'tous' ? books : books.filter(b => bookHasStatus(b, filter))),
-    [books, filter]
-  )
+  const setSort = v => { setSortState(v); writePref('levana.sort', v) }
+
+  const filtered = useMemo(() => {
+    let list = filter === 'tous' ? books : books.filter(b => bookHasStatus(b, filter))
+    const q = query.trim().toLowerCase()
+    if (q) list = list.filter(b => (b.title || '').toLowerCase().includes(q) || (b.authors || []).some(a => (a || '').toLowerCase().includes(q)))
+    return sortBooks(list, sort)
+  }, [books, filter, query, sort])
 
   const tabs = useMemo(() => [
     { id: 'tous', label: 'Tous', count: books.length },
     ...STATUSES.map(s => ({ id: s.id, label: s.label, count: books.filter(b => bookHasStatus(b, s.id)).length })),
   ], [books])
 
-  // Après un ajout, amener le nouveau livre au centre
+  const stats = useMemo(() => {
+    const read = books.filter(b => bookHasStatus(b, 'lu'))
+    return [
+      { label: 'Livres', value: books.length },
+      { label: 'Lus', value: read.length },
+      { label: 'En cours', value: books.filter(b => bookHasStatus(b, 'en_cours')).length },
+      { label: 'Pages lues', value: read.reduce((s, b) => s + (b.page_count || 0), 0).toLocaleString('fr-FR') },
+    ]
+  }, [books])
+
+  // En-tête collant : une règle apparaît dès qu'on fait défiler
   useEffect(() => {
-    if (!pendingFocus.current) return
-    const idx = filtered.findIndex(b => b.id === pendingFocus.current || b.google_id === pendingFocus.current)
-    if (idx >= 0) { pendingFocus.current = null; setTimeout(() => shelfRef.current?.goTo(idx), 50) }
-  }, [filtered])
+    const onScroll = () => setScrolled(window.scrollY > 8)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
-  const onActiveChange = useCallback((index, dir) => setActive({ index, dir }), [])
+  // Pas de défilement de la page derrière une fiche ou la recherche
+  const overlay = !!detail || search || scanner
+  useEffect(() => {
+    document.documentElement.style.overflow = overlay ? 'hidden' : ''
+    return () => { document.documentElement.style.overflow = '' }
+  }, [overlay])
 
-  const openActive = useCallback(() => {
-    const idx = shelfRef.current?.getActiveBookIndex() ?? -1
-    const book = filtered[idx]
-    if (!book) return
-    setDetail({ book, mode: 'edit', rect: shelfRef.current.getActiveCoverRect() })
+  // Après un ajout : faire défiler jusqu'au nouveau livre et le signaler
+  useEffect(() => {
+    const id = pendingFocus.current
+    if (!id || overlay) return
+    const el = document.querySelector(`.spine[data-id="${id}"]`)
+    if (!el) return
+    pendingFocus.current = null
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setHighlightId(id)
+    const t = setTimeout(() => setHighlightId(null), 2600)
+    return () => clearTimeout(t)
+  }, [filtered, overlay])
+
+  const openBook = useCallback((book, el) => {
+    setDetail({ book, mode: 'edit', rect: el?.getBoundingClientRect() || null })
     setDetailOpen(true)
-  }, [filtered])
+  }, [])
 
   const closeDetail = useCallback(() => setDetailOpen(false), [])
   const onDetailClosed = useCallback(() => setDetail(null), [])
@@ -80,10 +123,8 @@ function Library({ user, onSignOut }) {
     setDetail({ book, mode: 'add', rect: rect || null })
     setDetailOpen(true)
   }, [])
-
   const onScanFound = useCallback(book => onPick(book, null), [onPick])
 
-  // Échap : ferme la couche la plus haute
   useEffect(() => {
     const onKey = e => {
       if (e.key !== 'Escape') return
@@ -95,56 +136,92 @@ function Library({ user, onSignOut }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [scanner, detailOpen, searchOpen, closeDetail, closeSearch])
 
-  const locked = detailOpen || searchOpen || scanner || !!detail || search
+  // L'encart garde le dernier livre survolé pendant qu'il se referme
+  const lastHovered = useRef(null)
+  if (hovered) lastHovered.current = hovered
+  const hd = lastHovered.current ? toDisplay(lastHovered.current) : null
+  const caption = hd
+    ? { title: hd.title, subtitle: hd.authors.join(', '), year: [hd.year, hd.pageCount ? `${hd.pageCount} pages` : null, 'Cliquer pour ouvrir'].filter(Boolean).join(' / ') }
+    : { title: ' ', subtitle: ' ', year: ' ' }
 
-  const current = toDisplay(filtered[active.index] || filtered[0])
-  const caption = current
-    ? { title: current.title, subtitle: current.authors.join(', '), year: [current.year, current.categories[0]].filter(Boolean).join(' / ') || '—' }
-    : { title: filter === 'tous' ? 'Ton étagère est vide' : 'Rien ici pour le moment', subtitle: 'Ajoute un livre avec le bouton en haut à gauche', year: '' }
+  const [t1, t2] = TITLES[filter]
+  const emptyText = query
+    ? `Aucun livre ne répond à « ${query} ».`
+    : filter === 'tous' ? 'Le premier rayon attend son livre.' : 'Rien sur ce rayon pour le moment.'
 
   return (
     <>
-      <header className="top-bar">
+      <header className={'top-bar grain' + (scrolled ? ' scrolled' : '')}>
         <div className="top-left">
           <button type="button" className="lbl box" onClick={openSearch}>+ Ajouter un livre</button>
         </div>
         <Logo />
         <div className="top-right">
-          <span className="lbl count-lbl">Collection · {books.length} {books.length > 1 ? 'livres' : 'livre'}</span>
+          <span className="lbl count-lbl">{user.email}</span>
+          <button type="button" className="lbl box muted" onClick={onSignOut}>Déconnexion</button>
         </div>
       </header>
 
-      <StatusTabs tabs={tabs} value={filter} onChange={setFilter} />
-
-      {filtered.length > 0 ? (
-        <Shelf ref={shelfRef} books={filtered} onActiveChange={onActiveChange} onOpen={openActive} locked={locked} />
-      ) : (
-        <div className="empty-shelf">
-          <div className="ghosts" aria-hidden="true">
-            {[72, 58, 84, 64, 90, 56, 78, 66, 88, 60].map((h, i) => <div key={i} className="ghost" style={{ height: `${h}%` }} />)}
+      <main className="lib">
+        <section className="lib-head">
+          <div className="lib-head-main">
+            <div className="lbl lib-kicker">Catalogue personnel · {MONTH}</div>
+            <h1 className="lib-title"><span key={filter}>{t1} <em>{t2}</em></span></h1>
           </div>
-          <h2>{caption.title}</h2>
-          <p>{filter === 'tous' ? 'Cherche un titre, scanne un code-barres, et les livres viendront se ranger ici.' : 'Change de rayon, ou ajoute un livre avec ce statut.'}</p>
-          {filter === 'tous' && <button type="button" className="lbl box cobalt" onClick={openSearch}>Ajouter un premier livre</button>}
-        </div>
-      )}
+          <dl className="lib-stats">
+            {stats.map(s => (
+              <div key={s.label} className="stat">
+                <dt className="lbl">{s.label}</dt>
+                <dd>{s.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
 
-      {filtered.length > 0 && (
-        <>
-          <button type="button" className="nav-arrow prev" aria-label="Livre précédent" onClick={() => shelfRef.current?.prev()}><ArrowLeft /></button>
-          <button type="button" className="nav-arrow next" aria-label="Livre suivant" onClick={() => shelfRef.current?.next()}><ArrowRight /></button>
-          <Caption title={caption.title} subtitle={caption.subtitle} year={caption.year} dir={active.dir} />
-        </>
-      )}
+        <div className="lib-controls">
+          <StatusTabs tabs={tabs} value={filter} onChange={setFilter} />
+          <div className="lib-tools">
+            <input
+              className="lib-filter" type="search" value={query} onChange={e => setQuery(e.target.value)}
+              placeholder="Retrouver un livre…" aria-label="Filtrer mes livres" spellCheck="false"
+            />
+            <label className="lbl lib-sort">
+              <span>Ranger par</span>
+              <select value={sort} onChange={e => setSort(e.target.value)}>
+                {SORTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        {loading && !books.length ? (
+          <p className="lib-loading lbl">Ouverture des rayons…</p>
+        ) : (
+          <Bookcase
+            key={`${filter}|${sort}`} books={filtered} sort={sort}
+            onOpen={openBook} onHover={setHovered} highlightId={highlightId} emptyText={emptyText}
+          />
+        )}
+
+        {!books.length && !loading && (
+          <div className="lib-empty-cta">
+            <button type="button" className="lbl box cobalt" onClick={openSearch}>Ajouter un premier livre</button>
+          </div>
+        )}
+
+        <div className="lib-legend">
+          <span className="lbl"><i className="lg-ribbon" /> Ruban : en cours de lecture</span>
+          <span className="lbl"><i className="lg-wish" /> Pointillés : souhaité, pas encore sur l'étagère</span>
+          <span className="lbl">Initiales : l'auteur</span>
+        </div>
+      </main>
 
       <footer className="footer-bar">
-        <div className="lbl footer-copy">© Bibliothèque Levana{isDemoMode ? ' · Mode démo' : ''}</div>
-        <div className="lbl footer-links">
-          <span style={{ color: 'var(--muted)' }}>{user.email}</span>
-          <span>/</span>
-          <button type="button" onClick={onSignOut}>Déconnexion</button>
-        </div>
+        <div className="lbl">© Bibliothèque Levana{isDemoMode ? ' · Mode démo' : ''}</div>
+        <div className="lbl">{books.length} {books.length > 1 ? 'volumes' : 'volume'}</div>
       </footer>
+
+      <Caption className={'hover-caption' + (hovered && !overlay ? ' on' : '')} title={caption.title} subtitle={caption.subtitle} year={caption.year} dir={1} />
 
       {search && (
         <>
@@ -164,8 +241,9 @@ function Library({ user, onSignOut }) {
             onRemove={async () => { await removeBook(detail.book.id); closeDetail() }}
             onAdd={async statuses => {
               const saved = await addBook(detail.book, statuses)
-              pendingFocus.current = saved?.id || detail.book.googleId
+              pendingFocus.current = saved?.id || null
               setFilter('tous')
+              setQuery('')
               closeDetail()
               closeSearch()
             }}

@@ -3,13 +3,17 @@
 Une étagère de livres en ligne, à feuilleter comme une archive : les livres lus, ceux qu'on possède, ceux qu'on attend encore.
 
 Direction artistique « archive papier » : fond papier grainé, encre noire, cobalt, typographies Newsreader + Inter Tight.
-Les livres sont debout côte à côte sur une étagère 3D sans fin ; le livre actif s'avance et pivote pour montrer sa jaquette ;
-la fiche s'ouvre comme une feuille qui grandit depuis la couverture, l'encre s'étale sur l'image, chaque ligne de texte monte de son masque.
+Les livres sont rangés debout, rayon par rayon, dans un meuble qui s'adapte à la largeur de l'écran : chaque dos a sa couleur,
+son épaisseur (selon le nombre de pages), son titre et les initiales de l'auteur. Au survol, le livre se soulève ; au clic,
+la fiche s'ouvre comme une feuille qui grandit depuis le dos, l'encre s'étale sur la couverture, chaque ligne de texte monte de son masque.
 Aucun fondu : chaque apparition est un masque, un clip ou une mise à l'échelle.
 
 ## ✨ Fonctionnalités
 
-- **Étagère 3D** : molette, glisser-déposer, flèches ← →, clic sur une tranche, onglets de statut avec bloc cobalt glissant
+- **Bibliothèque en rayons** : les dos se rangent selon la place disponible, rayons étiquetés (« Rayon II · E – P »), serre-livres
+- **Tri** par ajout récent, titre (articles ignorés), auteur, année ou couleur, et **filtre** instantané par titre ou auteur
+- **Repères visuels** : ruban cobalt = en cours, silhouette en pointillés = souhaité, pas encore sur l'étagère
+- **En-tête** avec statistiques (livres, lus, en cours, pages lues) et onglets de statut à bloc cobalt glissant
 - **Fiche livre** : résumé, auteur, année, pages, ISBN, statuts multiples, note sur 5, notes personnelles
 - **Recherche** dans des millions de livres (Google Books API)
 - **Scanner ISBN** par code-barres (caméra, html5-qrcode)
@@ -67,7 +71,7 @@ VITE_GOOGLE_VISION_API_KEY=AIzaSyxxxx   # optionnel
 | Technologie | Usage |
 |---|---|
 | React 19 + Vite | Frontend |
-| CSS 3D transforms + Web Animations API | Étagère, fiches, masques (aucune lib d'animation) |
+| CSS + Web Animations API | Rayons, fiches, masques (aucune lib d'animation) |
 | Supabase | Base de données + Auth Google |
 | Google Books API | Catalogue de livres |
 | Google Vision API | Reconnaissance de couverture |
@@ -78,8 +82,8 @@ VITE_GOOGLE_VISION_API_KEY=AIzaSyxxxx   # optionnel
 ```
 src/
 ├── components/
-│   ├── Shelf.jsx         # Étagère 3D (boucle rAF, drag, molette, clavier)
-│   ├── Caption.jsx       # Titre / auteur / année qui glissent dans des masques
+│   ├── Bookcase.jsx      # Meuble : dos rangés rayon par rayon, étiquettes, serre-livres
+│   ├── Caption.jsx       # Encart de survol : titre / auteur qui glissent dans des masques
 │   ├── StatusTabs.jsx    # Onglets avec indicateur cobalt glissant
 │   ├── DetailSheet.jsx   # Fiche livre : feuille clip-path, encre, édition
 │   ├── SearchPanel.jsx   # Recherche Google Books + photo de couverture
@@ -94,7 +98,7 @@ src/
 │   ├── supabase.js       # Client Supabase + détection du mode démo
 │   ├── googleBooks.js    # Recherche, ISBN, couvertures HD
 │   ├── visionApi.js      # OCR de couverture
-│   ├── bookUtils.js      # Palette des tranches, normalisation des livres
+│   ├── bookUtils.js      # Palette et tailles des dos, tris, normalisation des livres
 │   ├── demoStore.js      # Livres d'exemple du mode démo
 │   └── cursorState.js
 ├── App.jsx

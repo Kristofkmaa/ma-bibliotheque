@@ -61,3 +61,59 @@ export function smoothstep(x) {
   if (x >= 1) return 1
   return x * x * (3 - 2 * x)
 }
+
+/** Dimensions d'un dos : largeur selon le nombre de pages, hauteur variable mais stable. */
+export function spineSize(book) {
+  const h = hashString(book.google_id || book.googleId || book.title || '')
+  const pages = book.page_count || book.pageCount || 160 + (h % 280)
+  const w = Math.round(Math.min(58, Math.max(26, 20 + pages / 15)))
+  const hr = 0.8 + ((h >>> 9) % 21) / 100 // 0.80 → 1.00
+  return { w, hr }
+}
+
+export function authorInitials(book) {
+  const a = (book.authors && book.authors[0]) || ''
+  const parts = a.replace(/[^\p{L}\s-]/gu, '').split(/[\s-]+/).filter(Boolean)
+  if (!parts.length) return '·'
+  return (parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+const ARTICLES = /^(l['’]\s*|le\s+|la\s+|les\s+|un\s+|une\s+|des\s+|du\s+|the\s+|a\s+|an\s+)/i
+export function titleKey(book) {
+  return (book.title || '').trim().replace(ARTICLES, '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+}
+export function authorKey(book) {
+  const a = (book.authors && book.authors[0]) || ''
+  const last = a.trim().split(/\s+/).pop() || ''
+  return last.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+}
+
+export const SORTS = [
+  { id: 'recent', label: 'Ajout récent' },
+  { id: 'title', label: 'Titre' },
+  { id: 'author', label: 'Auteur' },
+  { id: 'year', label: 'Année' },
+  { id: 'color', label: 'Couleur' },
+]
+
+export function sortBooks(list, mode) {
+  const arr = [...list]
+  const coll = new Intl.Collator('fr')
+  switch (mode) {
+    case 'title': return arr.sort((a, b) => coll.compare(titleKey(a), titleKey(b)))
+    case 'author': return arr.sort((a, b) => coll.compare(authorKey(a), authorKey(b)) || coll.compare(titleKey(a), titleKey(b)))
+    case 'year': return arr.sort((a, b) => (parseInt(a.published_date) || 9999) - (parseInt(b.published_date) || 9999))
+    case 'color': {
+      const idx = b => SPINE_PALETTE.indexOf(spineColors(b))
+      return arr.sort((a, b) => idx(a) - idx(b) || coll.compare(titleKey(a), titleKey(b)))
+    }
+    default: return arr.sort((a, b) => new Date(b.added_at || 0) - new Date(a.added_at || 0))
+  }
+}
+
+export function toRoman(n) {
+  const map = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]
+  let out = ''
+  for (const [v, s] of map) while (n >= v) { out += s; n -= v }
+  return out
+}

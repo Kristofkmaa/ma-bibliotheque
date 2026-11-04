@@ -20,8 +20,9 @@ export default function Cursor() {
       const t = e.target
       if (!(t instanceof Element)) return
       if (t.closest('input, textarea')) { cursor.state = 'text'; return }
-      if (t.closest('button, a, [data-cursor="btn"]')) { cursor.state = 'btn'; return }
-      if (!t.closest('.tape')) cursor.state = 'default'
+      if (t.closest('.spine')) { cursor.state = 'spine'; return }
+      if (t.closest('button, a, select, [data-cursor="btn"]')) { cursor.state = 'btn'; return }
+      cursor.state = 'default'
     }
     window.addEventListener('pointermove', onMove, { passive: true })
     window.addEventListener('pointerover', onOver, { passive: true })

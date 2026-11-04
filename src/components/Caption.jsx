@@ -21,7 +21,7 @@ function swapLine(container, text, className, dir) {
 }
 
 /** Légende sous l'étagère : titre / auteur / année, qui glissent à travers des masques. */
-export default function Caption({ title, subtitle, year, dir }) {
+export default function Caption({ title, subtitle, year, dir, className = 'caption-container' }) {
   const t = useRef(null), s = useRef(null), y = useRef(null)
   const first = useRef(true)
 
@@ -34,7 +34,7 @@ export default function Caption({ title, subtitle, year, dir }) {
   }, [title, subtitle, year, dir])
 
   return (
-    <div className="caption-container" aria-live="polite">
+    <div className={className} aria-live="polite">
       <div className="caption-mask title-mask" ref={t} />
       <div className="caption-mask subtitle-mask" ref={s} />
       <div className="caption-mask year-mask" ref={y} />
