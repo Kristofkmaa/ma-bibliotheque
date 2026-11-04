@@ -1313,6 +1313,7 @@ export class LivingRoomScene {
       this.fly = { legacy: true, from: start, to: this._bookcaseView(), t: 0, dur: 1.15, onDone }
       return
     }
+    this._libraryToTop()
     this.fly = { dir: 'in', start, t: 0, dur: 1.7, onDone }
     this._setHover(null)
   }
@@ -1322,8 +1323,25 @@ export class LivingRoomScene {
     const lib = this.cb.getLibrary?.()
     if (lib) this.setWall(lib)
     if (!this.mirror) return
-    this.fly = { dir: 'out', start: { az: AZ0, el: EL0, dist: this.dist, target: TARGET0.clone() }, t: 0, dur: 1.6 }
+    // on part de la vue exacte où l'on était dans la bibliothèque…
+    this.fly = { dir: 'out', start: { az: AZ0, el: EL0, dist: this.dist, target: TARGET0.clone() }, t: 0, dur: 1.6, libPose: this._libraryPose() }
     this._stepFly(0)
+    // …puis la bibliothèque remonte en haut : dans le salon, les étagères du haut s'ouvrent,
+    // celles du bas se ferment (c'est par le haut qu'on entrera la prochaine fois)
+    lib.setZoom(true)
+    lib.scrollToTop()
+  }
+
+  /** La bibliothèque se présente toujours par le haut, vue de près. */
+  _libraryToTop() {
+    const lib = this.mirror?.lib
+    if (!lib?.scroll) return
+    const top = lib._clampScroll(Infinity)
+    if (Math.abs(lib.scroll.v - top) < 1e-3 && lib.zoom.v > 0.999) return
+    lib.scroll.snap(top); lib.zoom.snap(1)
+    lib.cb.onZoom?.(1)
+    lib.camDirty = true
+    lib.kick()
   }
 
   _stepFly(dt) {
@@ -1340,7 +1358,7 @@ export class LivingRoomScene {
     const k = Math.min(1, f.t)
     const p = f.dir === 'in' ? k : 1 - k          // 0 : salon ; 1 : bibliothèque
     const a = this._salonPose(f.start.az, f.start.el, f.start.dist, f.start.target)
-    const b = this._libraryPose()
+    const b = f.libPose || this._libraryPose()
     this._applyPose(a, b, ease(p))
     this._setFade(sstep(0.06, 0.55, p))
     this.mix = sstep(0.2, 0.8, p)
