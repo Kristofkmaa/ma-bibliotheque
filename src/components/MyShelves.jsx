@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { MATERIALS, WALLS, DOOR_STYLES, resolveSkin, skinVars } from '../lib/skins'
-import { LOOSE, createShelf, renameShelf, setShelfSkin, applySkinToAll, moveShelf, deleteShelf, deleteShelfMoving, adoptLoose } from '../lib/shelfOps'
+import { LOOSE, createShelf, renameShelf, setShelfSkin, applySkinToAll, moveShelf, deleteShelf, deleteShelfMoving } from '../lib/shelfOps'
 
 const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`
 
@@ -176,7 +176,6 @@ export default function MyShelves({ eff, commit, onClose, initialId, onDeleteBoo
                 <div className="ms-row ms-loose" data-id={LOOSE}>
                   <span className="ms-cell">
                     <span className="ms-loose-text">{plural(loose.book_ids.length, 'livre')} sans étagère</span>
-                    <button type="button" className="lbl box" onClick={() => run(adoptLoose(eff))}>En faire une étagère</button>
                   </span>
                   <span className="ms-plank"><span className="ms-label">À ranger</span></span>
                 </div>

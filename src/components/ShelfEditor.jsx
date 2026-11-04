@@ -53,10 +53,7 @@ export default function ShelfEditor({ shelf, anchor, selectName, canUp, canDown,
       {loose ? (
         <>
           <div className="se-title">À ranger</div>
-          <p className="se-note">Ces livres ne sont sur aucune étagère. Glisse-les où tu veux, ou fais-en une étagère.</p>
-          <div className="se-actions">
-            <button type="button" className="lbl box cobalt" onClick={() => { onAdopt(); onClose() }}>Créer une étagère avec ces livres</button>
-          </div>
+          <p className="se-note">Ces livres ne sont sur aucune étagère. Glisse-les où tu veux.</p>
         </>
       ) : (
         <>
