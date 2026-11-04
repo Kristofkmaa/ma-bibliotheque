@@ -365,34 +365,40 @@ body.is-dragging .custom-cursor { display: none; }
 .se-note { font-family: var(--serif); font-size: 14px; line-height: 1.4; color: var(--muted); }
 .footer-note { color: var(--muted); }
 
+/* Ombres droites à l'intérieur du compartiment (vue de face, sans perspective) */
+.row-inset {
+  position: absolute; pointer-events: none;
+  box-shadow:
+    inset 0 14px 16px -12px rgba(0, 0, 0, 0.32),
+    inset 12px 0 14px -12px rgba(0, 0, 0, 0.22),
+    inset -12px 0 14px -12px rgba(0, 0, 0, 0.22);
+}
+.row-floor {
+  position: absolute; pointer-events: none; height: 10px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.14));
+}
+
 /* Rangée de livres (dans le plan avant) */
 .row-books { position: absolute; right: 0; display: flex; align-items: flex-end; gap: var(--gap); }
-/* Un livre vivant : il se pose sur la planche, sort un peu quand on le survole,
-   ses voisins s'écartent, et on le tire de l'étagère quand on l'ouvre. */
+/* Les livres restent droits. Au survol, le livre sort légèrement de l'étagère :
+   il monte un peu et avance vers nous (ombre douce). Au clic, on le tire un peu plus. */
 .b3 {
   position: relative; flex: none; width: var(--ws); height: var(--H);
   transform-origin: 50% 100%;
-  transition: transform 0.55s cubic-bezier(.34, 1.56, .64, 1);
-  animation: settle 0.8s cubic-bezier(.3, 1.35, .5, 1) backwards;
+  transition: transform 0.45s cubic-bezier(.2, .8, .2, 1);
+  animation: settle 0.6s cubic-bezier(.2, .8, .2, 1) backwards;
 }
-@keyframes settle {
-  0% { transform: translateY(-38px) rotate(-2.5deg); }
-  55% { transform: translateY(3px) rotate(0.4deg); }
-  100% { transform: none; }
-}
-.b3:hover, .b3:focus-within { z-index: 999 !important; transform: translateY(-14px) scale(1.06); }
-.b3:hover + .b3 { transform: translateX(3px) rotate(2.6deg); }
-.b3:hover + .b3 + .b3 { transform: translateX(1px) rotate(1deg); }
-.b3:has(+ .b3:hover) { transform: translateX(-3px) rotate(-2.6deg); }
-.b3:has(+ .b3 + .b3:hover) { transform: translateX(-1px) rotate(-1deg); }
-.b3:hover .f-spine { box-shadow: 0 16px 20px -12px rgba(20, 16, 10, 0.5); }
+@keyframes settle { from { transform: translateY(-22px); } }
+.b3:hover, .b3:focus-within { z-index: 999 !important; transform: translateY(-10px) scale(1.035); }
+.b3 .f-spine { transition: box-shadow 0.45s cubic-bezier(.2, .8, .2, 1); }
+.b3:hover .f-spine, .b3:focus-within .f-spine { box-shadow: 0 14px 18px -10px rgba(20, 16, 10, 0.45); }
 .b3.taking {
   z-index: 1000 !important;
-  transform: translateY(-34px) scale(1.12) rotate(-1.5deg) !important;
-  transition: transform 0.26s cubic-bezier(.2, .8, .2, 1);
+  transform: translateY(-22px) scale(1.07) !important;
+  transition: transform 0.24s cubic-bezier(.2, .8, .2, 1);
 }
 @media (hover: none) {
-  .b3:active { z-index: 999 !important; transform: translateY(-10px) scale(1.05); }
+  .b3:active { z-index: 999 !important; transform: translateY(-8px) scale(1.03); }
 }
 
 /* Tranche visible (calculée par la perspective), attachée au livre */
@@ -448,7 +454,7 @@ body.is-dragging .custom-cursor { display: none; }
   background: var(--cobalt); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
   pointer-events: none; transform-origin: 50% 0;
 }
-.b3:hover .ribbon { animation: sway 1.5s ease-in-out infinite; }
+
 @keyframes sway {
   0%, 100% { transform: rotate(0deg); }
   30% { transform: rotate(9deg); }

@@ -31,7 +31,7 @@ function computeLayout(w, h, mobile) {
   const gap = Math.max(3, Math.round(H * 0.025))
   const D = Math.round(H * 0.62)
   const padX = mobile ? 14 : 26
-  const P = mobile ? 900 : 1500 // distance de l'œil (perspective)
+  const P = 1e7 // vue de face : étagère et livres bien droits (pas de fuite de perspective)
   // Le plan avant (montants, chant des planches) est agrandi par la perspective :
   // on rentre le meuble d'autant pour qu'il reste entièrement dans l'écran.
   const kp = P / (P - (D / 2 + 10))
@@ -191,6 +191,9 @@ const Row = memo(function Row({
         )}
       </svg>
 
+      <div className="row-inset" style={{ left: X0, width: X1 - X0, top: 0, height: yp }} />
+      <div className="row-floor" style={{ left: X0, width: X1 - X0, top: yp - 10 }} />
+
       <div className="layer" style={{ transformOrigin: `${ox}px ${oy}px`, transform: `scale(${k(zf).toFixed(4)})` }}>
         <div className="row-books" style={{ left: X0 + padX, top: ytop, height: H }}>
           {books.map(({ b, side, z: zi }, i) => (
@@ -198,7 +201,7 @@ const Row = memo(function Row({
               ? <div key={PH} className="b3 ph" aria-hidden="true" />
               : (
                 <Book3D
-                  key={b.id || b.google_id} book={b} L={L} side={side} z={zi} delay={Math.min(r * 60 + i * 14, 700)}
+                  key={b.id || b.google_id} book={b} L={L} side={null} z={zi} delay={Math.min(r * 60 + i * 14, 700)}
                   highlight={highlightId && b.id === highlightId} onOpen={onOpen} onHover={onHover}
                 />
               )
@@ -555,8 +558,7 @@ export default function Shelf3D({
 
     const placeGhost = () => {
       if (dg.phase !== 'drag') return
-      const target = Math.max(-14, Math.min(14, dg.vx * 0.9))
-      dg.tilt += (target - dg.tilt) * 0.18
+      dg.tilt = 0 // le livre reste droit pendant qu'on le déplace
       dg.vx *= 0.85
       dg.ghost.style.transform = `translate(${(dg.x - dg.fx * dg.w).toFixed(1)}px, ${(dg.y - dg.fy * dg.h).toFixed(1)}px) rotate(${dg.tilt.toFixed(2)}deg) scale(${dg.scale})`
       raf = requestAnimationFrame(placeGhost)
