@@ -48,7 +48,7 @@ export default function Scanner({ onBookFound, onClose }) {
   }, [onBookFound])
 
   return (
-    <div className="scanner-panel" role="dialog" aria-modal="true" aria-label="Scanner un code-barres">
+    <div className="scanner-panel grain" role="dialog" aria-modal="true" aria-label="Scanner un code-barres">
       <button type="button" className="lbl box search-close-btn" onClick={onClose}>Fermer</button>
       <div className="detail-top-logo"><div className="logo"><div className="logo-name">Levana</div><div className="logo-sub">Scanner</div></div></div>
       <div id="isbn-reader" className="scanner-box" />

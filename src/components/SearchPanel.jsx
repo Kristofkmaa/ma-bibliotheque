@@ -19,10 +19,11 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
   useEffect(() => {
     if (!open || openedOnce.current) return
     openedOnce.current = true
-    panel.current.animate(
+    const a = panel.current.animate(
       [{ clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0 0 0% 0)' }],
-      { duration: 800, easing: EASE_SHEET, fill: 'both' }
+      { duration: 800, easing: EASE_SHEET, fill: 'backwards' }
     )
+    a.onfinish = () => a.cancel()
     setTimeout(() => inputRef.current?.focus(), 450)
   }, [open])
 
@@ -72,7 +73,7 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
   }
 
   return (
-    <div className="search-panel" ref={panel} role="dialog" aria-modal="true" aria-label="Ajouter un livre">
+    <div className="search-panel grain" ref={panel} role="dialog" aria-modal="true" aria-label="Ajouter un livre">
       <div className="detail-top-logo"><div className="logo"><div className="logo-name">Levana</div><div className="logo-sub">Bibliothèque</div></div></div>
       <div className="search-inner">
         <div className="search-head">

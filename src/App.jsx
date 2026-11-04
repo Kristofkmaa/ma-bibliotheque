@@ -189,7 +189,6 @@ export default function App() {
       {loading
         ? <div className="loading-screen"><Logo /><span className="lbl">Ouverture de la bibliothèque…</span></div>
         : (user ? <Library user={user} onSignOut={signOut} /> : <LoginPage onSignIn={signInWithGoogle} />)}
-      <div className="paper-grain" aria-hidden="true" />
       <Cursor />
     </>
   )

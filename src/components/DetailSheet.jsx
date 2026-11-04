@@ -41,6 +41,7 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [imgError, setImgError] = useState(false)
+  const [inkDone, setInkDone] = useState(false)
   const openedOnce = useRef(false)
 
   // Ouverture
@@ -50,10 +51,11 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
     const sheet = sheetRef.current
     const rect = originRect || { left: innerWidth / 2 - 120, top: innerHeight / 2 - 180, right: innerWidth / 2 + 120, bottom: innerHeight / 2 + 180 }
     sheet.style.transformOrigin = `${(rect.left + rect.right) / 2}px ${(rect.top + rect.bottom) / 2}px`
-    sheet.animate(
+    const grow = sheet.animate(
       [{ clipPath: insetFrom(rect), transform: 'rotate(-4.5deg)' }, { clipPath: 'inset(0px 0px 0px 0px round 0px)', transform: 'rotate(0deg)' }],
-      { duration: 1050, easing: EASE_SHEET, fill: 'both' }
+      { duration: 1050, easing: EASE_SHEET, fill: 'backwards' }
     )
+    grow.onfinish = () => grow.cancel()
     sheet.querySelectorAll('.detail-line-inner').forEach((line, i) => {
       line.animate([{ transform: 'translateY(110%)' }, { transform: 'translateY(0%)' }],
         { duration: 900, delay: 620 + i * 60, easing: EASE, fill: 'both' })
@@ -73,6 +75,7 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
         else { done = false; const p = lt / 1250; el.setAttribute('r', ((1 - Math.pow(1 - p, 3)) * 900).toFixed(1)) }
       })
       if (!done) raf = requestAnimationFrame(run)
+      else setInkDone(true) // l'encre a tout couvert : on retire le masque filtré (coûteux)
     }
     raf = requestAnimationFrame(run)
     return () => cancelAnimationFrame(raf)
@@ -118,7 +121,7 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
   const longText = d.description.length > 520
 
   return (
-    <div className="detail" ref={sheetRef} role="dialog" aria-modal="true">
+    <div className="detail grain" ref={sheetRef} role="dialog" aria-modal="true">
       <div className="detail-top-logo"><div className="logo"><div className="logo-name">Levana</div><div className="logo-sub">Bibliothèque</div></div></div>
       <div className="detail-scroll">
         <div className="detail-grid">
@@ -190,6 +193,7 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
           <div className="detail-right">
             <svg className="poster-svg" viewBox="0 0 600 900" aria-hidden="true">
               <defs>
+                {!inkDone && <>
                 <filter id="ink-filter" x="-50%" y="-50%" width="200%" height="200%">
                   <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="3" seed="7" result="noise" />
                   <feDisplacementMap in="SourceGraphic" in2="noise" scale="120" xChannelSelector="R" yChannelSelector="G" />
@@ -200,6 +204,7 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
                     {BLOBS.map((b, i) => <circle key={i} ref={el => { blobRefs.current[i] = el }} cx={b.cx} cy={b.cy} r="0" fill="white" />)}
                   </g>
                 </mask>
+                </>}
                 <clipPath id="poster-clip"><rect x="0" y="0" width="600" height="900" rx="3" /></clipPath>
                 <linearGradient id="worn" x1="0" y1="0" x2="1" y2="0">
                   <stop offset="0" stopColor="#fff" stopOpacity="0.9" />
@@ -208,7 +213,7 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
                   <stop offset="1" stopColor="#000" stopOpacity="0.9" />
                 </linearGradient>
               </defs>
-              <g clipPath="url(#poster-clip)" mask="url(#ink-mask)">
+              <g clipPath="url(#poster-clip)" mask={inkDone ? undefined : 'url(#ink-mask)'}>
                 <rect x="0" y="0" width="600" height="900" fill={bg} />
                 {d.cover && !imgError ? (
                   <image href={d.cover} x="0" y="0" width="600" height="900" preserveAspectRatio="xMidYMid slice" onError={() => setImgError(true)} />

@@ -29,8 +29,10 @@ export default function Cursor() {
     const frame = now => {
       const dt = Math.min(0.05, (now - last) / 1000); last = now
       const f = 1 - Math.exp(-22 * dt)
-      cx += (mx - cx) * f; cy += (my - cy) * f
-      node.style.transform = `translate3d(${cx}px, ${cy}px, 0)`
+      if (Math.abs(mx - cx) > 0.1 || Math.abs(my - cy) > 0.1) {
+        cx += (mx - cx) * f; cy += (my - cy) * f
+        node.style.transform = `translate3d(${cx.toFixed(1)}px, ${cy.toFixed(1)}px, 0)`
+      }
       if (cursor.state !== lastState) {
         lastState = cursor.state
         node.className = 'custom-cursor' + (lastState !== 'default' ? ' ' + lastState : '')

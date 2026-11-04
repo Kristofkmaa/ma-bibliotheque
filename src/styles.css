@@ -28,6 +28,7 @@ html, body {
   width: 100%;
   height: 100%;
   background-color: var(--paper);
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="matrix" values="0 0 0 0 0.45 0 0 0 0 0.42 0 0 0 0 0.38 0 0 0 0.12 0"/></filter><rect width="100%" height="100%" filter="url(%23g)"/></svg>');
   color: var(--ink);
   font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
@@ -46,14 +47,8 @@ a { color: inherit; }
   body.app-shell, body.app-shell button, body.app-shell a { cursor: none !important; }
 }
 
-/* Grain papier ------------------------------------------------------------ */
-.paper-grain {
-  position: fixed; inset: 0; z-index: 90; pointer-events: none;
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="matrix" values="0 0 0 0 0.45 0 0 0 0 0.42 0 0 0 0 0.38 0 0 0 0.22 0"/></filter><rect width="100%" height="100%" filter="url(%23g)"/></svg>');
-  background-repeat: repeat;
-  mix-blend-mode: multiply;
-  opacity: 0.55;
-}
+/* Grain papier : simple fond statique (aucun calque fixe ni mode de fusion, très coûteux) */
+.grain { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="matrix" values="0 0 0 0 0.45 0 0 0 0 0.42 0 0 0 0 0.38 0 0 0 0.12 0"/></filter><rect width="100%" height="100%" filter="url(%23g)"/></svg>'); background-repeat: repeat; }
 
 /* Système de libellés ------------------------------------------------------ */
 .lbl {
@@ -140,11 +135,11 @@ a { color: inherit; }
 }
 .stage {
   position: absolute; left: 50%; top: 50%; width: 0; height: 0;
-  transform-style: preserve-3d; will-change: transform;
+  transform-style: preserve-3d;
 }
 .tape {
   position: absolute; width: 0; height: 0;
-  transform-style: preserve-3d; will-change: transform;
+  transform-style: preserve-3d;
 }
 .face {
   position: absolute; height: var(--H); top: calc(-0.5 * var(--H));
@@ -159,12 +154,19 @@ a { color: inherit; }
 .face.sp {
   width: var(--ws); left: calc(-0.5 * var(--ws));
   transform: translateZ(calc(var(--d) / 2));
-  box-shadow: 0 22px 34px -20px rgba(20, 16, 10, 0.55);
 }
 .face.cv {
   width: var(--d); left: calc(-0.5 * var(--d));
   transform: rotateY(90deg) translateZ(calc(var(--ws) / 2));
-  box-shadow: 0 30px 60px -28px rgba(20, 16, 10, 0.55);
+}
+/* Ombres : jamais de box-shadow sur les faces 3D (redessinées à chaque frame).
+   Une ombre de sol statique, peinte une seule fois, les remplace. */
+.shelf-floor {
+  position: fixed; left: 0; right: 0; pointer-events: none; z-index: 19;
+  top: calc(50% + var(--H) / 2 - 6px); height: 46px;
+  background:
+    radial-gradient(ellipse calc(var(--H) * 0.5) 26px at 50% 12px, rgba(20, 16, 10, 0.30), rgba(20, 16, 10, 0) 100%),
+    linear-gradient(180deg, rgba(20, 16, 10, 0.16), rgba(20, 16, 10, 0) 70%);
 }
 
 /* Tranche générée */
@@ -180,7 +182,7 @@ a { color: inherit; }
   border: 1px solid rgba(0,0,0,0.25); overflow: hidden;
   background: rgba(0,0,0,0.12); margin-bottom: 6%;
 }
-.sp-art img { width: 100%; height: 100%; object-fit: cover; display: block; filter: saturate(0.85) contrast(1.05); }
+.sp-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sp-title {
   flex: 1 1 auto; min-height: 0; writing-mode: vertical-rl; text-orientation: mixed;
   font-family: var(--serif); font-weight: 500; text-transform: uppercase;
@@ -222,7 +224,7 @@ a { color: inherit; }
   position: fixed; width: 42px; height: 42px; border-radius: 50%;
   border: 1px solid var(--cobalt); background: rgba(237, 235, 230, 0.75); color: var(--cobalt);
   display: flex; align-items: center; justify-content: center; z-index: 35; padding: 0;
-  transform: translate(-50%, -50%) scale(0); will-change: transform, left, top;
+  transform: translate(-50%, -50%) scale(0);
 }
 .play-ring-icon {
   width: 0; height: 0; border-style: solid; border-width: 6px 0 6px 10px;
@@ -309,7 +311,7 @@ a { color: inherit; }
 /* Fiche (détail / ajout) ---------------------------------------------------- */
 .detail {
   position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh;
-  background-color: var(--sheet); z-index: 60; overflow: hidden; will-change: clip-path, transform;
+  background-color: var(--sheet); z-index: 60; overflow: hidden;
 }
 .detail-scroll { width: 100%; height: 100%; overflow-y: auto; overflow-x: hidden; }
 .detail-grid {
@@ -353,12 +355,11 @@ a { color: inherit; }
 .detail-feedback { font-family: var(--sans); font-weight: 600; font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--cobalt); }
 
 .detail-right { display: flex; align-items: center; justify-content: center; height: 100%; max-height: calc(100vh - 160px); z-index: 1; }
-.poster-svg { height: 100%; max-height: min(74vh, 760px); aspect-ratio: 2 / 3; display: block; filter: drop-shadow(0 20px 40px rgba(20, 16, 10, 0.25)); }
+.poster-svg { height: 100%; max-height: min(74vh, 760px); aspect-ratio: 2 / 3; display: block; border-radius: 3px; box-shadow: 0 20px 40px rgba(20, 16, 10, 0.22); }
 
 /* Recherche ---------------------------------------------------------------- */
 .search-panel {
   position: fixed; inset: 0; background-color: var(--sheet); z-index: 58; overflow: hidden;
-  will-change: clip-path;
 }
 .search-inner { width: 100%; height: 100%; overflow-y: auto; padding: 110px 6vw 60px; }
 .search-head { max-width: 900px; margin: 0 auto 28px; }
@@ -390,7 +391,7 @@ a { color: inherit; }
 .search-close-btn { position: absolute; top: 31px; left: 32px; z-index: 70; }
 
 /* Scanner ------------------------------------------------------------------ */
-.scanner-panel { position: fixed; inset: 0; z-index: 65; background: var(--sheet); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; }
+.scanner-panel { position: fixed; inset: 0; z-index: 65; background-color: var(--sheet); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; }
 .scanner-box { width: min(92vw, 460px); aspect-ratio: 4 / 3; border: 1px solid var(--rule); overflow: hidden; background: #111; }
 .scanner-box video { width: 100% !important; height: 100% !important; object-fit: cover; }
 .scanner-msg { font-family: var(--serif); font-size: 16px; color: var(--ink); text-align: center; max-width: 40ch; }
