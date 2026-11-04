@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { spineColors, hashString } from '../lib/bookUtils'
 import { webglAvailable } from '../three/webgl'
 import { basketScale, MAX_BASKET } from '../lib/basketSize'
+import { suggestShelf } from '../lib/suggestShelf'
+import { resolveSkin } from '../lib/skins'
 
 // Le panier 3D (Three.js) est chargé à part, comme la bibliothèque
 const Basket3D = lazy(() => import('./Basket3D'))
@@ -247,6 +249,153 @@ export function ShelfBasket({ items, shelves, defaultShelf, canDrop, api, mobile
           {confirmClear ? 'Vraiment ?' : 'Vider'}
         </button>
       </div>
+    </aside>
+  )
+}
+
+/**
+ * Le panier sous la bibliothèque. On le touche : les livres en sortent et se posent en rang
+ * en bas de l'écran. On glisse un livre sur une étagère (une place s'ouvre), ou on touche son
+ * « + » pour choisir l'étagère (la plus probable en premier).
+ */
+export function BasketTray({ items, shelves, books, api, mobile, canDrop, open, onOpen, onClose, onDropBook, onPlace, onOpenBook }) {
+  const real = useMemo(() => shelves.filter(s => !s.pseudo), [shelves])
+  const byId = useMemo(() => new Map(books.map(b => [b.id, b])), [books])
+  const [picker, setPicker] = useState(null)        // livre dont on choisit l'étagère
+  const [dragging, setDragging] = useState(null)
+  const [busy, setBusy] = useState(null)
+  const [last, setLast] = useState(null)
+  const coverEls = useRef({})
+  const n = items.length
+
+  useEffect(() => { if (picker && !items.some(b => b.googleId === picker.googleId)) setPicker(null) }, [items, picker])
+  useEffect(() => { if (!open) setPicker(null) }, [open])
+
+  const startPress = (e, book) => {
+    if (e.button > 0 || busy) return
+    const el = e.currentTarget
+    const rc = el.getBoundingClientRect()
+    const start = { x: e.clientX, y: e.clientY }
+    const fx = (e.clientX - rc.left) / rc.width, fy = (e.clientY - rc.top) / rc.height
+    const touch = e.pointerType !== 'mouse'
+    const id = `basket:${book.googleId}`
+    let ghost = null, timer = null, dead = false
+    const src = el.querySelector('img')?.src
+
+    const begin = () => {
+      if (ghost || dead || !canDrop) return
+      ghost = document.createElement('div')
+      ghost.className = 'bb-ghost'
+      ghost.style.cssText = `width:${rc.width}px;height:${rc.height}px;background:${colorOf(book)}`
+      if (src) { const img = new Image(); img.src = src; img.alt = ''; ghost.appendChild(img) }
+      ghost.style.transform = `translate(${rc.left}px, ${rc.top}px) scale(1.08)`
+      document.body.appendChild(ghost)
+      document.body.classList.add('is-dragging')
+      setDragging(book.googleId)
+      setPicker(null)
+      navigator.vibrate?.(8)
+    }
+    const onMove = ev => {
+      const dx = ev.clientX - start.x, dy = ev.clientY - start.y
+      if (!ghost) {
+        if (Math.hypot(dx, dy) < 7) return
+        // doigt : vers le haut on prend le livre ; sur le côté on fait défiler la rangée
+        if (!touch || (dy < 0 && Math.abs(dy) > Math.abs(dx) * 0.8)) begin()
+        else { dead = true; clearTimeout(timer); return }
+        if (!ghost) return
+      }
+      ev.preventDefault()
+      ghost.style.transform = `translate(${ev.clientX - fx * rc.width}px, ${ev.clientY - fy * rc.height}px) scale(1.12) rotate(-3deg)`
+      const over = api.current?.previewExternal(id, ev.clientX, ev.clientY)
+      ghost.classList.toggle('on-shelf', !!over)
+    }
+    const end = ev => {
+      clearTimeout(timer)
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerup', end)
+      el.removeEventListener('pointercancel', end)
+      if (!ghost) {
+        if (ev.type === 'pointerup' && !dead && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 7) onOpenBook(book)
+        return
+      }
+      const t = api.current?.endExternal() || null
+      document.body.classList.remove('is-dragging')
+      setDragging(null)
+      const g = ghost
+      if (t && ev.type === 'pointerup') {
+        g.animate([{ opacity: 1 }, { opacity: 0, transform: g.style.transform.replace(/scale\([^)]*\)/, 'scale(0.5)') }], { duration: 260, easing: 'ease-in' }).onfinish = () => g.remove()
+        setLast(t.shelfId)
+        onDropBook(book, t)
+      } else {
+        // pas d'étagère sous le doigt : le livre revient à sa place dans la rangée
+        g.animate([{ transform: g.style.transform }, { transform: `translate(${rc.left}px, ${rc.top}px) scale(1)` }], { duration: 420, easing: 'cubic-bezier(.3, 1.25, .5, 1)' }).onfinish = () => g.remove()
+      }
+    }
+    if (touch) timer = setTimeout(begin, 380)     // appui long : on le prend aussi
+    el.setPointerCapture(e.pointerId)
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerup', end)
+    el.addEventListener('pointercancel', end)
+  }
+
+  const choose = async (book, shelfId) => {
+    const el = coverEls.current[book.googleId]
+    setPicker(null); setBusy(book.googleId); setLast(shelfId)
+    try { await onPlace(book, shelfId, el?.getBoundingClientRect(), el?.querySelector('img')?.src) } finally { setBusy(null) }
+  }
+
+  const sugg = picker ? suggestShelf(picker, real, byId, last) : null
+  const ordered = sugg ? [real.find(s => s.id === sugg.shelfId), ...real.filter(s => s.id !== sugg.shelfId)].filter(Boolean) : real
+
+  return (
+    <aside className={'tray-bar' + (open ? ' is-open' : '')} aria-label="Mon panier">
+      <div className="tray-basket" onClick={() => !open && onOpen()} role="button" tabIndex={0} aria-label="Sortir les livres du panier">
+        <AnyBasket items={items} width={mobile ? 104 : 190} onBookClick={() => !open && onOpen()} />
+      </div>
+      <div className="tray-side">
+        <p className="tray-count">{n > 1 ? `${n} livres à ranger` : '1 livre à ranger'}</p>
+        {/* toujours là (invisible une fois ouvert) : la place du panier ne change pas, le mur ne bouge pas */}
+        <button type="button" className="lbl box filled tray-out" style={open ? { visibility: 'hidden' } : undefined} onClick={onOpen}>Sortir les livres</button>
+      </div>
+
+      {open && (
+        <div className="tray grain" role="dialog" aria-label="Livres à ranger">
+          <div className="tray-head">
+            <p className="tray-hint">{canDrop ? 'Glisse un livre sur une étagère, ou touche +' : 'Touche + pour choisir l’étagère'}</p>
+            <button type="button" className="lbl box" onClick={onClose}>Remettre au panier</button>
+          </div>
+          <div className="tray-row">
+            {items.map((b, k) => (
+              <div key={b.googleId} className={'tray-book' + (dragging === b.googleId || busy === b.googleId ? ' away' : '')} style={{ animationDelay: `${80 + k * 70}ms` }}>
+                <span className="tray-cover" ref={el => { coverEls.current[b.googleId] = el }} style={{ background: colorOf(b) }} onPointerDown={e => startPress(e, b)} onDragStart={e => e.preventDefault()}>
+                  {b.cover && <img src={b.cover.replace('http://', 'https://')} alt="" draggable="false" />}
+                </span>
+                <button type="button" className={'tray-plus' + (picker?.googleId === b.googleId ? ' on' : '')} aria-label={`Choisir l’étagère de ${b.title}`} onClick={() => setPicker(p => (p?.googleId === b.googleId ? null : b))}>+</button>
+                <span className="tray-title">{b.title}</span>
+              </div>
+            ))}
+          </div>
+          {picker && (
+            <div className="tray-picker" key={picker.googleId}>
+              <p className="tray-q"><em>{picker.title}</em> · sur quelle étagère ?</p>
+              <div className="gp-shelves">
+                {ordered.map((s, k) => {
+                  const pal = resolveSkin(s)
+                  const on = sugg?.shelfId === s.id
+                  return (
+                    <button key={s.id} type="button" className={'gp-chip' + (on ? ' sugg' : '')} style={{ '--wood': pal.mat.mid, '--wall': pal.wall2, animationDelay: `${40 + k * 35}ms` }} onClick={() => choose(picker, s.id)}>
+                      {on && <span className="gp-why">Suggérée · {sugg.reason}</span>}
+                      <span className="gp-swatch" aria-hidden="true" />
+                      <span className="gp-name">{s.name}</span>
+                      <span className="gp-count">{s.book_ids.length}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </aside>
   )
 }

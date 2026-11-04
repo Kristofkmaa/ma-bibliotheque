@@ -20,7 +20,7 @@ const SLIDES = [
   { title: 'Entre dans ta bibliothèque', text: 'Touche la bibliothèque du salon : la caméra plonge et tu arrives devant tes étagères.', frames: ['enter-a', 'enter-b', 'enter-c'] },
   { title: 'Ajoute un livre', text: '« + Ajouter un livre » : tape un titre, un auteur… ou scanne le code-barres au dos.', frames: ['add-a', 'add-b'] },
   { title: 'Remplis ton panier', text: 'Touche « + », ou reste appuyé sur un livre et glisse-le : le panier monte pour l’attraper.', frames: ['basket-a', 'basket-b', 'basket-c'] },
-  { title: 'Range tes livres', text: '« Ranger mon livre » : choisis l’étagère, une est déjà suggérée. Le livre s’y envole.', frames: ['range-a', 'range-c'] },
+  { title: 'Range tes livres', text: 'Touche le panier : tes livres sortent en bas de l’écran. Glisse-les sur une étagère, ou touche + pour la choisir.', frames: ['range-a', 'range-b', 'range-c'] },
   { title: 'Tes étagères, à ton goût', text: '« Mes étagères » : crée, renomme, change le bois, la couleur du fond et les portes.', frames: ['shelves-a', 'shelves-b', 'shelves-c'] },
   { title: 'Déplace tes livres', text: 'Reste appuyé sur un livre, puis glisse-le à sa nouvelle place.', frames: ['move-a', 'move-b'] },
   { title: 'En cours, lu', text: 'Touche un livre : « En cours » glisse un marque-page entre ses pages, « Lu » le tamponne.', frames: ['read-a', 'read-b', 'read-c'] },
