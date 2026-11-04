@@ -334,7 +334,7 @@ function Library({ user, onSignOut }) {
         <Suspense fallback={<div className="salon" />}>
           <LivingRoom
             from={salon} books={books} shelves={effShelves} basketItems={basket.items}
-            onEntered={() => { markSalonSeen(); setSalon(null) }}
+            onEntered={next => { markSalonSeen(); setSalon(null); if (next === 'guide' && manual && basket.items.length) setGuide(true) }}
             onOpenBook={b => (b ? openBook(b, null) : openSearch())}
             onAddBooks={() => openSearch()}
             getLibrary={() => bookcaseApi.current?.scene?.()}

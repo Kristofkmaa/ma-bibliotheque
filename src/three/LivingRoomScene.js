@@ -4,6 +4,7 @@ import { grainTexture, doorTexture } from './textures'
 import { weaveTexture, ropeTexture } from './BasketScene'
 import { spineColors, toDisplay } from '../lib/bookUtils'
 import { preloadCover } from '../lib/covers'
+import { TvTutorial, TV_W, TV_H } from './tvTutorial'
 import { resolveSkin } from '../lib/skins'
 import { RH, PT, SD, ST } from './BookcaseScene'
 import { noTouchSelect } from './webgl'
@@ -723,7 +724,8 @@ export class LivingRoomScene {
     frame.position.set(0, 0.42, 0)
     tv.add(stand, neck, frame)
     this.tvCanvas = document.createElement('canvas')
-    this.tvCanvas.width = 640; this.tvCanvas.height = 360
+    this.tvCanvas.width = TV_W; this.tvCanvas.height = TV_H
+    this.tut = new TvTutorial()
     this.tvTex = this._track(new THREE.CanvasTexture(this.tvCanvas))
     this.tvTex.colorSpace = THREE.SRGBColorSpace
     const screen = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(1.01, 0.57)), new THREE.MeshBasicMaterial({ map: this.tvTex, toneMapped: false }))
@@ -733,11 +735,16 @@ export class LivingRoomScene {
     this.tvIndex = 0
     this.tvSwitch = 1
     this._drawTv()
-    this._register('tv', grp, 'Mes lectures')
+    this._register('tv', grp, 'Le tuto')
   }
 
   /** Livres à montrer sur l'écran : en cours, sinon les derniers arrivés. */
   setTvBooks(list, kind) {
+    this.tvList = list; this.tvKind = kind
+    return  // la télé passe désormais le tuto
+  }
+
+  _setTvBooksOld(list, kind) {
     const sig = kind + '|' + list.map(b => b.id).join(',')
     if (sig === this.tvSig) return
     this.tvSig = sig
@@ -751,7 +758,96 @@ export class LivingRoomScene {
   }
   get tvBook() { return this.tvList[this.tvIndex] || null }
 
+  /** L'écran de la télé : le tuto, en boucle. */
   _drawTv() {
+    this.tut.draw(this.tvCanvas.getContext('2d'))
+    this.tvTex.needsUpdate = true
+  }
+
+  // ---- Zoom sur la télé (le tuto en grand) -------------------------------------------------
+  _tvView() {
+    const target = new THREE.Vector3(TV.x, 1.0, -R + 0.2)
+    const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
+    const dist = Math.max((1.01 * 1.1) / 2 / (t * this.camera.aspect), (0.57 * 1.9) / 2 / t)
+    // écran en hauteur (téléphone) : la télé monte dans le haut, le texte du tuto se lit dessous
+    if (this.camera.aspect < 1) target.y -= 0.42 * dist * t
+    return { target, az: 0, el: 0.03, dist }
+  }
+
+  zoomTv() {
+    if (this.fly || this.tvZoom) return
+    this._setHover(null)
+    this.tut.go(0)
+    this._drawTv()
+    this.tvZoom = { k: 0, dir: 1, from: { target: this.target.clone(), az: this.az.v + (this.lastDrift || 0), el: this.el.v, dist: this.dist } }
+    this.cb.onTvZoom?.(true)
+    this.cb.onTutSlide?.(0)
+  }
+
+  unzoomTv() {
+    if (!this.tvZoom) return
+    this.tvZoom.dir = -1
+    this.cb.onTvZoom?.(false)
+  }
+
+  tutNext() { this.tut.next(); this._drawTv(); this.cb.onTutSlide?.(this.tut.i) }
+  tutPrev() { this.tut.prev(); this._drawTv(); this.cb.onTutSlide?.(this.tut.i) }
+
+  _stepTvZoom(dt) {
+    const z = this.tvZoom
+    z.k = clamp(z.k + (z.dir * dt) / 1.1, 0, 1)
+    const e = ease(z.k), a = z.from, b = this._tvView()
+    const tgt = a.target.clone().lerp(b.target, e)
+    const dist = Math.exp(Math.log(a.dist) + (Math.log(b.dist) - Math.log(a.dist)) * e)
+    this._placeCamera(a.az + (b.az - a.az) * e, a.el + (b.el - a.el) * e, dist, tgt)
+    this._fadeLamp(e)
+    if (z.dir < 0 && z.k <= 0) {
+      this.tvZoom = null
+      this.az.snap(a.az); this.el.snap(a.el); this.target.copy(a.target)
+      this._fadeLamp(0)
+      this.idleAt = this.time
+      if (this.pendingEnter !== undefined) { const f = this.pendingEnter; this.pendingEnter = undefined; this.enter(f) }
+    }
+  }
+
+  /** La lampe passe devant la télé : elle s'efface pendant le zoom. */
+  _fadeLamp(d) {
+    this.lampHide = d
+    if (!this.lampMats) {
+      const set = new Set()
+      // la lampe et le canapé sont entre la caméra et l'écran
+      for (const k of ['lamp', 'sofa']) this.items.get(k).group.traverse(o => { if (o.isMesh) [].concat(o.material).forEach(m => set.add(m)) })
+      this.lampMats = [...set].map(m => ({ m, op: m.opacity, tr: m.transparent, dw: m.depthWrite }))
+    }
+    for (const f of this.lampMats) {
+      if (d > 0) {
+        if (!f.m.transparent) { f.m.transparent = true; f.m.needsUpdate = true }
+        f.m.depthWrite = false
+        f.m.opacity = f.op * (1 - d)
+      } else if (f.m.transparent !== f.tr || f.m.opacity !== f.op) {
+        f.m.opacity = f.op; f.m.depthWrite = f.dw
+        if (f.m.transparent !== f.tr) { f.m.transparent = f.tr; f.m.needsUpdate = true }
+      }
+    }
+    this.items.get('lamp').group.visible = d < 0.99
+    this.items.get('sofa').group.visible = d < 0.99
+  }
+
+  /** Les bulles au-dessus de la télé et du panier suivent la caméra. */
+  _placeBubbles() {
+    const S = this.renderer.domElement.getBoundingClientRect()
+    const show = !this.fly && !this.tvZoom
+    for (const [kind, pos] of [['tv', new THREE.Vector3(TV.x, 1.47, -R + 0.2)], ['basket', new THREE.Vector3(TABLE.x + 0.17, 0.86, TABLE.z + 0.04)]]) {
+      const el = this.cb.bubble?.(kind)
+      if (!el) continue
+      const v = pos.project(this.camera)
+      const x = S.left + ((v.x + 1) / 2) * S.width, y = S.top + ((1 - v.y) / 2) * S.height
+      el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
+      el.classList.toggle('off', !show)
+    }
+  }
+
+  _drawTvBooks() {
     const c = this.tvCanvas, g = c.getContext('2d'), w = c.width, h = c.height
     const grad = g.createLinearGradient(0, 0, w, h)
     grad.addColorStop(0, '#1E2A55'); grad.addColorStop(1, '#2B47B0')
@@ -1305,6 +1401,8 @@ export class LivingRoomScene {
   /** On s'approche de la bibliothèque jusqu'à la voir exactement comme dans la bibliothèque. */
   enter(onDone) {
     if (this.fly) return
+    // on regardait le tuto : on revient d'abord dans le salon, puis on entre
+    if (this.tvZoom) { this.pendingEnter = onDone || null; this.unzoomTv(); return }
     const lib = this.cb.getLibrary?.()
     if (lib && (!this.mirror || this.mirror.lib !== lib)) this.setWall(lib)
     const start = { az: this.az.v + (this.lastDrift || 0), el: this.el.v, dist: this.dist, target: this.target.clone() }
@@ -1413,7 +1511,7 @@ export class LivingRoomScene {
       if (p && p.id === e.pointerId) {
         const dx = e.clientX - p.x, dy = e.clientY - p.y
         if (!p.drag && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) > 7) { p.drag = true; this._setHover(null) }
-        if (p.drag) {
+        if (p.drag && !this.tvZoom) {
           const k = 2.6 / Math.max(320, this.w)
           this.az.t = clamp(this.az.t - dx * k, AZ_MIN - 0.08, AZ_MAX + 0.08)
           this.el.t = clamp(this.el.t + dy * k * 0.8, EL_MIN - 0.05, EL_MAX + 0.05)
@@ -1424,12 +1522,18 @@ export class LivingRoomScene {
         this.idleAt = this.time
         return
       }
-      if (e.pointerType === 'mouse' && !this.fly) this.hoverXY = { x: e.clientX, y: e.clientY }
+      if (e.pointerType === 'mouse' && !this.fly && !this.tvZoom) this.hoverXY = { x: e.clientX, y: e.clientY }
     }
     this._up = e => {
       const p = this.pointer
       if (!p || p.id !== e.pointerId) return
       this.pointer = null
+      if (this.tvZoom) {
+        const dx = p.x - p.x0
+        if (p.drag) { if (Math.abs(dx) > 40) { if (dx < 0) this.tutNext(); else this.tutPrev() } return }
+        if (pick(e.clientX, e.clientY) === 'tv') this.tutNext()
+        return
+      }
       if (p.drag) {
         const k = 2.6 / Math.max(320, this.w)
         this.az.t = clamp(this.az.t - p.vx * 160 * k, AZ_MIN, AZ_MAX)
@@ -1468,7 +1572,7 @@ export class LivingRoomScene {
       case 'lamp': this.setLamp(!this.lampState); break
       case 'sofa': this.cushions.forEach((c, i) => { c.s.vel -= 1.1 + (i % 3) * 0.2 }); break
       case 'plant': this.leaves.forEach((l, i) => { l.sway.vel += (i % 2 ? 1 : -1) * 3 }); break
-      case 'tv': this.cb.onTv?.(this.tvBook); break
+      case 'tv': if (this.tvZoom) this.tutNext(); else this.zoomTv(); break
       case 'basket': this.cb.onBasket?.(); break
       default: this.cb.onTap?.(kind)
     }
@@ -1489,6 +1593,8 @@ export class LivingRoomScene {
     // caméra
     if (this.fly) {
       this._stepFly(dt)
+    } else if (this.tvZoom) {
+      this._stepTvZoom(dt)
     } else {
       if (!this.pointer) {
         this.az.t = clamp(this.az.t, AZ_MIN, AZ_MAX)
@@ -1510,7 +1616,7 @@ export class LivingRoomScene {
     const vis = 1 - (this.fade || 0)
 
     // survol à la souris
-    if (this.hoverXY && !this.pointer && !this.fly) {
+    if (this.hoverXY && !this.pointer && !this.fly && !this.tvZoom) {
       const kind = this._pick(this.hoverXY.x, this.hoverXY.y)
       this._setHover(kind, this.hoverXY.x, this.hoverXY.y)
     }
@@ -1586,10 +1692,10 @@ export class LivingRoomScene {
     // lampe
     for (let i = 0; i < sub; i++) this.lampOn.step(h)
     const lo = clamp(this.lampOn.v, 0, 1.2)
-    this.lampLight.intensity = 2.6 * lo * sal
+    this.lampLight.intensity = 2.6 * lo * sal * (1 - (this.lampHide || 0))
     this.shadeMat.emissiveIntensity = 0.75 * lo * sal
     this.bulbMat.color.setRGB(0.55 + 0.45 * lo, 0.52 + 0.42 * lo, 0.45 + 0.35 * lo)
-    this.lampGlow.material.opacity = 0.28 * lo * vis
+    this.lampGlow.material.opacity = 0.28 * lo * vis * (1 - (this.lampHide || 0))
     this.lampGlow.quaternion.copy(this.camera.quaternion)
     if (!this.lampOn.done) moving = true
     // vapeur de la tasse
@@ -1601,13 +1707,11 @@ export class LivingRoomScene {
       s.scale.setScalar(0.6 + t * 1.2)
       s.quaternion.copy(this.camera.quaternion)
     }
-    // télé
-    if (this.tvList.length > 1 && this.time > (this.tvNext || 0)) {
-      this.tvIndex = (this.tvIndex + 1) % this.tvList.length
-      this.tvSwitch = 0
-      this.tvNext = this.time + 6
-    }
-    if (this.tvSwitch < 1) { this.tvSwitch = Math.min(1, this.tvSwitch + dt * 2.2); this._drawTv() }
+    // télé : le tuto tourne en boucle (plus fluide quand on le regarde en grand)
+    if (this.tut.update(dt)) this.cb.onTutSlide?.(this.tut.i)
+    this.tvAcc = (this.tvAcc || 0) + dt
+    if (this.tvAcc >= (this.tvZoom ? 1 / 30 : 1 / 12)) { this.tvAcc = 0; this._drawTv() }
+    this._placeBubbles()
 
     if (moving) this.shadowDirty = Math.max(this.shadowDirty, 1)
     if (this.shadowDirty > 0) { this.renderer.shadowMap.needsUpdate = true; this.shadowDirty-- }
