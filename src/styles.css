@@ -751,9 +751,9 @@ button.plank-label.over.editable:hover { transform: translate(0, calc(-50% - 1px
 .bb-ghost.on-shelf { outline-color: var(--cobalt); }
 
 /* Recherche : le panier à côté des résultats */
-.search-layout { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 40px; max-width: 1360px; margin: 0 auto; }
+.search-layout { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 40px; max-width: 1440px; margin: 0 auto; }
 .search-main .search-head, .search-main .results-grid, .search-main .search-empty { max-width: none; }
-.search-basket { position: sticky; top: 24px; align-self: start; }
+.search-basket { position: sticky; top: 24px; align-self: start; min-width: 380px; }
 .sb { display: flex; flex-direction: column; align-items: center; gap: 14px; padding-top: 8px; }
 .sb-title { font-family: var(--serif); font-size: 30px; letter-spacing: -0.015em; align-self: flex-start; }
 .sb-side { display: flex; flex-direction: column; gap: 12px; align-items: stretch; width: 100%; }
@@ -764,7 +764,7 @@ button.plank-label.over.editable:hover { transform: translate(0, calc(-50% - 1px
 .case-row { display: flex; align-items: stretch; min-height: 0; width: min(1360px, 100%); margin: 0 auto; gap: 4px; }
 .case-row > .case3d { flex: 1; min-width: 0; width: auto; margin: 0; }
 .shelf-basket {
-  flex: none; width: 372px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  flex: none; min-width: 330px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
   gap: 10px; padding: 0 14px 6px 0;
   animation: basketIn 0.7s cubic-bezier(.3, 1.25, .45, 1) both;
 }
@@ -810,3 +810,11 @@ button.plank-label.over.editable:hover { transform: translate(0, calc(-50% - 1px
 .basket-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .basket3d .bb-tag { transform: translate(-50%, -50%) rotate(-4deg); }
 .basket3d .bb-remove.on { opacity: 1; z-index: 5; }
+
+.fly-live { left: 0; top: 0; transform-origin: 50% 50%; will-change: transform, width, height; }
+.basket3d { transition: none; }
+.result-plus:disabled:not(.picked) { background: var(--muted); opacity: 0.45; cursor: not-allowed; transform: none; }
+@media (max-width: 767px) {
+  .search-basket { min-width: 0; }
+  .shelf-basket { min-width: 0; }
+}

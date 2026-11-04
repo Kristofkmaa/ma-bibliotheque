@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { hashString } from '../lib/bookUtils'
 import { spineTexture, withCover, pagesTexture } from './textures'
+import { basketScale } from '../lib/basketSize'
 
 /*
  * Panier en osier en vraie 3D : corbeille ovale tressée, bord en tresse, anse,
@@ -12,7 +13,9 @@ import { spineTexture, withCover, pagesTexture } from './textures'
 const SX = 1.25, SZ = 0.82   // ovale
 const BH = 0.82              // hauteur de la corbeille
 const R_TOP = 1.0, R_BOT = 0.8
-const BOOK_W = 0.8, BOOK_H = 1.5
+const BOOK_W = 0.92, BOOK_H = 1.42   // proportions d'une couverture (≈ 2/3)
+const CAM_AZ = 0.42, CAM_TILT = 0.42  // vue de trois quarts, un peu d'en haut
+
 
 class Spring {
   constructor(v = 0, k = 140, damp = 0.62) { this.v = v; this.t = v; this.vel = 0; this.k = k; this.c = 2 * Math.sqrt(k) * damp }
@@ -74,6 +77,7 @@ export class BasketScene {
   constructor(container, cb) {
     this.cb = cb
     this.container = container
+    this.baseWidth = cb.baseWidth || 360
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -83,13 +87,13 @@ export class BasketScene {
     container.appendChild(this.renderer.domElement)
 
     this.scene = new THREE.Scene()
-    this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50)
+    this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 60)
     this.scene.add(new THREE.HemisphereLight(0xfff6e8, 0xa08a68, 1.4))
     const key = new THREE.DirectionalLight(0xfff1dc, 1.6)
     key.position.set(-1.2, 7, 2.2)
     key.castShadow = true
     key.shadow.mapSize.set(1024, 1024)
-    Object.assign(key.shadow.camera, { left: -3, right: 3, top: 4, bottom: -2, near: 0.5, far: 20 })
+    Object.assign(key.shadow.camera, { left: -4, right: 4, top: 4, bottom: -3, near: 0.5, far: 20 })
     key.shadow.radius = 6
     key.shadow.bias = -0.0005
     this.scene.add(key)
@@ -97,15 +101,18 @@ export class BasketScene {
     this.root = new THREE.Group()        // se balance quand un livre tombe dedans
     this.scene.add(this.root)
     this.wobble = new Spring(0, 90, 0.35)
+    this.k = new Spring(1, 55, 0.95)     // largeur du panier (grandit avec le contenu)
     this._buildBasket()
+    this._applyScale()
 
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.ShadowMaterial({ opacity: 0.16 }))
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShadowMaterial({ opacity: 0.16 }))
     ground.rotation.x = -Math.PI / 2
     ground.receiveShadow = true
     this.scene.add(ground)
 
     this.pagesMat = new THREE.MeshStandardMaterial({ map: pagesTexture(), roughness: 0.95 })
     this.books = new Map()
+    this.expected = new Set()             // livres en vol vers le panier (révélés à l'arrivée)
     this.raycaster = new THREE.Raycaster()
     this.ndc = new THREE.Vector2()
     this.hoverId = null
@@ -125,14 +132,15 @@ export class BasketScene {
     el.addEventListener('pointerleave', this.onLeave)
     el.addEventListener('pointerdown', this.onDown)
 
+    this._sizeContainer()
     this.ro = new ResizeObserver(() => this.resize())
     this.ro.observe(container)
     this.resize()
   }
 
+  // ---- Panier ----------------------------------------------------------------------------
   _buildBasket() {
     const g = new THREE.Group()
-    g.scale.set(SX, 1, SZ)
     const prof = []
     for (let i = 0; i <= 12; i++) {
       const t = i / 12
@@ -156,9 +164,9 @@ export class BasketScene {
     foot.rotation.x = Math.PI / 2
     foot.position.y = 0.04
     g.add(outer, inner, bottom, rim, foot)
+    this.body = g
     this.root.add(g)
 
-    // anse (hors du groupe ovale pour garder une section ronde)
     const pts = []
     for (let i = 0; i <= 24; i++) {
       const a = Math.PI * (i / 24)
@@ -168,22 +176,42 @@ export class BasketScene {
     handleMat.map = ropeTexture().clone(); handleMat.map.repeat.set(16, 1); handleMat.map.needsUpdate = true
     const handle = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 64, 0.07, 12), handleMat)
     handle.castShadow = true
+    this.handle = handle
     this.root.add(handle)
+  }
+
+  /** L'ovale s'élargit (et s'approfondit un peu) avec k ; la hauteur ne change pas. */
+  _applyScale() {
+    const k = this.k.v
+    this.body.scale.set(SX * k, 1, SZ * (1 + (k - 1) * 0.6))
+    this.handle.scale.set(k, 1, 1)
+  }
+
+  /** Largeur du cadre : le panier grandit à l'écran, les livres gardent leur taille. */
+  _sizeContainer() {
+    const w = Math.round(this.baseWidth * (1 + (this.k.v - 1) * 0.85))
+    if (w !== this._lastW) { this._lastW = w; this.container.style.width = `${w}px` }
   }
 
   resize() {
     const w = this.container.clientWidth, h = this.container.clientHeight
     if (!w || !h) return
-    this.w = w; this.h = h
-    this.renderer.setSize(w, h, false)
+    if (w !== this.w || h !== this.h) { this.w = w; this.h = h; this.renderer.setSize(w, h, false) }
     this.camera.aspect = w / h
-    // vue de trois quarts, légèrement d'en haut, cadrée sur le panier et son anse
+    this._fit()
+    this._emitAnchors()
+    this.kick()
+  }
+
+  /** Cadre la caméra sur le panier (largeur actuelle) et son anse. */
+  _fit() {
+    const k = this.k.v, kz = 1 + (k - 1) * 0.6
     const target = new THREE.Vector3(0, 0.95, 0)
-    const dir = new THREE.Vector3(Math.sin(0.42), 0.42, Math.cos(0.42)).normalize()
+    const dir = new THREE.Vector3(Math.sin(CAM_AZ), CAM_TILT, Math.cos(CAM_AZ)).normalize()
     const pts = []
-    for (const x of [-SX * 1.08, SX * 1.08]) for (const y of [0, BH + 1.25]) for (const z of [-SZ, SZ]) pts.push(new THREE.Vector3(x, y, z))
-    let lo = 1, hi = 40
-    for (let i = 0; i < 28; i++) {
+    for (const x of [-SX * 1.08 * k, SX * 1.08 * k]) for (const y of [0, BH + 1.25]) for (const z of [-SZ * kz, SZ * kz]) pts.push(new THREE.Vector3(x, y, z))
+    let lo = 1, hi = 60
+    for (let i = 0; i < 26; i++) {
       const d = (lo + hi) / 2
       this.camera.position.copy(target).addScaledVector(dir, d)
       this.camera.lookAt(target)
@@ -194,20 +222,19 @@ export class BasketScene {
     this.camera.position.copy(target).addScaledVector(dir, hi)
     this.camera.lookAt(target)
     this.camera.updateMatrixWorld(); this.camera.updateProjectionMatrix()
-    this._emitAnchors()
-    this.kick()
   }
 
-  /** Livres du panier : on ajoute (ils tombent dedans), on retire, on range. */
+  // ---- Livres ------------------------------------------------------------------------------
+  /** Livres du panier : on ajoute, on retire, on range. Le panier grandit avec le contenu. */
   setItems(items) {
     const keep = new Set(items.map(it => it.googleId))
     for (const [id, b] of [...this.books]) if (!keep.has(id)) this._dispose(b)
-    let added = false
     items.forEach(it => {
       if (this.books.has(it.googleId)) { this.books.get(it.googleId).item = it; return }
       this._makeBook(it)
-      added = true
     })
+    this.k.t = basketScale(this.books.size)
+    if (!this.ready) { this.k.snap(this.k.t); this._applyScale(); this._sizeContainer() }
     this._layout()
     this.ready = true
     this.kick()
@@ -215,9 +242,12 @@ export class BasketScene {
 
   setHidden(googleId) {
     this.hiddenId = googleId
-    for (const b of this.books.values()) b.wrap.visible = !b.waiting && b.item.googleId !== googleId
+    for (const b of this.books.values()) b.wrap.visible = !b.waiting && !b.incoming && b.item.googleId !== googleId
     this.kick()
   }
+
+  /** Un livre va arriver en volant : il sera créé caché et révélé à l'arrivée (reveal). */
+  expect(googleId) { this.expected.add(googleId) }
 
   _makeBook(item) {
     const book = toBook(item)
@@ -231,31 +261,26 @@ export class BasketScene {
     mesh.castShadow = mesh.receiveShadow = true
     mesh.userData.id = item.googleId
     const wrap = new THREE.Group()
+    wrap.rotation.order = 'YXZ'
     wrap.add(mesh)
     this.root.add(wrap)
     const b = {
       item, mesh, wrap, mats: [cover, back, spine], t,
-      x: new Spring(0, 160, 0.75), y: new Spring(0, 150, 0.82), z: new Spring(0, 160, 0.75),
-      rz: new Spring(0, 140, 0.6), ry: new Spring(0, 140, 0.7), fresh: true,
+      x: new Spring(0, 150, 0.8), y: new Spring(0, 150, 0.82), z: new Spring(0, 150, 0.8),
+      rx: new Spring(0, 120, 0.8), ry: new Spring(0, 130, 0.75), rz: new Spring(0, 130, 0.7), fresh: true,
     }
     this.books.set(item.googleId, b)
-    // Le livre n'apparaît qu'avec sa vraie couverture, puis tombe dans le panier
+    b.incoming = this.expected.delete(item.googleId)
     b.waiting = true
-    b.dropOnReveal = !!this.ready
     wrap.visible = false
+    b.coverReady = new Promise(res => { b._coverDone = res })
     withCover(book, tex => {
       cover.map = tex; cover.needsUpdate = true
-      if (!b.waiting) return
-      b.waiting = false
-      wrap.visible = b.item.googleId !== this.hiddenId
-      if (b.dropOnReveal && b.base) {
-        b.y.snap(b.base.y + 2.2)
-        b.rz.snap(b.base.rz * -2.5)
-        this._target(b)
-        setTimeout(() => { this.wobble.vel += 0.9; this.kick() }, 280)
-      }
-      this.kick()
+      b._coverDone()
+      if (!b.waiting || b.incoming) { this.kick(); return }
+      this._show(b, !!this.ready)
     }, tex => { cover.map = tex; cover.needsUpdate = true; this.kick() })
+    if (b.incoming) setTimeout(() => this.reveal(item.googleId), 5000) // filet de sécurité
     return b
   }
 
@@ -266,33 +291,91 @@ export class BasketScene {
     this.books.delete(b.item.googleId)
   }
 
-  /** Disposition : un ou deux rangs de livres debout, couverture vers nous, un peu de travers. */
+  /** Pose de départ d'une chute : au-dessus du panier, couverture face à nous (comme une image). */
+  _startPose(b) {
+    const el = Math.atan2(CAM_TILT, 1)
+    return { x: b.base.x * 0.6, y: BH + BOOK_H / 2 + 0.45, z: b.base.z + 0.35, rx: -el, ry: CAM_AZ, rz: 0 }
+  }
+
+  /** Fait apparaître un livre ; s'il doit tomber, il part de la pose de départ. */
+  _show(b, drop) {
+    b.waiting = false
+    b.incoming = false
+    b.wrap.visible = b.item.googleId !== this.hiddenId
+    if (drop && b.base) {
+      const s = this._startPose(b)
+      b.x.snap(s.x); b.y.snap(s.y); b.z.snap(s.z); b.rx.snap(s.rx); b.ry.snap(s.ry); b.rz.snap(s.rz)
+      this._target(b)
+      setTimeout(() => { this.wobble.vel += 0.8; this.kick() }, 300)
+    }
+    this.kick()
+  }
+
+  /** Le livre volant arrive : le livre 3D prend sa place exacte et tombe dans le panier. */
+  reveal(googleId) {
+    const b = this.books.get(googleId)
+    if (b && (b.incoming || b.waiting)) this._show(b, true)
+  }
+
+  ready_(googleId) { return this.books.get(googleId)?.coverReady || Promise.resolve() }
+
+  /** Rectangle écran de la couverture dans la pose de départ (cible du livre volant). */
+  startRect(googleId) {
+    const b = this.books.get(googleId)
+    if (!b || !b.base || !this.w) return null
+    const s = this._startPose(b)
+    this.root.updateMatrixWorld()
+    const m = new THREE.Matrix4().compose(
+      new THREE.Vector3(s.x, s.y, s.z),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(s.rx, s.ry, s.rz, 'YXZ')),
+      new THREE.Vector3(1, 1, 1),
+    ).premultiply(this.root.matrixWorld)
+    const rc = this.renderer.domElement.getBoundingClientRect()
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+    const v = new THREE.Vector3()
+    for (const x of [-BOOK_W / 2, BOOK_W / 2]) for (const y of [-BOOK_H / 2, BOOK_H / 2]) {
+      v.set(x, y, b.t / 2).applyMatrix4(m).project(this.camera)
+      const sx = rc.left + (v.x + 1) / 2 * rc.width, sy = rc.top + (1 - v.y) / 2 * rc.height
+      x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy)
+    }
+    return { left: x0, top: y0, right: x1, bottom: y1, width: x1 - x0, height: y1 - y0 }
+  }
+
+  /**
+   * Disposition : jusqu'à trois rangs de livres debout, couverture vers nous, un peu de travers.
+   * Chaque livre repose sur le fond (en tenant compte de son inclinaison) et reste entre les parois.
+   */
   _layout() {
     const list = [...this.books.values()]
     const n = list.length
-    const rows = n > 5 ? [list.slice(0, Math.ceil(n / 2)), list.slice(Math.ceil(n / 2))] : [[], list]
+    const k = this.k.t, kz = 1 + (k - 1) * 0.6
+    const nRows = n <= 5 ? 1 : n <= 12 ? 2 : 3
+    const rows = Array.from({ length: nRows }, (_, r) => list.slice(Math.floor((r * n) / nRows), Math.floor(((r + 1) * n) / nRows)))
+    const halfDepth = R_BOT * 0.9 * SZ * kz
     rows.forEach((row, ri) => {
-      const k = row.length
-      if (!k) return
-      const back = ri === 0
-      const span = Math.min(1.5, 0.42 * (k - 1))
+      const cnt = row.length
+      if (!cnt) return
+      const depthPos = nRows === 1 ? 0.12 : -0.38 + (0.76 * ri) / (nRows - 1)  // du fond vers l'avant
+      const z = depthPos * halfDepth
+      const lift = (nRows - 1 - ri) * 0.16                                         // les rangs du fond dépassent
+      // demi-largeur intérieure au fond, à cette profondeur (ellipse)
+      const halfIn = R_BOT * 0.92 * SX * k * Math.sqrt(Math.max(0.2, 1 - (z / (R_BOT * SZ * kz)) ** 2))
       row.forEach((b, i) => {
         const h = hashString(b.item.googleId)
-        const x = k > 1 ? -span / 2 + (span * i) / (k - 1) : 0
-        b.base = {
-          x: x + (((h >> 2) % 7) - 3) * 0.015,
-          y: BOOK_H / 2 + 0.04 + (back ? 0.2 : 0) + ((h >> 6) % 5) * 0.012,
-          z: back ? -0.22 : 0.2,
-          rz: ((h % 15) - 7) * 0.028 + x * -0.12,
-          ry: (((h >> 4) % 9) - 4) * 0.05,
-        }
+        const rz0 = Math.max(-0.14, Math.min(0.14, ((h % 15) - 7) * 0.02))
+        const ry = (((h >> 4) % 9) - 4) * 0.045
+        // emprise au sol du livre incliné, pour rester entre les parois
+        const foot = (BOOK_W / 2) * Math.cos(rz0) + (BOOK_H / 2) * Math.abs(Math.sin(rz0)) * 0.35 + 0.04
+        const span = Math.max(0, 2 * (halfIn - foot))
+        const step = cnt > 1 ? Math.min(0.5, span / (cnt - 1)) : 0
+        const x = cnt > 1 ? -((cnt - 1) * step) / 2 + i * step : 0
+        // le coin le plus bas touche le fond
+        const y = 0.04 + (BOOK_H / 2) * Math.cos(rz0) + (BOOK_W / 2) * Math.abs(Math.sin(rz0)) + lift
+        b.base = { x, y, z: z + (((h >> 7) % 5) - 2) * 0.012, rz: rz0, ry }
         if (b.fresh) {
-          b.x.snap(b.base.x); b.z.snap(b.base.z); b.ry.snap(b.base.ry)
-          b.y.snap(this.ready ? b.base.y + 2.2 : b.base.y)
-          b.rz.snap(this.ready ? b.base.rz * -2.5 : b.base.rz)
-          // couverture déjà prête : il tombe tout de suite, et le panier se balance à l'arrivée
-          if (this.ready && !b.waiting) setTimeout(() => { this.wobble.vel += 0.9; this.kick() }, 280)
+          b.x.snap(b.base.x); b.y.snap(b.base.y); b.z.snap(b.base.z); b.rz.snap(b.base.rz); b.ry.snap(b.base.ry)
           b.fresh = false
+          if (!b.waiting && !b.incoming && this.ready) this._show(b, true)
         }
         this._target(b)
       })
@@ -303,11 +386,13 @@ export class BasketScene {
     const hov = b.item.googleId === this.hoverId
     b.x.t = b.base.x
     b.y.t = b.base.y + (hov ? 0.32 : 0)
-    b.z.t = b.base.z + (hov ? 0.15 : 0)
+    b.z.t = b.base.z + (hov ? 0.18 : 0)
+    b.rx.t = 0
     b.rz.t = hov ? 0 : b.base.rz
-    b.ry.t = hov ? 0 : b.base.ry
+    b.ry.t = hov ? CAM_AZ * 0.5 : b.base.ry
   }
 
+  // ---- Interactions ------------------------------------------------------------------------
   _pointer(e) {
     const rc = this.renderer.domElement.getBoundingClientRect()
     this.ndc.set(((e.clientX - rc.left) / rc.width) * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1)
@@ -317,7 +402,7 @@ export class BasketScene {
   _pick() {
     if (!this.ndcValid) return null
     this.raycaster.setFromCamera(this.ndc, this.camera)
-    const meshes = [...this.books.values()].filter(b => b.wrap.visible && !b.waiting).map(b => b.mesh)
+    const meshes = [...this.books.values()].filter(b => b.wrap.visible && !b.waiting && !b.incoming).map(b => b.mesh)
     const hit = this.raycaster.intersectObjects(meshes, false)[0]
     return hit ? hit.object.userData.id : null
   }
@@ -348,10 +433,12 @@ export class BasketScene {
 
   /** Points d'accroche des éléments HTML : l'étiquette sur le devant, l'ouverture (cible des envols). */
   _emitAnchors() {
+    const kz = 1 + (this.k.v - 1) * 0.6
     const p = (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(this.camera); return { x: (v.x + 1) / 2 * this.w, y: (1 - v.y) / 2 * this.h } }
-    this.cb.onAnchors?.({ tag: p(0.15, BH * 0.42, SZ * 0.95), mouth: p(0, BH + 0.1, 0) })
+    this.cb.onAnchors?.({ tag: p(0.15, BH * 0.42, SZ * kz * 0.95), mouth: p(0, BH + 0.1, 0) })
   }
 
+  // ---- Boucle --------------------------------------------------------------------------------
   kick() {
     if (this.running || this.disposed) return
     this.running = true
@@ -365,12 +452,21 @@ export class BasketScene {
     this.last = now
     let moving = false
     const sub = 4, h = dt / sub
+
+    // le panier grandit en douceur : cadre, caméra et forme suivent
+    if (!this.k.done) {
+      for (let i = 0; i < sub; i++) this.k.step(h)
+      this._applyScale()
+      this._sizeContainer()
+      this.resize()
+      moving = true
+    }
     for (const b of this.books.values()) {
-      if (b.waiting) continue
-      for (let i = 0; i < sub; i++) { b.x.step(h); b.y.step(h); b.z.step(h); b.rz.step(h); b.ry.step(h) }
+      if (b.waiting || b.incoming) continue
+      for (let i = 0; i < sub; i++) { b.x.step(h); b.y.step(h); b.z.step(h); b.rx.step(h); b.ry.step(h); b.rz.step(h) }
       b.wrap.position.set(b.x.v, b.y.v, b.z.v)
-      b.wrap.rotation.set(0, b.ry.v, b.rz.v)
-      if (!(b.x.done && b.y.done && b.z.done && b.rz.done && b.ry.done)) moving = true
+      b.wrap.rotation.set(b.rx.v, b.ry.v, b.rz.v)
+      if (!(b.x.done && b.y.done && b.z.done && b.rx.done && b.ry.done && b.rz.done)) moving = true
     }
     for (let i = 0; i < sub; i++) this.wobble.step(h)
     this.root.rotation.z = this.wobble.v * 0.06

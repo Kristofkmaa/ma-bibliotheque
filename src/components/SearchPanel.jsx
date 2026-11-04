@@ -18,7 +18,7 @@ const EASE_SHEET = 'cubic-bezier(.76, 0, .18, 1)'
 const HAS_VISION = !!import.meta.env.VITE_GOOGLE_VISION_API_KEY
 
 /** Panneau de recherche Google Books, plein écran, même papier que la fiche. */
-export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onScan, inBasket, onBasket, basketSlot }) {
+export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onScan, inBasket, onBasket, basketSlot, basketFull }) {
   const panel = useRef(null)
   const inputRef = useRef(null)
   const fileRef = useRef(null)
@@ -126,8 +126,9 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
                   {!here && (
                     <button
                       type="button" className={'result-plus' + (picked ? ' picked' : '')}
-                      aria-label={picked ? `${b.title} est dans le panier` : `Mettre ${b.title} dans le panier`}
-                      disabled={picked}
+                      aria-label={picked ? `${b.title} est dans le panier` : basketFull ? 'Le panier est plein' : `Mettre ${b.title} dans le panier`}
+                      title={!picked && basketFull ? 'Le panier est plein (20 livres)' : undefined}
+                      disabled={picked || basketFull}
                       onClick={e => onBasket(b, e.currentTarget.parentElement.querySelector('.result-cover'))}
                     >{picked ? '✓' : '+'}</button>
                   )}

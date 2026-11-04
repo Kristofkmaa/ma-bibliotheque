@@ -6,7 +6,8 @@ import { effectiveShelves, placeBook, moveBook } from './lib/shelfOps'
 import { useBasket } from './hooks/useBasket'
 import { SearchBasket, ShelfBasket } from './components/Basket'
 import { useIsMobile } from './hooks/useIsMobile'
-import { flyTo } from './lib/fly'
+import { flyTo, flyIntoBasket } from './lib/fly'
+import { MAX_BASKET } from './lib/basketSize'
 import { preloadCover } from './lib/covers'
 import { isDemoMode } from './lib/supabase'
 import { sortBooks, SORTS, spineColors } from './lib/bookUtils'
@@ -64,6 +65,7 @@ function Library({ user, onSignOut }) {
   const [bump, setBump] = useState(0)
   const [flying, setFlying] = useState(() => new Set())
   const bookcaseApi = useRef(null)
+  const searchBasketApi = useRef(null)
   const shelvesRef = useRef(shelves); shelvesRef.current = shelves
   const booksRef = useRef(books); booksRef.current = books
 
@@ -97,16 +99,36 @@ function Library({ user, onSignOut }) {
   useEffect(() => { basket.items.forEach(b => preloadCover(b)) }, [basket.items])
 
   // « + » dans la recherche : la couverture vole jusqu'au panier
+  // un livre en vol est déjà dans le panier (version 3D) : on compte chaque livre une seule fois
+  const basketCount = new Set([...basket.items.map(b => b.googleId), ...flying]).size
+  const basketFull = basketCount >= MAX_BASKET
   const addToBasket = useCallback((book, coverEl) => {
+    if (basketFull) return
     preloadCover(book)
-    setFlying(f => new Set(f).add(book.googleId))
     const img = coverEl?.querySelector('img')
-    flyTo(coverEl?.getBoundingClientRect(), img?.src, document.querySelector('.search-basket .bb-target'), () => {
+    const from = coverEl?.getBoundingClientRect()
+    const color = spineColors({ google_id: book.googleId, title: book.title })[0]
+    const done = () => setFlying(f => { const n = new Set(f); n.delete(book.googleId); return n })
+    setFlying(f => new Set(f).add(book.googleId))
+    const api = searchBasketApi.current
+    if (api) {
+      // envol continu : la couverture devient le livre 3D au-dessus du panier, puis il tombe dedans
+      api.expect(book.googleId)
       basket.add(book)
-      setFlying(f => { const n = new Set(f); n.delete(book.googleId); return n })
-      setBump(n => n + 1)
-    }, spineColors({ google_id: book.googleId, title: book.title })[0])
-  }, [basket])
+      flyIntoBasket({
+        from, src: img?.src, color,
+        target: () => api.startRect(book.googleId),
+        ready: () => api.ready(book.googleId),
+        onLand: () => api.reveal(book.googleId),
+        onDone: done,
+      })
+    } else {
+      // panier dessiné (sans 3D)
+      flyTo(from, img?.src, document.querySelector('.search-basket .bb-target'), () => {
+        basket.add(book); done(); setBump(n => n + 1)
+      }, color)
+    }
+  }, [basket, basketFull])
   const inBasket = useCallback(id => basket.has(id) || flying.has(id), [basket, flying])
 
   // Un livre du panier posé sur une étagère
@@ -218,8 +240,8 @@ function Library({ user, onSignOut }) {
 
       {search && (
         <>
-          <SearchPanel open={searchOpen} onClosed={onSearchClosed} onPick={onPick} isInLibrary={isInLibrary} onScan={() => setScanner(true)} inBasket={inBasket} onBasket={addToBasket}
-            basketSlot={<SearchBasket items={basket.items} bump={bump} mobile={mobile} onBookClick={b => onPick(b, null)} onRemove={basket.remove} onDone={closeSearch} />} />
+          <SearchPanel open={searchOpen} onClosed={onSearchClosed} onPick={onPick} isInLibrary={isInLibrary} onScan={() => setScanner(true)} inBasket={inBasket} onBasket={addToBasket} basketFull={basketFull}
+            basketSlot={<SearchBasket items={basket.items} bump={bump} mobile={mobile} apiRef={searchBasketApi} onBookClick={b => onPick(b, null)} onRemove={basket.remove} onDone={closeSearch} />} />
           <button type="button" className="lbl box search-close-btn" style={{ zIndex: 59, position: 'fixed' }} onClick={closeSearch}>Fermer</button>
         </>
       )}

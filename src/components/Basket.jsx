@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { spineColors, hashString } from '../lib/bookUtils'
 import { webglAvailable } from '../three/webgl'
+import { basketScale, MAX_BASKET } from '../lib/basketSize'
 
 // Le panier 3D (Three.js) est chargé à part, comme la bibliothèque
 const Basket3D = lazy(() => import('./Basket3D'))
@@ -126,17 +127,20 @@ function AnyBasket({ width, ...props }) {
       </Suspense>
     )
   }
-  return <BigBasket width={width} {...props} onBookDown={props.onBookDown ? (e, b) => props.onBookDown(e, b, e.currentTarget.getBoundingClientRect()) : undefined} />
+  return <BigBasket width={Math.round(width * (1 + (basketScale(props.items.length) - 1) * 0.85))} {...props} onBookDown={props.onBookDown ? (e, b) => props.onBookDown(e, b, e.currentTarget.getBoundingClientRect()) : undefined} />
 }
 
 /** Le panier dans la recherche, posé à côté des résultats. */
-export function SearchBasket({ items, bump, onBookClick, onRemove, onDone, mobile }) {
+export function SearchBasket({ items, bump, onBookClick, onRemove, onDone, mobile, apiRef }) {
+  const full = items.length >= MAX_BASKET
   return (
     <div className="sb">
       <div className="sb-title">Mon panier</div>
-      <AnyBasket items={items} width={mobile ? 160 : 400} bump={bump} onBookClick={onBookClick} onRemove={mobile ? null : onRemove} />
+      <AnyBasket items={items} width={mobile ? 150 : 360} bump={bump} onBookClick={onBookClick} onRemove={mobile ? null : onRemove} apiRef={apiRef} />
       <div className="sb-side">
-        {items.length
+        {full
+          ? <p className="sb-hint">Ton panier est plein ({MAX_BASKET} livres) : va les ranger sur tes étagères.</p>
+          : items.length
           ? <p className="sb-hint">Continue tes trouvailles, puis va les ranger sur tes étagères.</p>
           : <p className="sb-hint">Appuie sur <b>+</b> à côté d'un livre pour le mettre dans le panier.</p>}
         {items.length > 0 && (
@@ -225,7 +229,7 @@ export function ShelfBasket({ items, shelves, defaultShelf, canDrop, api, mobile
     <aside className="shelf-basket" aria-label="Mon panier">
       <p className="sh-hint">{canDrop ? 'Attrape un livre et pose-le sur une étagère' : 'Range-les tous d’un coup'}</p>
       <AnyBasket
-        items={items} width={mobile ? 170 : 350} dragging={dragging}
+        items={items} width={mobile ? 160 : 320} dragging={dragging}
         onBookDown={startPress} onRemove={mobile ? null : onRemove}
       />
       <div className="sh-controls">

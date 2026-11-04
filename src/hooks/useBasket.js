@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { MAX_BASKET } from '../lib/basketSize'
 
 const KEY = uid => `levana.basket.${uid}`
 const slim = b => ({
@@ -15,7 +16,7 @@ export function useBasket(userId) {
     try { localStorage.setItem(KEY(userId), JSON.stringify(items)) } catch { /* ignore */ }
   }, [userId, items])
 
-  const add = useCallback(book => setItems(prev => (prev.some(x => x.googleId === book.googleId) ? prev : [...prev, slim(book)])), [])
+  const add = useCallback(book => setItems(prev => (prev.some(x => x.googleId === book.googleId) || prev.length >= MAX_BASKET ? prev : [...prev, slim(book)])), [])
   const remove = useCallback(googleId => setItems(prev => prev.filter(x => x.googleId !== googleId)), [])
   const clear = useCallback(() => setItems([]), [])
   const has = useCallback(googleId => items.some(x => x.googleId === googleId), [items])

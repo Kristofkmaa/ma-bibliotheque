@@ -5,7 +5,7 @@ import { BasketScene } from '../three/BasketScene'
  * Le panier en vraie 3D (Three.js). Mêmes possibilités que le panier dessiné :
  * toucher un livre, le retirer (×), l'attraper pour le poser sur une étagère.
  */
-export default function Basket3D({ items, width, height, onBookDown, onBookClick, onRemove, dragging }) {
+export default function Basket3D({ items, width, height, onBookDown, onBookClick, onRemove, dragging, apiRef }) {
   const box = useRef(null)
   const sceneRef = useRef(null)
   const [anchors, setAnchors] = useState(null)
@@ -17,6 +17,7 @@ export default function Basket3D({ items, width, height, onBookDown, onBookClick
 
   useEffect(() => {
     const sc = new BasketScene(box.current, {
+      baseWidth: width,
       onAnchors: setAnchors,
       onHover: item => {
         clearTimeout(hideTimer.current)
@@ -40,15 +41,24 @@ export default function Basket3D({ items, width, height, onBookDown, onBookClick
       },
     })
     sceneRef.current = sc
+    if (apiRef) {
+      apiRef.current = {
+        expect: id => sc.expect(id),
+        startRect: id => sc.startRect(id),
+        ready: id => sc.ready_(id),
+        reveal: id => sc.reveal(id),
+      }
+    }
     if (location.search.includes('debug')) window.__basket = sc // tests automatisés
-    return () => { clearTimeout(hideTimer.current); sc.dispose(); sceneRef.current = null }
+    return () => { clearTimeout(hideTimer.current); sc.dispose(); sceneRef.current = null; if (apiRef) apiRef.current = null }
   }, [])
 
   useEffect(() => { sceneRef.current?.setItems(items) }, [items])
   useEffect(() => { sceneRef.current?.setHidden(dragging || null) }, [dragging])
 
   return (
-    <div className="basket3d" ref={box} style={{ width, height }}>
+    // la largeur est pilotée par la scène (le panier grandit avec son contenu)
+    <div className="basket3d" ref={box} style={{ height }}>
       {anchors && <span className="bb-target" style={{ left: anchors.mouth.x - width * 0.18, top: anchors.mouth.y - 10, width: width * 0.36, height: 20 }} />}
       {anchors && (
         <div className="bb-tag" style={{ left: anchors.tag.x, top: anchors.tag.y }}>
