@@ -3,17 +3,20 @@
 Une étagère de livres en ligne, à feuilleter comme une archive : les livres lus, ceux qu'on possède, ceux qu'on attend encore.
 
 Direction artistique « archive papier » : fond papier grainé, encre noire, cobalt, typographies Newsreader + Inter Tight.
-Les livres sont rangés debout, rayon par rayon, dans un meuble qui s'adapte à la largeur de l'écran : chaque dos a sa couleur,
-son épaisseur (selon le nombre de pages), son titre et les initiales de l'auteur. Au survol, le livre se soulève ; au clic,
-la fiche s'ouvre comme une feuille qui grandit depuis le dos, l'encre s'étale sur la couverture, chaque ligne de texte monte de son masque.
+Les livres sont des volumes posés sur les planches d'un meuble vu en perspective (fond, côtés, dessus des planches,
+tranches des livres). Ils restent à leur place : on change d'étagère avec les flèches, la molette ou un glissé du doigt,
+et un clic sur un livre ouvre sa fiche, une feuille qui grandit depuis le dos, l'encre qui s'étale sur la couverture.
+
+La perspective est calculée une seule fois en JavaScript puis dessinée à plat (SVG + calques agrandis) : même rendu
+qu'une vraie scène 3D, sans aucun coût d'affichage, même avec des centaines de livres.
 Aucun fondu : chaque apparition est un masque, un clip ou une mise à l'échelle.
 
 ## ✨ Fonctionnalités
 
-- **Bibliothèque en rayons** : les dos se rangent selon la place disponible, rayons étiquetés (« Rayon II · E – P »), serre-livres
-- **Tri** par ajout récent, titre (articles ignorés), auteur, année ou couleur, et **filtre** instantané par titre ou auteur
+- **Étagère en perspective** : livres en volume, rayons étiquetés (« Rayon II · E – P »), étagères suivantes avec ← →
+- **Tri** par ajout récent, titre (articles ignorés), auteur, année ou couleur
 - **Repères visuels** : ruban cobalt = en cours, silhouette en pointillés = souhaité, pas encore sur l'étagère
-- **En-tête** avec statistiques (livres, lus, en cours, pages lues) et onglets de statut à bloc cobalt glissant
+- **Onglets de statut** avec bloc cobalt glissant, légende titre / auteur au survol
 - **Fiche livre** : résumé, auteur, année, pages, ISBN, statuts multiples, note sur 5, notes personnelles
 - **Recherche** dans des millions de livres (Google Books API)
 - **Scanner ISBN** par code-barres (caméra, html5-qrcode)
@@ -71,7 +74,7 @@ VITE_GOOGLE_VISION_API_KEY=AIzaSyxxxx   # optionnel
 | Technologie | Usage |
 |---|---|
 | React 19 + Vite | Frontend |
-| CSS + Web Animations API | Rayons, fiches, masques (aucune lib d'animation) |
+| SVG + CSS + Web Animations API | Perspective, fiches, masques (aucune lib d'animation) |
 | Supabase | Base de données + Auth Google |
 | Google Books API | Catalogue de livres |
 | Google Vision API | Reconnaissance de couverture |
@@ -82,8 +85,8 @@ VITE_GOOGLE_VISION_API_KEY=AIzaSyxxxx   # optionnel
 ```
 src/
 ├── components/
-│   ├── Bookcase.jsx      # Meuble : dos rangés rayon par rayon, étiquettes, serre-livres
-│   ├── Caption.jsx       # Encart de survol : titre / auteur qui glissent dans des masques
+│   ├── Shelf3D.jsx       # Meuble en perspective : rayons, volumes, étagères successives
+│   ├── Caption.jsx       # Légende : titre / auteur qui glissent dans des masques
 │   ├── StatusTabs.jsx    # Onglets avec indicateur cobalt glissant
 │   ├── DetailSheet.jsx   # Fiche livre : feuille clip-path, encre, édition
 │   ├── SearchPanel.jsx   # Recherche Google Books + photo de couverture
