@@ -99,6 +99,21 @@ export function fallbackCover(book) {
   })
 }
 
+/** Marque-page : carton coloré, filet doré, petit motif (deux teintes selon la couleur du livre). */
+export function bookmarkTexture(variant = 0) {
+  const [bg, ink] = variant ? ['#B8322B', '#F3D79A'] : ['#1F3FB0', '#F3D79A']
+  return canvasTexture(`bookmark|${variant}`, 64, 256, (ctx, w, h) => {
+    const g = ctx.createLinearGradient(0, 0, w, 0)
+    g.addColorStop(0, bg); g.addColorStop(0.5, bg); g.addColorStop(1, '#00000033')
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h)
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
+    ctx.strokeStyle = ink; ctx.lineWidth = 2.5
+    ctx.strokeRect(6, 6, w - 12, h - 12)
+    ctx.fillStyle = ink
+    for (let y = 40; y < h - 30; y += 34) { ctx.beginPath(); ctx.arc(w / 2, y, 3.2, 0, Math.PI * 2); ctx.fill() }
+  })
+}
+
 /** Tranche des pages (crème, fines lignes). */
 export function pagesTexture() {
   return canvasTexture('pages', 256, 64, (ctx, w, h) => {

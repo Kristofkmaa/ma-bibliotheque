@@ -59,7 +59,7 @@ function fitTitle(title, ws, H, hasArt) {
 const Book3D = memo(function Book3D({ book, L, side, z, delay, highlight, onOpen, onHover }) {
   const d = toDisplay(book)
   const [bg, ink] = spineColors(book)
-  const reading = false
+  const reading = (book.statuses || [book.status]).includes('en_cours')
   const wish = false
   const hasArt = !!d.cover && L.ws >= 24
   const { fs, lines } = fitTitle(d.title, L.ws, L.H, hasArt)
@@ -780,7 +780,7 @@ export default function Shelf3D({
                 onLabel={onLabelClick}
                 palette={palette} born={!!shelf && shelf.id === bornId && !meta.cont}
                 highlightId={highlightId} onOpen={onOpen} onHover={setHovered}
-                doorsOpen={doorsOpen} doorLabel={doorLabel} card={card} cardKey={cardKey} onCard={onCardAction}
+                doorsOpen={doorsOpen} doorLabel={doorLabel} card={null} cardKey={cardKey} onCard={onCardAction}
               />
             )
           })}

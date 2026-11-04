@@ -62,7 +62,7 @@ function autoLabel(row, n, sort) {
  */
 export default function Bookcase3D({
   books, allBooks, sort, viewKey, manual, canEdit, shelves, commitShelves, newShelfSignal,
-  onOpen, onAdd, locked, focusId, onFocused, emptyText, apiRef, aside,
+  onOpen, onAdd, locked, focusId, onFocused, emptyText, apiRef, aside, onShelfClick,
 }) {
   const caseRef = useRef(null)
   const sceneRef = useRef(null)
@@ -392,15 +392,12 @@ export default function Bookcase3D({
           const meta = displayRows[r]
           if (!meta) return null
           const shelf = meta.shelf
-          let label = '', card = null, onCard = null
+          // plus de bouton « Ajouter » sur les portes : tout se gère dans « Mes étagères »
+          let label = ''
           if (manual) {
-            if (shelf) {
-              label = meta.cont ? `${shelf.name} · suite` : shelf.name
-              if (canEdit && !shelf.preview) { card = '+ Ajouter un livre'; onCard = () => onAdd(shelf.pseudo || shelf.virtual ? null : shelf.id) }
-            } else if (canEdit) { card = '+ Nouvelle étagère'; onCard = createNew }
+            if (shelf) label = meta.cont ? `${shelf.name} · suite` : shelf.name
           } else {
             label = meta.free ? '' : autoLabel(meta.books, meta.auto, sort)
-            if (!meta.free) { card = '+ Ajouter un livre'; onCard = () => onAdd(null) }
           }
           const editable = manual && canEdit && !!shelf && !meta.cont && !shelf.preview
           return (
@@ -410,17 +407,17 @@ export default function Bookcase3D({
                   type="button" ref={el => { if (shelf) labelRefs.current[shelf.id] = el }}
                   className={'plank-label editable over' + (meta.shelf?.id === bornId ? ' born' : '')}
                   style={{ left: o.label.x, top: o.label.y }}
-                  onClick={e => setEditing({ shelfId: shelf.id, rect: e.currentTarget.getBoundingClientRect(), selectName: false, openId: performance.now() })}
-                  title="Renommer, changer l'apparence"
+                  onClick={e => {
+                    if (onShelfClick && !shelf.pseudo) { onShelfClick(shelf.id); return }
+                    setEditing({ shelfId: shelf.id, rect: e.currentTarget.getBoundingClientRect(), selectName: false, openId: performance.now() })
+                  }}
+                  title="Modifier cette étagère"
                 >
                   <span className="pl-name">{label}</span><span className="pl-pen" aria-hidden="true">✎</span>
                 </button>
               ) : (
                 <span className="plank-label over" style={{ left: o.label.x, top: o.label.y }}>{label}</span>
               ))}
-              {card && o.free && doorsOpen && (
-                <button type="button" className="door-card over" style={{ left: o.card.x, top: o.card.y }} onClick={onCard}>{card}</button>
-              )}
             </div>
           )
         })}

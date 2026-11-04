@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { spineSize, spineColors } from '../lib/bookUtils'
-import { spineTexture, withCover, pagesTexture, grainTexture, doorTexture, setAnisotropy } from './textures'
+import { spineTexture, withCover, pagesTexture, grainTexture, doorTexture, setAnisotropy, bookmarkTexture } from './textures'
+import { getBookStatuses } from '../hooks/useLibrary'
 
 /*
  * Bibliothèque en vraie 3D (Three.js), vue de trois quarts.
@@ -55,6 +56,12 @@ class Spring {
 
 const tmpV = new THREE.Vector3()
 const lerpColor = (c, target, f) => c.lerp(target, f)
+
+/** Le livre est-il bleu ? (le marque-page prend alors la teinte rouge, pour trancher) */
+function spineColorsIsBlue(book) {
+  const [bg] = spineColors(book)
+  return ['#1F3FB0', '#4A3B8C', '#3B5B7E'].includes(bg)
+}
 
 export class BookcaseScene {
   constructor(container, cb) {
@@ -327,7 +334,42 @@ export class BookcaseScene {
     return entry
   }
 
+  /**
+   * Livre « en cours » : un marque-page glissé au milieu des pages dépasse du haut du livre,
+   * avec une queue d'aronde. Il sort des pages quand on passe le livre en cours.
+   */
+  _syncBookmark(e) {
+    const wants = getBookStatuses(e.book).includes('en_cours')
+    if (wants && !e.mark) {
+      const w = 0.095, L = 0.32, notch = 0.04
+      const shape = new THREE.Shape()
+      shape.moveTo(-w / 2, 0); shape.lineTo(w / 2, 0); shape.lineTo(w / 2, L); shape.lineTo(0, L - notch); shape.lineTo(-w / 2, L); shape.closePath()
+      const tex = bookmarkTexture(spineColorsIsBlue(e.book) ? 1 : 0).clone()
+      tex.needsUpdate = true
+      tex.repeat.set(1 / w, 1 / L); tex.offset.set(0.5, 0)
+      const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55, side: THREE.DoubleSide })
+      const mark = new THREE.Mesh(new THREE.ShapeGeometry(shape), mat)
+      mark.rotation.y = Math.PI / 2            // dans le plan des pages
+      mark.rotation.z = 0.06                    // légèrement penché, comme glissé à la main
+      const holder = new THREE.Group()
+      holder.add(mark)
+      holder.position.set(0, e.h / 2 - 0.1, e.d * 0.16)    // au milieu des pages, côté visible
+      holder.scale.y = 0.001                    // il sort des pages (animé)
+      mark.castShadow = true
+      e.mesh.add(holder)
+      e.mark = holder; e.markMat = mat; e.markTex = tex
+      e.markGrow = true
+      this.kick()
+    } else if (!wants && e.mark) {
+      e.mesh.remove(e.mark)
+      e.mark.children[0].geometry.dispose(); e.markMat.dispose(); e.markTex.dispose()
+      e.mark = null
+    }
+    e.markReady = true
+  }
+
   _disposeBook(entry) {
+    if (entry.mark) { entry.mark.children[0].geometry.dispose(); entry.markMat.dispose(); entry.markTex.dispose() }
     this.booksGroup.remove(entry.wrap)
     entry.mesh.geometry.dispose()
     entry.mats.forEach(m => m.dispose())
@@ -358,6 +400,7 @@ export class BookcaseScene {
         const fresh = !e
         if (!e) e = this._makeBook(b)
         e.book = b
+        this._syncBookmark(e)
         e.row = r
         e.fresh = fresh
         e.order = order++
@@ -677,6 +720,11 @@ export class BookcaseScene {
       for (let i = 0; i < sub; i++) { e.x.step(h); e.y.step(h); e.z.step(h); e.yaw.step(h) }
       e.wrap.position.set(e.x.v, e.y.v, e.z.v)
       e.mesh.rotation.y = e.yaw.v
+      if (e.mark && e.markGrow) {
+        const s = Math.min(1, e.mark.scale.y + dt * 3.2)
+        e.mark.scale.y = s < 1 ? s : 1
+        if (s >= 1) e.markGrow = false; else moving = true
+      }
       if (!(e.x.done && e.y.done && e.z.done && e.yaw.done)) moving = true
     }
     if (this.caseParts) {

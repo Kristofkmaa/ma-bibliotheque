@@ -18,7 +18,12 @@ Aucun fondu : chaque apparition est un masque, un clip ou une mise à l'échelle
 - **Portes coulissantes** : la bibliothèque s'ouvre portes fermées puis elles coulissent ; sur chaque rayon, une porte
   cache la place libre (avec « + Ajouter un livre ») ; changer d'étagère, de filtre ou de tri ferme les portes, échange
   les livres derrière et les rouvre
-- **Mes étagères** (tri « Mon rangement ») : « + Étagère » en crée une, qui se construit sous tes yeux (le fond se
+- **Menu « Mes étagères »** : une fenêtre montre le meuble à plat (une étagère par compartiment, sans les livres) ; on
+  y ajoute une étagère, on la renomme, on change sa matière, la couleur du fond et le style des portes, on la monte, la
+  descend ou la supprime. Un clic sur le nom d'une planche en 3D ouvre directement cette étagère.
+- **Lecture** : dans la fiche d'un livre, « En cours » glisse un marque-page entre ses pages (il dépasse du livre sur
+  l'étagère) ; « Lu » appose un tampon sur la fiche, à côté du résumé.
+- **Étagères** (tri « Mon rangement ») : « + Étagère » en crée une, qui se construit sous tes yeux (le fond se
   dessine, la planche se pose, les portes arrivent) puis demande son nom ; un clic sur l'étiquette d'une planche permet
   de la renommer, de la monter/descendre, de la supprimer et de changer son apparence : **matière** (chêne clair, noyer,
   laque noire, bois blanc, acier), **couleur du fond** (8 teintes) et **portes** (panneau, cannage, lattes), avec
@@ -114,6 +119,7 @@ src/
 │   ├── Shelf3D.jsx       # Version dessinée à plat (navigateurs sans WebGL)
 │   ├── Basket.jsx        # Panier (recherche et bibliothèque), glisser vers une étagère ; version dessinée sans WebGL
 │   ├── Basket3D.jsx      # Panier en 3D (chargé à part)
+│   ├── MyShelves.jsx     # Fenêtre « Mes étagères » (meuble à plat + réglages)
 │   ├── ShelfEditor.jsx   # Carte d'édition d'une étagère (nom, matière, fond, portes, ordre)
 │   ├── Caption.jsx       # Légende : titre / auteur qui glissent dans des masques
 │   ├── StatusTabs.jsx    # Onglets avec indicateur cobalt glissant

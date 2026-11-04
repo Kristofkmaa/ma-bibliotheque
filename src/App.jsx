@@ -12,6 +12,7 @@ import { preloadCover } from './lib/covers'
 import { isDemoMode } from './lib/supabase'
 import { sortBooks, SORTS, spineColors } from './lib/bookUtils'
 import Shelf3D from './components/Shelf3D'
+import MyShelves from './components/MyShelves'
 import { webglAvailable } from './three/webgl'
 import DetailSheet from './components/DetailSheet'
 import SearchPanel from './components/SearchPanel'
@@ -51,7 +52,8 @@ function Library({ user, onSignOut }) {
   const { books, loading, addBook, updateBook, removeBook, isInLibrary } = useLibrary(user.id)
   const { shelves, commit: commitShelves, storage } = useShelves(user.id)
   const [sort, setSortState] = useState(() => readPref('levana.sort2', 'manual'))
-  const [newShelfSignal, setNewShelfSignal] = useState(0)
+  const [newShelfSignal] = useState(0)
+  const [shelvesOpen, setShelvesOpen] = useState(null)   // null : fermé ; sinon { id } de l'étagère à montrer
   const [addTarget, setAddTarget] = useState(null)
   const [highlightId, setHighlightId] = useState(null)
   const [focusId, setFocusId] = useState(null)
@@ -77,7 +79,8 @@ function Library({ user, onSignOut }) {
     return sortBooks(books, sort)
   }, [books, sort])
 
-  const overlay = !!detail || search || scanner
+  const overlay = !!detail || search || scanner || !!shelvesOpen
+  const effShelves = useMemo(() => effectiveShelves(shelves, books), [shelves, books])
 
   const openBook = useCallback((book, el) => {
     setDetail({ book, mode: 'edit', rect: el?.getBoundingClientRect() || null })
@@ -197,9 +200,10 @@ function Library({ user, onSignOut }) {
       </header>
 
       <div className="scene-tabs">
-        {canEdit && (
-          <button type="button" className="lbl box cobalt" onClick={e => { e.currentTarget.blur(); setNewShelfSignal(n => n + 1) }}>+ Étagère</button>
-        )}
+        <button type="button" className="lbl box cobalt ms-open" onClick={e => { e.currentTarget.blur(); setShelvesOpen({ id: null }) }}>
+          <svg width="13" height="11" viewBox="0 0 13 11" aria-hidden="true"><path d="M0.5 0.5h12M0.5 5.5h12M0.5 10.5h12M0.5 0.5v10M12.5 0.5v10" stroke="currentColor" fill="none" /></svg>
+          Mes étagères
+        </button>
         <label className="lbl scene-sort">
           <span>Ranger par</span>
           <select value={sort} onChange={e => setSort(e.target.value)}>
@@ -215,6 +219,7 @@ function Library({ user, onSignOut }) {
           books={filtered} allBooks={books} sort={sort} viewKey="all" manual={manual} canEdit={canEdit}
           shelves={shelves} commitShelves={commitShelves} newShelfSignal={newShelfSignal}
           onOpen={openBook} onAdd={openSearch} locked={overlay} apiRef={bookcaseApi}
+          onShelfClick={id => setShelvesOpen({ id })}
           aside={basket.items.length > 0 ? (
             <ShelfBasket
               items={basket.items} shelves={shelves.map(s => ({ id: s.id, name: s.name }))} defaultShelf={addTarget}
@@ -256,7 +261,7 @@ function Library({ user, onSignOut }) {
             shelfOptions={shelves.map(s => ({ id: s.id, name: s.name }))} defaultShelf={addTarget}
             onClosed={onDetailClosed}
             inLibrary={detail.mode === 'add' && isInLibrary(detail.book.googleId)}
-            onSave={async updates => { await updateBook(detail.book.id, updates) }}
+            onSave={async updates => { await updateBook(detail.book.id, updates); setDetail(dt => dt && { ...dt, book: { ...dt.book, ...updates } }) }}
             onRemove={async () => { await removeBook(detail.book.id); closeDetail() }}
             onAdd={async shelfId => {
               const saved = await addBook(detail.book, ['possede'])
@@ -271,6 +276,10 @@ function Library({ user, onSignOut }) {
             {detail.mode === 'add' ? 'Retour' : 'Fermer'}
           </button>
         </>
+      )}
+
+      {shelvesOpen && (
+        <MyShelves eff={effShelves} commit={commitShelves} initialId={shelvesOpen.id} onClose={() => setShelvesOpen(null)} />
       )}
 
       {scanner && <Suspense fallback={null}><Scanner onBookFound={onScanFound} onClose={() => setScanner(false)} /></Suspense>}

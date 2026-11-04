@@ -34,6 +34,18 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
   const blobRefs = useRef([])
   const [shelfId, setShelfId] = useState(defaultShelf || shelfOptions[0]?.id || null)
   const [rating, setRating] = useState(d.rating || 0)
+  const [reading, setReading] = useState(() => (d.statuses.includes('lu') ? 'lu' : d.statuses.includes('en_cours') ? 'en_cours' : null))
+  const [stampKey, setStampKey] = useState(0)
+
+  // « En cours » ou « Lu » : enregistré tout de suite (les autres statuts éventuels sont gardés)
+  const setReadingState = async next => {
+    const value = reading === next ? null : next
+    setReading(value)
+    if (value === 'lu') setStampKey(k => k + 1)
+    const others = (d.statuses || []).filter(s => s !== 'lu' && s !== 'en_cours')
+    try { await onSave({ statuses: value ? [value, ...others] : (others.length ? others : ['possede']) }) }
+    catch (e) { setFeedback('Erreur : ' + (e.message || e)) }
+  }
   const [notes, setNotes] = useState(d.notes)
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
@@ -126,6 +138,11 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
           <div className="detail-left">
             <Line className="detail-subtitle">{d.authors.join(', ')}{mode === 'add' && inLibrary ? ' / Déjà dans la bibliothèque' : ''}</Line>
             <Line><h1 className="detail-title">{d.title}</h1></Line>
+            {mode === 'edit' && reading === 'lu' && (
+              <span className="read-stamp" key={stampKey} aria-label="Livre lu">
+                <span className="rs-top">Lu</span><span className="rs-bot">Bibliothèque Levana</span>
+              </span>
+            )}
             {meta && <Line className="detail-meta">{meta}</Line>}
             <Line>
               <p className={'detail-synopsis' + (longText && !expanded ? ' clamped' : '')}>
@@ -154,6 +171,17 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
 
             {mode === 'edit' && (
               <>
+                <Line>
+                  <div className="detail-field-label">Ma lecture</div>
+                  <div className="toggle-row">
+                    <button type="button" className={'lbl toggle reading-toggle' + (reading === 'en_cours' ? ' on' : '')} onClick={() => setReadingState('en_cours')}>
+                      <span className="mini-mark" aria-hidden="true" /> En cours
+                    </button>
+                    <button type="button" className={'lbl toggle' + (reading === 'lu' ? ' on' : '')} onClick={() => setReadingState('lu')}>
+                      ✓ Lu
+                    </button>
+                  </div>
+                </Line>
                 <Line>
                   <div className="detail-field-label">Note</div>
                   <div className="stars" role="radiogroup" aria-label="Note sur cinq">
