@@ -804,3 +804,9 @@ button.plank-label.over.editable:hover { transform: translate(0, calc(-50% - 1px
   .sh-controls { flex-direction: column; flex: 1; align-items: stretch; padding-bottom: 6px; }
   .sh-controls .box { height: 32px; }
 }
+
+/* Panier en 3D */
+.basket3d { position: relative; flex: none; }
+.basket-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.basket3d .bb-tag { transform: translate(-50%, -50%) rotate(-4deg); }
+.basket3d .bb-remove.on { opacity: 1; z-index: 5; }

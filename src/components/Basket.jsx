@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { spineColors, hashString } from '../lib/bookUtils'
+import { webglAvailable } from '../three/webgl'
+
+// Le panier 3D (Three.js) est chargé à part, comme la bibliothèque
+const Basket3D = lazy(() => import('./Basket3D'))
+
+const HAS_WEBGL = typeof window !== 'undefined' && webglAvailable()
 
 const colorOf = b => spineColors({ google_id: b.googleId, title: b.title })[0]
 
@@ -110,12 +116,25 @@ export function BigBasket({ items, width = 280, bump, onBookDown, onBookClick, o
   )
 }
 
+/** Le panier en 3D si possible, sinon le panier dessiné. */
+function AnyBasket({ width, ...props }) {
+  if (HAS_WEBGL) {
+    const height = Math.round(width * 0.95)
+    return (
+      <Suspense fallback={<div style={{ width, height }} />}>
+        <Basket3D width={width} height={height} {...props} />
+      </Suspense>
+    )
+  }
+  return <BigBasket width={width} {...props} onBookDown={props.onBookDown ? (e, b) => props.onBookDown(e, b, e.currentTarget.getBoundingClientRect()) : undefined} />
+}
+
 /** Le panier dans la recherche, posé à côté des résultats. */
 export function SearchBasket({ items, bump, onBookClick, onRemove, onDone, mobile }) {
   return (
     <div className="sb">
       <div className="sb-title">Mon panier</div>
-      <BigBasket items={items} width={mobile ? 120 : 270} bump={bump} onBookClick={onBookClick} onRemove={mobile ? null : onRemove} />
+      <AnyBasket items={items} width={mobile ? 124 : 280} bump={bump} onBookClick={onBookClick} onRemove={mobile ? null : onRemove} />
       <div className="sb-side">
         {items.length
           ? <p className="sb-hint">Continue tes trouvailles, puis va les ranger sur tes étagères.</p>
@@ -142,11 +161,11 @@ export function ShelfBasket({ items, shelves, defaultShelf, canDrop, api, mobile
 
   useEffect(() => { if (!shelves.some(s => s.id === target)) setTarget(shelves[0]?.id || '') }, [shelves, target])
 
-  const startPress = (e, book) => {
+  const startPress = (e, book, rect) => {
     if (e.button > 0) return
-    const el = e.currentTarget
+    const el = e.currentTarget || e.target
     const start = { x: e.clientX, y: e.clientY }
-    const rc = el.getBoundingClientRect()
+    const rc = rect || el.getBoundingClientRect()
     const fx = (e.clientX - rc.left) / rc.width, fy = (e.clientY - rc.top) / rc.height
     const id = `basket:${book.googleId}`
     let ghost = null
@@ -205,8 +224,8 @@ export function ShelfBasket({ items, shelves, defaultShelf, canDrop, api, mobile
   return (
     <aside className="shelf-basket" aria-label="Mon panier">
       <p className="sh-hint">{canDrop ? 'Attrape un livre et pose-le sur une étagère' : 'Range-les tous d’un coup'}</p>
-      <BigBasket
-        items={items} width={mobile ? 128 : 236} dragging={dragging}
+      <AnyBasket
+        items={items} width={mobile ? 132 : 244} dragging={dragging}
         onBookDown={startPress} onRemove={mobile ? null : onRemove}
       />
       <div className="sh-controls">
