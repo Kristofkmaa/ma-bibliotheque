@@ -342,61 +342,66 @@ export class BasketScene {
   }
 
   /**
-   * Disposition « dossiers dans une corbeille » : les livres sont parallèles, couverture face à
-   * nous, rangés l'un derrière l'autre (tranches) sur 1 à 3 colonnes. Deux livres ne partagent
-   * jamais le même volume : chaque tranche a sa profondeur, et dans une tranche les livres
-   * penchent tous du même côté. Le panier s'élargit assez pour tout contenir.
+   * Disposition à places fixes (« dossiers dans une corbeille ») : grille de 3 colonnes × 7 rangs,
+   * la plus compacte pour 20 livres (analyse : k ≈ 2,0 contre 2,3 à 3,8 pour les autres grilles).
+   * Chaque livre reçoit une place une fois pour toutes : rang du milieu d'abord, puis centre,
+   * droite, gauche ; les rangs se remplissent du milieu vers l'avant et l'arrière. Ajouter ou
+   * retirer un livre ne déplace jamais les autres ; le panier s'élargit juste pour les places prises.
+   * Livres parallèles, couverture vers l'avant ; dans un rang ils penchent du même côté : jamais emmêlés.
    */
+  _slots() {
+    if (this.slotList) return this.slotList
+    const COLS = 3, ROWS = 7
+    const depth = 0.142 + 0.028        // épaisseur max d'un livre + jeu
+    const pitch = BOOK_W + 0.07
+    const rowOrder = [3, 4, 2, 5, 1, 6, 0]          // du milieu vers l'avant et l'arrière
+    const colOrder = [1, 2, 0]                      // centre, droite, gauche
+    const lean = [-0.05, 0.04, -0.03, 0.05, -0.04, 0.03, -0.05]
+    this.slotList = []
+    rowOrder.forEach(r => colOrder.forEach(c => {
+      this.slotList.push({
+        x: (c - (COLS - 1) / 2) * pitch + (r % 2 ? 0.03 : -0.03),
+        z: (r - (ROWS - 1) / 2) * depth,            // r = 6 : à l'avant
+        rz: lean[r],
+        lift: (ROWS - 1 - r) * 0.075,               // les rangs du fond dépassent un peu
+      })
+    }))
+    return this.slotList
+  }
+
   _layout() {
+    const slots = this._slots()
     const list = [...this.books.values()]
-    const n = list.length
-    if (!n) { this.k.t = basketScale(0); return }
-    const cols = n <= 6 ? 1 : n <= 13 ? 2 : 3
-    const slices = Math.ceil(n / cols)
-    // alignés sur l'ovale du panier (le plus compact) ; la vue de 3/4 montre leurs couvertures
-    const nrm = new THREE.Vector3(0, 0, 1)     // vers l'avant du panier
-    const tan = new THREE.Vector3(1, 0, 0)     // de gauche à droite
-    const maxT = Math.max(...list.map(b => b.t))
-    const depth = maxT + 0.028                 // d'une tranche à l'autre
-    const pitch = BOOK_W + 0.07                // d'une colonne à l'autre
-    const lean = j => [-0.05, 0.04, -0.02, 0.05, -0.04, 0.025, -0.05][j % 7]
-    const slot = (i) => {
-      const ci = i % cols, j = Math.floor(i / cols)
-      const a = (ci - (cols - 1) / 2) * pitch + (j % 2 ? 0.035 : -0.035)
-      const d = (j - (slices - 1) / 2) * depth
-      return { a, d, j }
-    }
-    // emprise au sol de chaque livre (coins du bas, livre penché) dans le repère du panier
-    const footprint = (a, d, rz) => {
-      const out = []
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-        const lx = sx * ((BOOK_W / 2) * Math.cos(rz) + (BOOK_H / 2) * Math.abs(Math.sin(rz)))
-        const ld = d + sz * maxT / 2
-        out.push(tan.clone().multiplyScalar(a + lx).addScaledVector(nrm, ld))
-      }
-      return out
-    }
+    // place attribuée une fois pour toutes : la première libre dans l'ordre
+    const taken = new Set(list.filter(b => b.slot != null).map(b => b.slot))
+    list.forEach(b => {
+      if (b.slot != null) return
+      let s = 0
+      while (taken.has(s) && s < slots.length - 1) s++
+      b.slot = s; taken.add(s)
+    })
+    // largeur du panier : juste assez pour les places occupées (coins du bas dans l'ovale)
     const fits = k => {
       const kz = 1 + (k - 1) * 0.6
       const ax = R_BOT * 0.93 * SX * k, bz = R_BOT * 0.93 * SZ * kz
-      for (let i = 0; i < n; i++) {
-        const { a, d, j } = slot(i)
-        for (const c of footprint(a, d, lean(j))) if ((c.x / ax) ** 2 + (c.z / bz) ** 2 > 1) return false
+      for (const b of list) {
+        const sl = slots[b.slot]
+        const hx = (BOOK_W / 2) * Math.cos(sl.rz) + (BOOK_H / 2) * Math.abs(Math.sin(sl.rz))
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+          const x = sl.x + sx * hx, z = sl.z + sz * 0.08
+          if ((x / ax) ** 2 + (z / bz) ** 2 > 1) return false
+        }
       }
       return true
     }
-    let k = basketScale(n)
-    while (!fits(k) && k < 2.6) k += 0.02
-    this.k.t = k
-    list.forEach((b, i) => {
-      const { a, d, j } = slot(i)
+    let k = 1
+    while (!fits(k) && k < 2.6) k += 0.01
+    this.k.t = Math.max(k, basketScale(0))
+    list.forEach(b => {
+      const sl = slots[b.slot]
       const h = hashString(b.item.googleId)
-      const rz = lean(j)
-      const p = tan.clone().multiplyScalar(a).addScaledVector(nrm, d)
-      // le coin le plus bas touche le fond ; les tranches du fond dépassent un peu (posées sur les autres)
-      const lift = (slices - 1 - j) * 0.09 + ((h >> 6) % 4) * 0.01
-      const y = 0.045 + (BOOK_H / 2) * Math.cos(rz) + (BOOK_W / 2) * Math.abs(Math.sin(rz)) + lift
-      b.base = { x: p.x, y, z: p.z, rz, ry: 0 }
+      const y = 0.045 + (BOOK_H / 2) * Math.cos(sl.rz) + (BOOK_W / 2) * Math.abs(Math.sin(sl.rz)) + sl.lift + ((h >> 6) % 4) * 0.008
+      b.base = { x: sl.x, y, z: sl.z, rz: sl.rz, ry: 0 }
       if (b.fresh) {
         b.x.snap(b.base.x); b.y.snap(b.base.y); b.z.snap(b.base.z); b.rz.snap(b.base.rz); b.ry.snap(b.base.ry)
         b.fresh = false
