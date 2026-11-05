@@ -279,8 +279,35 @@ function Poster({ s, onOpen }) {
   )
 }
 
-const SORTS = [['added', 'Ajout récent'], ['rating', 'Mieux notés'], ['az', 'A → Z'], ['year', 'Année']]
+/** Une ligne de notre liste : la petite affiche, le titre, puis tout ce qu'il faut savoir. */
+function ListRow({ s, onOpen }) {
+  const genres = (s.genres || []).slice(0, 2).join(', ')
+  return (
+    <li>
+      <button type="button" className="sx-li" onClick={() => onOpen(s)}>
+        <span className="sx-li-img">
+          {s.poster_path ? <img src={tmdbImg(s.poster_path, 'w185')} alt="" loading="lazy" draggable="false" /> : null}
+        </span>
+        <span className="sx-li-body">
+          <span className="sx-li-title">{s.name}</span>
+          <span className="sx-li-meta">
+            <span className={'sx-li-kind ' + (isMovie(s) ? 'm' : 't')}>{kindLabel(s)}</span>
+            {[year(s), lengthLabel(s)].filter(Boolean).join(' · ')}
+          </span>
+          <span className="sx-li-sub">
+            {genres && <span>{genres}</span>}
+            {s.rating ? <span className="sx-li-stars" aria-label={`${s.rating} étoiles sur 5`}>{'★'.repeat(s.rating)}<i>{'★'.repeat(5 - s.rating)}</i></span> : <span className="sx-li-norate">Pas encore notée</span>}
+          </span>
+        </span>
+        <span className="sx-li-chev" aria-hidden="true">›</span>
+      </button>
+    </li>
+  )
+}
+
+const SORTS = [['cat', 'Par catégorie'], ['added', 'Ajout récent'], ['rating', 'Mieux notés'], ['az', 'A → Z'], ['year', 'Année']]
 const sorters = {
+  cat: (a, b) => a.name.localeCompare(b.name, 'fr'),
   added: (a, b) => (b.added_at || '').localeCompare(a.added_at || ''),
   rating: (a, b) => (b.rating || 0) - (a.rating || 0) || (b.added_at || '').localeCompare(a.added_at || ''),
   az: (a, b) => a.name.localeCompare(b.name, 'fr'),
@@ -357,7 +384,9 @@ function ZoomBar({ zoom, onZoom }) {
  */
 export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, onRemove, onRenameCategory, onClose }) {
   const [kind, setKind] = useState('all')     // notre liste (tout), séries ou films
-  const [sort, setSortState] = useState(() => { try { return localStorage.getItem('levana.series.tri') || 'added' } catch { return 'added' } })
+  const [sort, setSortState] = useState(() => { try { return localStorage.getItem('levana.series.tri') || 'cat' } catch { return 'cat' } })
+  const [layout, setLayoutState] = useState(() => { try { return localStorage.getItem('levana.series.vue') || 'list' } catch { return 'list' } })
+  const setLayout = v => { setLayoutState(v); try { localStorage.setItem('levana.series.vue', v) } catch { /* ignore */ } }
   const setSort = v => { setSortState(v); try { localStorage.setItem('levana.series.tri', v) } catch { /* ignore */ } }
   const [catFilter, setCatFilter] = useState(null)   // une catégorie, ou toutes
   const [renaming, setRenaming] = useState(false)
@@ -500,12 +529,22 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
                           : `${shown.length} titre${shown.length > 1 ? 's' : ''}`}
                       </p>
                     </div>
+                    <div className="sx-tools">
+                    <div className="sx-view" role="tablist" aria-label="Affichage">
+                      <button type="button" role="tab" aria-selected={layout === 'list'} className={layout === 'list' ? 'on' : ''} onClick={() => setLayout('list')} aria-label="En liste">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11" /><rect x="3.5" y="4.5" width="3" height="3" rx="0.6" /><rect x="3.5" y="10.5" width="3" height="3" rx="0.6" /><rect x="3.5" y="16.5" width="3" height="3" rx="0.6" /></svg>
+                      </button>
+                      <button type="button" role="tab" aria-selected={layout === 'grid'} className={layout === 'grid' ? 'on' : ''} onClick={() => setLayout('grid')} aria-label="En affiches">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="9" rx="1" /><rect x="13.5" y="4" width="6.5" height="9" rx="1" /><path d="M4 17h6.5M13.5 17h6.5M4 20h4M13.5 20h4" /></svg>
+                      </button>
+                    </div>
                     <label className="sx-sort">
                       <span className="sr-only">Trier</span>
                       <select value={sort} onChange={e => setSort(e.target.value)}>
                         {SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                       </select>
                     </label>
+                    </div>
                   </header>
                   {groups.length > 1 && (
                     <div className="sx-chips" role="tablist" aria-label="Catégories">
@@ -526,9 +565,22 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
                       <button type="button" className="sx-renamebtn" onClick={() => setRenaming(true)}>✎ Renommer « {catGroup.name} »</button>
                     )
                   )}
-                  <div className="sx-grid">
-                    {listItems.map(x => <Poster key={x.id} s={x} onOpen={o => setId(o.id)} />)}
-                  </div>
+                  {(() => {
+                    // rangée par catégorie : un intertitre par catégorie ; sinon une seule suite
+                    const sections = sort === 'cat' && !catFilter
+                      ? groups.map(g => ({ name: g.name, items: [...g.items].sort(sorters.cat) }))
+                      : [{ name: null, items: listItems }]
+                    return sections.map(sec => (
+                      <div className="sx-sec" key={sec.name || 'all'}>
+                        {sec.name && <h3 className="sx-sec-title">{sec.name}<span>{sec.items.length}</span></h3>}
+                        {layout === 'list' ? (
+                          <ul className="sx-ul">{sec.items.map(x => <ListRow key={x.id} s={x} onOpen={o => setId(o.id)} />)}</ul>
+                        ) : (
+                          <div className="sx-grid">{sec.items.map(x => <Poster key={x.id} s={x} onOpen={o => setId(o.id)} />)}</div>
+                        )}
+                      </div>
+                    ))
+                  })()}
                 </section>
               )}
               <ZoomBar zoom={zoom} onZoom={setZoom} />

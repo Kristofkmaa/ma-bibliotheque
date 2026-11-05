@@ -2197,3 +2197,49 @@ body.immersive .scene { padding: 0 !important; }
 .tv-now.on { opacity: 1; transform: none; }
 .tv-now-kind { font-family: var(--sans); font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #E8B04B; }
 .tv-now-name { font-family: var(--sans); font-size: 34px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; color: #fff; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6); }
+
+/* Notre liste, en liste : une ligne par titre, rangée par catégorie */
+.sx-tools { display: flex; align-items: center; gap: 8px; }
+.sx-view { display: inline-flex; padding: 3px; border-radius: 18px; background: rgba(243, 239, 232, 0.08); }
+.sx-view button { width: 34px; height: 30px; border: 0; border-radius: 15px; background: transparent; color: var(--sx-muted); display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.sx-view button.on { background: var(--sx-fg); color: #111; }
+.sx-view svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.sx-sec { margin-top: 22px; }
+.sx-sec-title {
+  position: sticky; top: 0; z-index: 2; display: flex; align-items: baseline; gap: 10px; margin: 0 calc(-1 * clamp(16px, 3.4vw, 48px));
+  padding: 10px clamp(16px, 3.4vw, 48px) 8px; background: rgba(13, 12, 14, 0.94); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  font-family: var(--sans); font-size: 12px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: var(--sx-gold);
+}
+.sx-sec-title span { font-weight: 600; letter-spacing: 0.06em; color: var(--sx-muted); }
+.sx-ul { list-style: none; margin: 0; padding: 0; }
+.sx-ul li + li .sx-li { border-top: 1px solid var(--sx-line); }
+.sx-li {
+  width: 100%; display: flex; align-items: center; gap: 14px; padding: 12px 4px; border: 0; background: none; color: var(--sx-fg); text-align: left;
+  border-radius: 6px; transition: background-color 0.2s;
+}
+@media (hover: hover) { .sx-li:hover { background: rgba(243, 239, 232, 0.05); } }
+.sx-li:active { background: rgba(243, 239, 232, 0.08); }
+.sx-li-img { flex: none; width: 58px; aspect-ratio: 2 / 3; border-radius: 4px; overflow: hidden; background: #24211E; box-shadow: 0 8px 16px -10px rgba(0, 0, 0, 0.9); }
+.sx-li-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sx-li-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.sx-li-title { font-family: var(--sans); font-size: 17px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sx-li-meta { display: flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 12.5px; font-weight: 500; color: var(--sx-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sx-li-kind { flex: none; padding: 2px 6px; border-radius: 3px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; background: rgba(243, 239, 232, 0.1); color: var(--sx-fg); }
+.sx-li-kind.m { background: rgba(232, 176, 75, 0.16); color: var(--sx-gold); }
+.sx-li-sub { display: flex; align-items: center; gap: 10px; font-family: var(--sans); font-size: 12px; color: var(--sx-muted); white-space: nowrap; overflow: hidden; }
+.sx-li-sub > span:first-child:not(.sx-li-stars):not(.sx-li-norate) { overflow: hidden; text-overflow: ellipsis; }
+.sx-li-stars { flex: none; color: var(--sx-gold); letter-spacing: 1px; font-size: 13px; }
+.sx-li-stars i { font-style: normal; color: rgba(243, 239, 232, 0.18); }
+.sx-li-norate { flex: none; font-style: italic; opacity: 0.7; }
+.sx-li-chev { flex: none; font-size: 24px; color: rgba(243, 239, 232, 0.3); padding-right: 4px; }
+/* la grille d'affiches, plus aérée */
+.sx-sec .sx-grid { margin-top: 12px; }
+.sx-poster-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+@media (min-width: 900px) and (min-aspect-ratio: 1/1) {
+  .sx-ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
+  .sx-ul li + li .sx-li { border-top: 0; }
+  .sx-ul li .sx-li { border-bottom: 1px solid var(--sx-line); }
+}
+/* l'intertitre de catégorie reste collé juste sous l'en-tête */
+.sx-sec-title { top: 60px; }
+@media (max-aspect-ratio: 1/1) { .sx-sec-title { top: 74px; } }
