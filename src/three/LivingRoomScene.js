@@ -33,7 +33,6 @@ const LAMP = { x: 1.8, z: 1.38 }            // au bout du canapé
 const PLANT = { x: 1.62, z: -1.62 }         // coin du fond, à droite
 const WINDOW = { z: 1.3, y: 1.55, w: 0.66, h: 1.0 }
 const SALON_ROWS = 4                        // la bibliothèque du salon montre au plus 4 étagères
-const TV_FOV = 46                           // zoom sur la télé : comme assis dans le canapé
 
 const COL = {
   wallBack: '#ECE3D5', wallLeft: '#E4D9C8', base: '#F4EFE6', slab: '#CDBB9F',
@@ -798,7 +797,7 @@ export class LivingRoomScene {
   _tvView() {
     // face à l'écran, tout près : l'écran remplit la vue (on entre dans la télé)
     const target = this.tvScreen.getWorldPosition(new THREE.Vector3())
-    const t = Math.tan(THREE.MathUtils.degToRad(TV_FOV / 2))
+    const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
     const dist = Math.min(1.01 / 2 / (t * this.camera.aspect), 0.57 / 2 / t) * 0.94
     return { target, az: Math.PI / 2, el: 0, dist }
   }
@@ -825,14 +824,14 @@ export class LivingRoomScene {
     const z = this.tvZoom
     z.k = clamp(z.k + (z.dir * dt) / 1.1, 0, 1)
     const e = ease(z.k), a = z.from, b = this._tvView()
+    // la caméra garde son objectif (rien ne se déforme) ; elle tourne vers la télé, puis descend
+    // à sa hauteur seulement à la fin (elle passe au-dessus de la lampe et du canapé)
+    const eEl = ease(clamp((z.k - 0.3) / 0.7, 0, 1))
     const tgt = a.target.clone().lerp(b.target, e)
     const dist = Math.exp(Math.log(a.dist) + (Math.log(b.dist) - Math.log(a.dist)) * e)
-    this.camera.fov = FOV + (TV_FOV - FOV) * e
-    this.camera.clearViewOffset()
-    this.camera.updateProjectionMatrix()
     if (z.dir > 0 && z.k >= 1 && !z.inside) { z.inside = true; this.cb.onTvInside?.(true) }
     if (z.dir < 0 && z.inside) { z.inside = false; this.cb.onTvInside?.(false) }
-    this._placeCamera(a.az + shortAngle(a.az, b.az) * e, a.el + (b.el - a.el) * e, dist, tgt)
+    this._placeCamera(a.az + shortAngle(a.az, b.az) * e, a.el + (b.el - a.el) * eEl, dist, tgt)
     if (z.dir < 0 && z.k <= 0) {
       this.tvZoom = null
       this.az.snap(a.az); this.el.snap(a.el); this.target.copy(a.target)
@@ -1731,7 +1730,8 @@ export class LivingRoomScene {
       const dx = cp.x, dz = cp.z, len = Math.hypot(dx, dz) || 1
       for (const w of this.walls) {
         const facing = (w.n.x * dx + w.n.z * dz) / len
-        w.cut.t = facing > 0.2 ? 0.07 : 1
+        // pendant le zoom sur la télé, les murs restent comme ils sont (sinon la télé s'aplatirait)
+        if (!this.tvZoom) w.cut.t = facing > 0.2 ? 0.07 : 1
         if (!this.wallsReady) w.cut.snap(w.cut.t)          // à l'ouverture : déjà en place, sans animation
         if (!w.cut.done || !this.wallsReady) {
           for (let i = 0; i < sub; i++) w.cut.step(h)
