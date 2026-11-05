@@ -26,7 +26,7 @@ const TARGET0 = new THREE.Vector3(0, 0.95, 0)
 
 // emplacements (repère de la pièce)
 const BOOKCASE = { x: -1.05, z: -R + 0.2, w: 1.62, h: 2.18, d: 0.38 }   // mur du fond, à gauche (face à la caméra)
-const FIRE = { x: -0.95, w: 1.3, d: 0.3, h: 1.38 }                     // mur de devant, à gauche (loin des livres et du canapé)
+const FIRE = { x: 0, w: 1.3, d: 0.3, h: 1.38 }                         // centrée sur le mur de devant (loin des livres et du canapé)
 const TV = { z: 0.0 }                       // mur de gauche, en face du canapé
 const SOFA = { x: 1.34, z: 0.0 }            // face à la télé
 const TABLE = { x: -0.15, z: 0.0 }          // entre le canapé et la télé
@@ -409,7 +409,7 @@ export class LivingRoomScene {
     const wall = (name, n, build) => {
       const grp = new THREE.Group()
       g.add(grp)
-      const w = { name, grp, n, cut: new Spring(1, 70, 1), decor: [] }
+      const w = { name, grp, n, cut: new Spring(1, 70, 1), decor: [], attached: [] }   // attached : meubles contre ce mur
       build(grp, w)
       this.walls.push(w)
       return w
@@ -721,6 +721,7 @@ export class LivingRoomScene {
       vase.add(tw)
     }
     this._register('fire', grp, 'La cheminée')
+    this.wallOf('front').attached.push(grp)
   }
 
   // ---- Coin télé -------------------------------------------------------------------------
@@ -776,6 +777,7 @@ export class LivingRoomScene {
     this.tvSwitch = 1
     this._drawTv()
     this._register('tv', grp, 'Le tuto')
+    this.wallOf('left').attached.push(grp)
   }
 
   /** Livres à montrer sur l'écran : en cours, sinon les derniers arrivés. */
@@ -901,17 +903,38 @@ export class LivingRoomScene {
     this.items.get('sofa').group.visible = d < 0.99
   }
 
+  /**
+   * Un mur abaissé (et ce qui y est accroché) ; les meubles adossés à ce mur s'aplatissent
+   * avec lui jusqu'à disparaître : du côté invisible, on ne les voit pas de dos.
+   */
+  _applyCut(w) {
+    w.grp.scale.y = Math.max(0.05, w.cut.v)
+    const show = w.cut.v > 0.6
+    for (const d of w.decor) d.visible = show
+    const f = clamp((w.cut.v - 0.07) / 0.93, 0, 1)
+    w.f = f
+    const objs = w.name === 'back' ? [this.bookcase, this.mirror?.g].filter(Boolean) : w.attached
+    for (const o of objs) {
+      o.userData.baseSy ??= o.scale.y
+      o.userData.baseY ??= o.position.y
+      o.scale.y = Math.max(0.001, o.userData.baseSy * f)
+      o.position.y = o.userData.baseY * f
+      o.visible = f > 0.02 && !(o === this.bookcase && this.mirror)
+    }
+  }
+
   /** Les bulles au-dessus de la télé et du panier suivent la caméra. */
   _placeBubbles() {
     const S = this.renderer.domElement.getBoundingClientRect()
     const show = !this.fly && !this.tvZoom
+    const tvShown = (this.wallOf('left').f ?? 1) > 0.5
     for (const [kind, pos] of [['tv', new THREE.Vector3(-R + 0.2, 1.47, TV.z)], ['basket', new THREE.Vector3(TABLE.x + 0.17, 0.86, TABLE.z + 0.04)]]) {
       const el = this.cb.bubble?.(kind)
       if (!el) continue
       const v = pos.project(this.camera)
       const x = S.left + ((v.x + 1) / 2) * S.width, y = S.top + ((1 - v.y) / 2) * S.height
       el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
-      el.classList.toggle('off', !show)
+      el.classList.toggle('off', !show || (kind === 'tv' && !tvShown))
     }
   }
 
@@ -1356,6 +1379,8 @@ export class LivingRoomScene {
     this.libFill.position.set(5, 2, 3); this.libFill.target.position.set(0, 0, 0)
     this.mirror = { lib, g, copy, pairs, doors, hits, sc, tops, cutY, sig: this._wallSig(lib) }
     this.bookcase.visible = false
+    const bw = this.wallOf('back')
+    if (bw) this._applyCut(bw)
     this.shadowDirty = 2
     return true
   }
@@ -1704,9 +1729,7 @@ export class LivingRoomScene {
         if (!this.wallsReady) w.cut.snap(w.cut.t)          // à l'ouverture : déjà en place, sans animation
         if (!w.cut.done || !this.wallsReady) {
           for (let i = 0; i < sub; i++) w.cut.step(h)
-          w.grp.scale.y = Math.max(0.05, w.cut.v)
-          const show = w.cut.v > 0.6
-          for (const d of w.decor) d.visible = show
+          this._applyCut(w)
           this.shadowDirty = Math.max(this.shadowDirty, 1)
         }
       }
@@ -1785,7 +1808,8 @@ export class LivingRoomScene {
       f.getWorldPosition(tmp)
       f.rotation.y = Math.atan2(cam.x - tmp.x, cam.z - tmp.z)
     }
-    this.fireLight.intensity = 3.2 * fp * flick * sal
+    const fireOn = this.wallOf('front').f ?? 1
+    this.fireLight.intensity = 3.2 * fp * flick * sal * fireOn
     this.ember.material.opacity = (0.65 + 0.25 * flick) * vis
     // lampe
     for (let i = 0; i < sub; i++) this.lampOn.step(h)
