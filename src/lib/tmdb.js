@@ -37,6 +37,17 @@ export const workKey = s => (isMovie(s) ? 'm' : 't') + s.tmdb_id
 /** « 2 h 05 » */
 export const runtimeLabel = m => (m ? (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`) : '')
 
+const imageCache = new Map()
+/** Les grandes images d'une œuvre (pour les faire défiler derrière son titre). */
+export function seriesImages(tmdbId, media = 'tv') {
+  const k = media + tmdbId
+  if (!imageCache.has(k)) {
+    const p = get({ images: String(tmdbId), type: media }).then(d => d.backdrops || [], () => { imageCache.delete(k); return [] })
+    imageCache.set(k, p)
+  }
+  return imageCache.get(k)
+}
+
 const videoCache = new Map()
 /** Les vidéos d'une série (générique d'abord, sinon bandes-annonces), gardées en mémoire. */
 export function seriesVideos(tmdbId, media = 'tv') {

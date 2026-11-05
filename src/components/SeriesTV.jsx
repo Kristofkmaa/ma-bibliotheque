@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { tmdbImg, searchSeries, seriesDetails, seriesVideos, year, isMovie, workKey, runtimeLabel } from '../lib/tmdb'
+import { tmdbImg, searchSeries, seriesDetails, seriesVideos, seriesImages, year, isMovie, workKey, runtimeLabel } from '../lib/tmdb'
 
 /** Un titre dont les mots montent un à un, comme sortis d'une fente. */
 function Rise({ text, as: Tag = 'span', className, delay = 0, step = 0.06 }) {
@@ -168,9 +168,6 @@ function Player({ show, videos, onDone }) {
 
 const pad = n => String(n).padStart(2, '0')
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
-const ZOOM_KEY = 'levana.series.zoom'
-const readZoom = () => { try { const z = parseFloat(localStorage.getItem(ZOOM_KEY)); return z > 0 ? clamp(z, 0.55, 1.6) : 1 } catch { return 1 } }
-const HERO_MS = 14000
 
 /** La catégorie d'une œuvre : celle qu'on lui a donnée, sinon son genre. */
 export const categoryOf = s => s.category || s.genres?.[0] || 'Autres'
@@ -213,69 +210,73 @@ function HeroVideo({ videoKey }) {
   )
 }
 
-/** La grande affiche du haut : l'image de l'œuvre, son titre, deux boutons. */
-function Hero({ item, videos, onPlay, onInfo, n, i, onDot }) {
+/** Les grandes images d'une œuvre, qui défilent en fondu (avec un lent mouvement de caméra). */
+function Slideshow({ s }) {
+  const [imgs, setImgs] = useState(() => [s.backdrop_path || s.poster_path].filter(Boolean))
+  const [k, setK] = useState(0)
+  useEffect(() => {
+    let live = true
+    seriesImages(s.tmdb_id, s.media).then(list => {
+      if (!live || !list.length) return
+      const first = s.backdrop_path
+      setImgs([first, ...list.filter(x => x !== first)].filter(Boolean).slice(0, 8))
+    })
+    return () => { live = false }
+  }, [s.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (imgs.length < 2) return
+    const t = setInterval(() => setK(n => (n + 1) % imgs.length), 5200)
+    return () => clearInterval(t)
+  }, [imgs.length])
+  return (
+    <div className="sx-slides" aria-hidden="true">
+      {imgs.map((p, n) => (
+        <img key={p} src={tmdbImg(p, 'w1280')} alt="" className={n === k ? 'on' : n === (k + imgs.length - 1) % imgs.length ? 'prev' : ''} style={{ '--dx': n % 2 ? '-2%' : '2%' }} />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * La page d'un titre, en plein écran : ses images défilent derrière le grand titre, puis sa
+ * bande-annonce démarre sans le son ; en dessous, le résumé, la note, la catégorie.
+ */
+function DetailPage({ s, videos, allCats, onBack, onPlay, onUpdate, onRemove }) {
   const [late, setLate] = useState(false)
-  useEffect(() => { setLate(false); const t = setTimeout(() => setLate(true), 2600); return () => clearTimeout(t) }, [item.id])
+  useEffect(() => { setLate(false); const t = setTimeout(() => setLate(true), 6000); return () => clearTimeout(t) }, [s.id])
   const v = videos?.[0]
   return (
-    <section className="sx-hero" key={item.id}>
-      <div className="sx-hero-img">
-        {(item.backdrop_path || item.poster_path) && <img src={tmdbImg(item.backdrop_path || item.poster_path, 'w1280')} alt="" />}
-        {late && v && <HeroVideo videoKey={v.key} />}
+    <div className="sx-page" role="dialog" aria-label={s.name}>
+      <div className="sx-page-scroll">
+        <section className="sx-page-hero">
+          <Slideshow s={s} />
+          {late && v && <HeroVideo videoKey={v.key} />}
+          <div className="sx-page-shade" />
+          <button type="button" className="sx-back" onClick={onBack}><span aria-hidden="true">←</span> Notre liste</button>
+          <div className="sx-page-head">
+            <p className="sx-kicker">{kindLabel(s)} <i /> {categoryOf(s)}</p>
+            <h2 className="sx-page-title">{s.name}</h2>
+            <p className="sx-page-meta">{[year(s), lengthLabel(s), (s.genres || []).slice(0, 2).join(', ')].filter(Boolean).join('   ·   ')}</p>
+            {s.rating ? <p className="sx-page-stars" aria-label={`${s.rating} étoiles sur 5`}>{'★'.repeat(s.rating)}<i>{'★'.repeat(5 - s.rating)}</i></p> : null}
+            <div className="sx-actions">
+              {v && <button type="button" className="sx-btn play" onClick={onPlay}><span className="sx-tri" aria-hidden="true" />{isOpening(v) ? 'Générique' : 'Bande-annonce'}</button>}
+            </div>
+          </div>
+        </section>
+        <section className="sx-page-body">
+          {s.overview && <p className="sx-page-over">{s.overview}</p>}
+          {byLabel(s) && <p className="sx-page-by">{isMovie(s) ? 'Réalisation' : 'Chaîne'} · <b>{isMovie(s) ? s.networks?.[0] : byLabel(s)}</b></p>}
+          <div className="sx-page-block">
+            <p className="sx-page-label">Notre note</p>
+            <Stars value={s.rating} onChange={r => onUpdate(s.id, { rating: r })} />
+          </div>
+          <div className="sx-page-block">
+            <CategoryPicker value={categoryOf(s)} all={allCats} onChange={c => onUpdate(s.id, { category: c })} />
+          </div>
+          <button type="button" className="sx-remove" onClick={onRemove}>Retirer {isMovie(s) ? 'ce film' : 'cette série'} de notre liste</button>
+        </section>
       </div>
-      <div className="sx-hero-shade" />
-      <div className="sx-hero-text">
-        <p className="sx-kicker">{kindLabel(item)} <i /> {categoryOf(item)}</p>
-        <h2 className="sx-hero-title">{item.name}</h2>
-        <p className="sx-meta">
-          {item.rating ? <span className="sx-stars">{'★'.repeat(item.rating)}</span> : null}
-          {[year(item), lengthLabel(item), byLabel(item)].filter(Boolean).join('  ·  ')}
-        </p>
-        {item.overview && <p className="sx-hero-over">{item.overview}</p>}
-        <div className="sx-actions">
-          {v && <button type="button" className="sx-btn play" onClick={onPlay}><span className="sx-tri" aria-hidden="true" />{isOpening(v) ? 'Générique' : 'Bande-annonce'}</button>}
-          <button type="button" className="sx-btn" onClick={onInfo}><span className="sx-i" aria-hidden="true">i</span>Infos</button>
-        </div>
-      </div>
-      {n > 1 && (
-        <div className="sx-dots" role="tablist" aria-label="À l'affiche">
-          {Array.from({ length: n }, (_, k) => <button key={k} type="button" className={k === i ? 'on' : ''} onClick={() => onDot(k)} aria-label={`Affiche ${k + 1}`} />)}
-        </div>
-      )}
-    </section>
-  )
-}
-
-/** Une carte : l'image en large, le titre dessus. */
-function Card({ s, onOpen, rank }) {
-  const img = s.backdrop_path || s.poster_path
-  return (
-    <button type="button" className="sx-card" onClick={() => onOpen(s)} aria-label={s.name}>
-      <span className="sx-card-img">
-        {img ? <img src={tmdbImg(img, 'w780')} alt="" loading="lazy" draggable="false" /> : null}
-        <span className="sx-card-shade" />
-        <span className="sx-card-name">{s.name}</span>
-        <span className={'sx-card-kind ' + (isMovie(s) ? 'm' : 't')}>{kindLabel(s)}</span>
-        {rank != null && <span className="sx-rank">{rank}</span>}
-      </span>
-      <span className="sx-card-meta">{[year(s), lengthLabel(s)].filter(Boolean).join(' · ')}{s.rating ? <b> {'★'.repeat(s.rating)}</b> : null}</span>
-    </button>
-  )
-}
-
-/** Une affiche de notre liste : l'image en hauteur, la note, le titre dessous. */
-function Poster({ s, onOpen }) {
-  return (
-    <button type="button" className="sx-poster" onClick={() => onOpen(s)} aria-label={s.name}>
-      <span className="sx-poster-img">
-        {s.poster_path ? <img src={tmdbImg(s.poster_path, 'w342')} alt="" loading="lazy" draggable="false" /> : <span className="sx-poster-name">{s.name}</span>}
-        <span className={'sx-card-kind ' + (isMovie(s) ? 'm' : 't')}>{kindLabel(s)}</span>
-        {s.rating ? <span className="sx-poster-rate">★ {s.rating}</span> : null}
-      </span>
-      <span className="sx-poster-title">{s.name}</span>
-      <span className="sx-poster-meta">{[year(s), categoryOf(s)].filter(Boolean).join(' · ')}</span>
-    </button>
+    </div>
   )
 }
 
@@ -305,6 +306,23 @@ function ListRow({ s, onOpen }) {
   )
 }
 
+/** L'intertitre d'une catégorie ; ✎ pour la renommer. */
+function SectionTitle({ name, count, onRename }) {
+  const [edit, setEdit] = useState(false)
+  if (edit) {
+    return (
+      <input className="sx-rename sx-sec-input" defaultValue={name} autoFocus aria-label="Nouveau nom de la catégorie"
+        onBlur={e => { const t = e.target.value.trim(); setEdit(false); if (t && t !== name) onRename(t) }}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setEdit(false) }} />
+    )
+  }
+  return (
+    <h3 className="sx-sec-title">{name}<span>{count}</span>
+      <button type="button" className="sx-sec-edit" onClick={() => setEdit(true)} aria-label={`Renommer ${name}`}>✎</button>
+    </h3>
+  )
+}
+
 const SORTS = [['cat', 'Par catégorie'], ['added', 'Ajout récent'], ['rating', 'Mieux notés'], ['az', 'A → Z'], ['year', 'Année']]
 const sorters = {
   cat: (a, b) => a.name.localeCompare(b.name, 'fr'),
@@ -312,35 +330,6 @@ const sorters = {
   rating: (a, b) => (b.rating || 0) - (a.rating || 0) || (b.added_at || '').localeCompare(a.added_at || ''),
   az: (a, b) => a.name.localeCompare(b.name, 'fr'),
   year: (a, b) => (b.first_air_date || '').localeCompare(a.first_air_date || ''),
-}
-
-/** Une rangée qui défile de côté, avec ses flèches sur ordinateur. */
-function CardRow({ title, items, onOpen, onRename, ranked }) {
-  const track = useRef(null)
-  const [edit, setEdit] = useState(false)
-  const [v, setV] = useState(title)
-  const scrollBy = d => { const el = track.current; if (el) el.scrollBy({ left: d * el.clientWidth * 0.85, behavior: 'smooth' }) }
-  const done = () => { setEdit(false); const t = v.trim(); if (t && t !== title) onRename?.(t); else setV(title) }
-  return (
-    <section className="sx-row">
-      <header className="sx-row-head">
-        {edit ? (
-          <input className="sx-rename" value={v} autoFocus onChange={e => setV(e.target.value)} onBlur={done}
-            onKeyDown={e => { if (e.key === 'Enter') done(); if (e.key === 'Escape') { setV(title); setEdit(false) } }} aria-label="Nom de la catégorie" />
-        ) : (
-          <h3>{title}{onRename && <button type="button" className="sx-edit" onClick={() => { setV(title); setEdit(true) }} aria-label={`Renommer ${title}`}>✎</button>}</h3>
-        )}
-        <span className="sx-count">{items.length}</span>
-      </header>
-      <div className="sx-row-wrap">
-        <button type="button" className="sx-arrow l" onClick={() => scrollBy(-1)} aria-label="Précédents">‹</button>
-        <div className="sx-track" ref={track}>
-          {items.map((s, i) => <Card key={s.id} s={s} onOpen={onOpen} rank={ranked ? i + 1 : null} />)}
-        </div>
-        <button type="button" className="sx-arrow r" onClick={() => scrollBy(1)} aria-label="Suivants">›</button>
-      </div>
-    </section>
-  )
 }
 
 /** Choisir la catégorie d'une série (ou en créer une). */
@@ -366,17 +355,6 @@ function CategoryPicker({ value, all, onChange }) {
   )
 }
 
-/** Le zoom : moins de boîtiers mais plus grands, ou une vue d'ensemble. */
-function ZoomBar({ zoom, onZoom }) {
-  return (
-    <div className="vx-zoom" role="group" aria-label="Zoom">
-      <button type="button" onClick={() => onZoom(clamp(zoom / 1.25, 0.55, 1.6))} disabled={zoom <= 0.56} aria-label="Dézoomer (voir plus de séries)">−</button>
-      <input type="range" min="0.55" max="1.6" step="0.01" value={zoom} onChange={e => onZoom(+e.target.value)} aria-label="Taille des boîtiers" />
-      <button type="button" onClick={() => onZoom(clamp(zoom * 1.25, 0.55, 1.6))} disabled={zoom >= 1.59} aria-label="Zoomer (boîtiers plus grands)">+</button>
-    </div>
-  )
-}
-
 /**
  * Nos films et séries, à l'intérieur de l'image projetée : un menu de plateforme de streaming,
  * à notre façon (fond sombre, la grande affiche, des rangées par catégorie, la fiche) ; et la
@@ -385,11 +363,7 @@ function ZoomBar({ zoom, onZoom }) {
 export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, onRemove, onRenameCategory, onClose }) {
   const [kind, setKind] = useState('all')     // notre liste (tout), séries ou films
   const [sort, setSortState] = useState(() => { try { return localStorage.getItem('levana.series.tri') || 'cat' } catch { return 'cat' } })
-  const [layout, setLayoutState] = useState(() => { try { return localStorage.getItem('levana.series.vue') || 'list' } catch { return 'list' } })
-  const setLayout = v => { setLayoutState(v); try { localStorage.setItem('levana.series.vue', v) } catch { /* ignore */ } }
   const setSort = v => { setSortState(v); try { localStorage.setItem('levana.series.tri', v) } catch { /* ignore */ } }
-  const [catFilter, setCatFilter] = useState(null)   // une catégorie, ou toutes
-  const [renaming, setRenaming] = useState(false)
   const shown = useMemo(() => (kind === 'all' ? series : series.filter(s => (kind === 'movie') === isMovie(s))), [series, kind])
   const byAdded = (a, b) => (b.added_at || '').localeCompare(a.added_at || '')
   const groups = useMemo(() => {
@@ -399,37 +373,21 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
       .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name))
   }, [shown])
   const allCats = useMemo(() => [...new Set(series.map(categoryOf))].sort((a, b) => a.localeCompare(b)), [series])
-  const loved = useMemo(() => shown.filter(s => (s.rating || 0) >= 4).sort((a, b) => b.rating - a.rating || byAdded(a, b)), [shown])
-  const recent = useMemo(() => [...shown].sort(byAdded).slice(0, 15), [shown])
-  // à l'affiche : nos coups de cœur d'abord, sinon les derniers ajoutés
-  const featured = useMemo(() => (loved.length ? loved : recent).slice(0, 6), [loved, recent])
-  const [hi, setHi] = useState(0)
-  const hero = featured[hi % Math.max(1, featured.length)] || null
   const [id, setId] = useState(initialId)     // la fiche ouverte
   const [view, setView] = useState(() => (series.length ? 'home' : 'search'))   // home | search
   const [closing, setClosing] = useState(false)
   const [playing, setPlaying] = useState(null)   // l'œuvre dont on regarde la vidéo
   const [videos, setVideos] = useState({})     // œuvre → vidéos (générique d'abord)
-  const [zoom, setZoomState] = useState(readZoom)
-  const setZoom = useCallback(z => { setZoomState(z); try { localStorage.setItem(ZOOM_KEY, String(z)) } catch { /* ignore */ } }, [])
   const homeRef = useRef(null)
   const [scrolled, setScrolled] = useState(false)   // l'en-tête prend un fond dès qu'on descend
   const cur = series.find(s => s.id === id) || null
   const have = useMemo(() => new Set(series.map(workKey)), [series])
 
   useEffect(() => { if (!series.length && view !== 'search') setView('search') }, [series.length, view])
-  useEffect(() => { setHi(0); setCatFilter(null) }, [kind])
-  useEffect(() => { if (catFilter && !groups.some(g => g.name === catFilter)) setCatFilter(null) }, [groups, catFilter])
 
-  // la grande affiche change toute seule (pas pendant une fiche ou une vidéo)
-  useEffect(() => {
-    if (view !== 'home' || cur || playing || featured.length < 2) return
-    const t = setTimeout(() => setHi(k => (k + 1) % featured.length), HERO_MS)
-    return () => clearTimeout(t)
-  }, [hi, view, cur, playing, featured.length])
 
   // les vidéos de ce qu'on regarde (l'affiche, la fiche)
-  const want = [hero, cur].filter(Boolean)
+  const want = [cur].filter(Boolean)
   const wantKey = want.map(workKey).join(',')
   useEffect(() => {
     let live = true
@@ -441,24 +399,6 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
   }, [wantKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const vidsOf = s => (s && videos[workKey(s)]) || []
   const stopVideo = useCallback(() => setPlaying(null), [])
-
-  // pincer pour zoomer sur l'accueil (deux doigts), ou ctrl + molette
-  const zoomRef = useRef(zoom); zoomRef.current = zoom
-  useEffect(() => {
-    const el = homeRef.current
-    if (!el) return
-    let p0 = null
-    const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
-    const ts = e => { if (e.touches.length === 2) p0 = { d: dist(e.touches), z: zoomRef.current } }
-    const tm = e => { if (e.touches.length !== 2 || !p0) return; e.preventDefault(); setZoom(clamp(p0.z * dist(e.touches) / p0.d, 0.55, 1.6)) }
-    const te = e => { if (e.touches.length < 2) p0 = null }
-    const wh = e => { if (!e.ctrlKey) return; e.preventDefault(); setZoom(clamp(zoomRef.current * Math.exp(-e.deltaY * 0.01), 0.55, 1.6)) }
-    el.addEventListener('touchstart', ts, { passive: true })
-    el.addEventListener('touchmove', tm, { passive: false })
-    el.addEventListener('touchend', te)
-    el.addEventListener('wheel', wh, { passive: false })
-    return () => { el.removeEventListener('touchstart', ts); el.removeEventListener('touchmove', tm); el.removeEventListener('touchend', te); el.removeEventListener('wheel', wh) }
-  }, [view, setZoom])
 
   const close = useCallback(() => {
     if (closing) return
@@ -484,8 +424,6 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
   const curVideos = vidsOf(cur)
   const tabs = [['all', 'Notre liste'], ['tv', 'Séries'], ['movie', 'Films']]
   const nTv = series.filter(x => !isMovie(x)).length, nMovie = series.length - nTv
-  const listItems = [...(catFilter ? shown.filter(x => categoryOf(x) === catFilter) : shown)].sort(sorters[sort] || sorters.added)
-  const catGroup = catFilter ? groups.find(g => g.name === catFilter) : null
 
   return createPortal(
     <div className={'stv sx' + (closing ? ' closing' : '')} role="dialog" aria-label="Nos films et séries">
@@ -505,112 +443,46 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
           {view === 'search' && <SeriesSearch have={have} onAdd={added} />}
 
           {view === 'home' && (
-            <div className="sx-home" ref={homeRef} style={{ '--z': zoom }} onScroll={e => setScrolled(e.currentTarget.scrollTop > 40)}>
-              {hero ? (
-                <Hero item={hero} videos={vidsOf(hero)} onPlay={() => setPlaying(hero)} onInfo={() => setId(hero.id)}
-                  n={featured.length} i={hi % Math.max(1, featured.length)} onDot={setHi} />
-              ) : (
-                <p className="sx-empty">Rien ici pour l’instant : ajoute {kind === 'movie' ? 'un film' : kind === 'tv' ? 'une série' : 'un film ou une série'}.</p>
-              )}
-              {loved.length > 0 && (
-                <div className="sx-rows">
-                  <CardRow title="Nos coups de cœur" items={loved} onOpen={s => setId(s.id)} ranked />
-                </div>
-              )}
-              {/* notre liste : toutes nos affiches, qu'on trie et qu'on filtre */}
-              {shown.length > 0 && (
-                <section className="sx-list" aria-label="Notre liste">
-                  <header className="sx-list-head">
-                    <div>
-                      <h2 className="sx-list-title">{kind === 'tv' ? 'Nos séries' : kind === 'movie' ? 'Nos films' : 'Notre liste'}</h2>
-                      <p className="sx-list-count">
-                        {kind === 'all'
-                          ? `${series.length} titre${series.length > 1 ? 's' : ''} · ${nTv} série${nTv > 1 ? 's' : ''} · ${nMovie} film${nMovie > 1 ? 's' : ''}`
-                          : `${shown.length} titre${shown.length > 1 ? 's' : ''}`}
-                      </p>
-                    </div>
-                    <div className="sx-tools">
-                    <div className="sx-view" role="tablist" aria-label="Affichage">
-                      <button type="button" role="tab" aria-selected={layout === 'list'} className={layout === 'list' ? 'on' : ''} onClick={() => setLayout('list')} aria-label="En liste">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11" /><rect x="3.5" y="4.5" width="3" height="3" rx="0.6" /><rect x="3.5" y="10.5" width="3" height="3" rx="0.6" /><rect x="3.5" y="16.5" width="3" height="3" rx="0.6" /></svg>
-                      </button>
-                      <button type="button" role="tab" aria-selected={layout === 'grid'} className={layout === 'grid' ? 'on' : ''} onClick={() => setLayout('grid')} aria-label="En affiches">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="9" rx="1" /><rect x="13.5" y="4" width="6.5" height="9" rx="1" /><path d="M4 17h6.5M13.5 17h6.5M4 20h4M13.5 20h4" /></svg>
-                      </button>
-                    </div>
+            <div className="sx-home sx-home-list" ref={homeRef} onScroll={e => setScrolled(e.currentTarget.scrollTop > 10)}>
+              <section className="sx-list" aria-label="Notre liste">
+                <header className="sx-list-head">
+                  <div>
+                    <h2 className="sx-list-title">{kind === 'tv' ? 'Nos séries' : kind === 'movie' ? 'Nos films' : 'Notre liste'}</h2>
+                    <p className="sx-list-count">
+                      {kind === 'all'
+                        ? `${nTv} série${nTv > 1 ? 's' : ''} · ${nMovie} film${nMovie > 1 ? 's' : ''}`
+                        : `${shown.length} titre${shown.length > 1 ? 's' : ''}`}
+                    </p>
+                  </div>
+                  {shown.length > 1 && (
                     <label className="sx-sort">
                       <span className="sr-only">Trier</span>
                       <select value={sort} onChange={e => setSort(e.target.value)}>
                         {SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                       </select>
                     </label>
-                    </div>
-                  </header>
-                  {groups.length > 1 && (
-                    <div className="sx-chips" role="tablist" aria-label="Catégories">
-                      <button type="button" role="tab" aria-selected={!catFilter} className={!catFilter ? 'on' : ''} onClick={() => setCatFilter(null)}>Toutes</button>
-                      {groups.map(g => (
-                        <button key={g.name} type="button" role="tab" aria-selected={catFilter === g.name} className={catFilter === g.name ? 'on' : ''} onClick={() => { setCatFilter(g.name); setRenaming(false) }}>
-                          {g.name} <span>{g.items.length}</span>
-                        </button>
-                      ))}
-                    </div>
                   )}
-                  {catGroup && (
-                    renaming ? (
-                      <input className="sx-rename sx-rename-cat" defaultValue={catGroup.name} autoFocus aria-label="Nouveau nom de la catégorie"
-                        onBlur={e => { const t = e.target.value.trim(); setRenaming(false); if (t && t !== catGroup.name) { renameGroup(catGroup, t); setCatFilter(t) } }}
-                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setRenaming(false) }} />
-                    ) : (
-                      <button type="button" className="sx-renamebtn" onClick={() => setRenaming(true)}>✎ Renommer « {catGroup.name} »</button>
-                    )
-                  )}
-                  {(() => {
-                    // rangée par catégorie : un intertitre par catégorie ; sinon une seule suite
-                    const sections = sort === 'cat' && !catFilter
-                      ? groups.map(g => ({ name: g.name, items: [...g.items].sort(sorters.cat) }))
-                      : [{ name: null, items: listItems }]
-                    return sections.map(sec => (
-                      <div className="sx-sec" key={sec.name || 'all'}>
-                        {sec.name && <h3 className="sx-sec-title">{sec.name}<span>{sec.items.length}</span></h3>}
-                        {layout === 'list' ? (
-                          <ul className="sx-ul">{sec.items.map(x => <ListRow key={x.id} s={x} onOpen={o => setId(o.id)} />)}</ul>
-                        ) : (
-                          <div className="sx-grid">{sec.items.map(x => <Poster key={x.id} s={x} onOpen={o => setId(o.id)} />)}</div>
-                        )}
-                      </div>
-                    ))
-                  })()}
-                </section>
-              )}
-              <ZoomBar zoom={zoom} onZoom={setZoom} />
+                </header>
+                {!shown.length && <p className="sx-empty">Rien ici pour l’instant : ajoute {kind === 'movie' ? 'un film' : kind === 'tv' ? 'une série' : 'un film ou une série'}.</p>}
+                {(() => {
+                  // rangée par catégorie : un intertitre par catégorie ; sinon une seule suite
+                  const sections = sort === 'cat'
+                    ? groups.map(g => ({ g, name: g.name, items: [...g.items].sort(sorters.cat) }))
+                    : [{ name: null, items: [...shown].sort(sorters[sort] || sorters.added) }]
+                  return sections.map(sec => (
+                    <div className="sx-sec" key={sec.name || 'all'}>
+                      {sec.name && <SectionTitle name={sec.name} count={sec.items.length} onRename={to => renameGroup(sec.g, to)} />}
+                      <ul className="sx-ul">{sec.items.map(x => <ListRow key={x.id} s={x} onOpen={o => setId(o.id)} />)}</ul>
+                    </div>
+                  ))
+                })()}
+              </section>
             </div>
           )}
 
           {cur && (
-            <div className="sx-modal" role="dialog" aria-label={cur.name} onClick={e => { if (e.target === e.currentTarget) setId(null) }}>
-              <section className="sx-sheet" key={cur.id}>
-                <div className="sx-sheet-img">
-                  {(cur.backdrop_path || cur.poster_path) && <img src={tmdbImg(cur.backdrop_path || cur.poster_path, 'w1280')} alt="" />}
-                  <div className="sx-hero-shade" />
-                  <button type="button" className="sx-close sx-sheet-x" onClick={() => setId(null)} aria-label="Fermer la fiche">×</button>
-                  <div className="sx-sheet-head">
-                    <p className="sx-kicker">{kindLabel(cur)} <i /> {categoryOf(cur)}</p>
-                    <h2 className="sx-sheet-title">{cur.name}</h2>
-                    <div className="sx-actions">
-                      {curVideos.length > 0 && <button type="button" className="sx-btn play" onClick={() => setPlaying(cur)}><span className="sx-tri" aria-hidden="true" />{isOpening(curVideos[0]) ? 'Générique' : 'Bande-annonce'}</button>}
-                    </div>
-                  </div>
-                </div>
-                <div className="sx-sheet-body">
-                  <p className="sx-meta">{[year(cur), lengthLabel(cur), cur.genres?.slice(0, 2).join(', '), byLabel(cur)].filter(Boolean).join('  ·  ')}</p>
-                  {cur.overview && <p className="sx-sheet-over">{cur.overview}</p>}
-                  <Stars value={cur.rating} onChange={r => onUpdate(cur.id, { rating: r })} />
-                  <CategoryPicker value={categoryOf(cur)} all={allCats} onChange={c => onUpdate(cur.id, { category: c })} />
-                  <button type="button" className="sx-remove" onClick={() => { onRemove(cur.id); setId(null) }}>Retirer {isMovie(cur) ? 'ce film' : 'cette série'}</button>
-                </div>
-              </section>
-            </div>
+            <DetailPage key={cur.id} s={cur} videos={curVideos} allCats={allCats} onBack={() => setId(null)} onPlay={() => setPlaying(cur)}
+              onUpdate={onUpdate} onRemove={() => { onRemove(cur.id); setId(null) }} />
           )}
 
           {/* téléphone : le menu du bas de la projection */}

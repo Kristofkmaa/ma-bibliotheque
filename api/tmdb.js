@@ -4,7 +4,8 @@
  *   /api/tmdb?q=friends   → recherche de séries
  *   /api/tmdb?id=1668     → fiche d'une série (saisons, genres…)
  *   /api/tmdb?videos=1668 → ses vidéos YouTube : le générique d'abord, sinon les bandes-annonces
- * Avec &type=movie, les mêmes appels pour les films (recherche, fiche, bandes-annonces).
+ *   /api/tmdb?images=1668 → ses grandes images (pour les faire défiler derrière le titre)
+ * Avec &type=movie, les mêmes appels pour les films (recherche, fiche, bandes-annonces, images).
  * La clé peut être la « clé d'API » (v3) ou le « jeton d'accès en lecture » (v4, commence par eyJ).
  */
 const BASE = 'https://api.themoviedb.org/3'
@@ -41,9 +42,15 @@ export default async function handler(req, res) {
     const q = String(req.query.q || '').trim().slice(0, 120)
     const id = parseInt(req.query.id, 10)
     const vid = parseInt(req.query.videos, 10)
+    const img = parseInt(req.query.images, 10)
     const kind = req.query.type === 'movie' ? 'movie' : 'tv'
     let out
-    if (vid > 0) {
+    if (img > 0) {
+      // les images sans texte d'abord (null), puis françaises, puis anglaises ; les mieux notées
+      const data = await call(`/${kind}/${img}/images`, { language: '', include_image_language: 'null,fr,en' })
+      const rank = b => (b.iso_639_1 == null ? 0 : 1) * 10 - (b.vote_average || 0)
+      out = { backdrops: (data.backdrops || []).filter(b => b.file_path && b.width >= 1000).sort((a, b) => rank(a) - rank(b)).slice(0, 8).map(b => b.file_path) }
+    } else if (vid > 0) {
       // vidéos en français et en anglais d'un coup, on trie nous-mêmes
       const data = await call(`/${kind}/${vid}/videos`, { include_video_language: 'fr,en,null' })
       const vids = (data.results || [])

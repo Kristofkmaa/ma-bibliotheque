@@ -2243,3 +2243,70 @@ body.immersive .scene { padding: 0 !important; }
 /* l'intertitre de catégorie reste collé juste sous l'en-tête */
 .sx-sec-title { top: 60px; }
 @media (max-aspect-ratio: 1/1) { .sx-sec-title { top: 74px; } }
+
+/* ==========================================================================================
+   Films & séries, version simple : une liste propre à l'accueil, et la page d'un titre en
+   plein écran avec ses images qui défilent derrière le titre.
+   ========================================================================================== */
+.sx-home-list { padding-top: 70px; }
+.sx-home-list .sx-list { padding-top: 10px; max-width: 980px; margin: 0 auto; }
+.sx-home-list .sx-list-head { border-top: 0; padding-top: 6px; align-items: center; }
+.sx-home-list .sx-list-title { font-family: var(--sans); font-weight: 800; font-size: clamp(32px, 4vw, 48px); letter-spacing: -0.035em; }
+.sx-home-list .sx-list-count { color: var(--sx-muted); letter-spacing: 0.12em; }
+.sx-home-list .sx-sec { margin-top: 26px; }
+.sx-home-list .sx-sec-title { top: 58px; font-size: 11px; padding-top: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--sx-line); }
+.sx-sec-edit { margin-left: auto; border: 0; background: none; color: var(--sx-muted); font-size: 13px; padding: 0 4px; opacity: 0.7; }
+.sx-sec-input { margin: 14px 0 6px; }
+.sx-home-list .sx-ul { display: block; }
+.sx-home-list .sx-ul li .sx-li { border: 0; }
+.sx-home-list .sx-ul li + li .sx-li { border-top: 1px solid var(--sx-line); }
+.sx-home-list .sx-li { padding: 14px 2px; gap: 16px; }
+.sx-home-list .sx-li-img { width: 64px; border-radius: 5px; }
+.sx-home-list .sx-li-title { font-size: 18px; }
+.sx-home-list .sx-li-meta { font-size: 13px; }
+
+/* la page d'un titre */
+.sx-page { position: absolute; inset: 0; z-index: 7; background: var(--sx-bg); animation: pageIn 0.45s cubic-bezier(.2, .9, .2, 1) both; }
+@keyframes pageIn { from { opacity: 0; transform: scale(1.02); } }
+.sx-page-scroll { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; }
+.sx-page-hero { position: relative; height: min(86vh, 70vw); min-height: 460px; overflow: hidden; }
+.sx-slides { position: absolute; inset: 0; background: #1A1816; }
+.sx-slides img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0;
+  transition: opacity 1.6s ease; transform: scale(1.12) translateX(var(--dx));
+}
+.sx-slides img.on { opacity: 1; animation: slideDrift 7s linear both; }
+.sx-slides img.prev { opacity: 0; transform: scale(1.04) translateX(0); }
+@keyframes slideDrift { from { transform: scale(1.14) translateX(var(--dx)); } to { transform: scale(1.04) translateX(0); } }
+.sx-page-hero .sx-hero-video { z-index: 1; }
+.sx-page-shade {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: linear-gradient(0deg, var(--sx-bg) 0%, rgba(13, 12, 14, 0.75) 28%, rgba(13, 12, 14, 0.1) 60%, rgba(13, 12, 14, 0.55) 100%),
+              linear-gradient(90deg, rgba(13, 12, 14, 0.6) 0%, rgba(13, 12, 14, 0) 55%);
+}
+.sx-back {
+  position: absolute; left: clamp(14px, 3vw, 40px); top: calc(14px + env(safe-area-inset-top, 0px)); z-index: 4;
+  height: 38px; padding: 0 16px 0 12px; border-radius: 19px; border: 1px solid rgba(243, 239, 232, 0.25); background: rgba(13, 12, 14, 0.5);
+  color: var(--sx-fg); font-family: var(--sans); font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.sx-page-head { position: absolute; left: clamp(18px, 4vw, 56px); right: clamp(18px, 4vw, 56px); bottom: clamp(24px, 6vh, 64px); z-index: 3; max-width: 760px; }
+.sx-page-title { margin-top: 10px; font-family: var(--sans); font-weight: 800; font-size: clamp(42px, 8vw, 110px); line-height: 0.92; letter-spacing: -0.045em; color: #fff; text-shadow: 0 4px 40px rgba(0, 0, 0, 0.55); animation: fadeUp 0.8s 0.1s both; }
+.sx-page-meta { margin-top: 14px; font-family: var(--sans); font-size: 14px; font-weight: 600; color: rgba(243, 239, 232, 0.85); white-space: pre-wrap; animation: fadeUp 0.8s 0.2s both; }
+.sx-page-stars { margin-top: 8px; color: var(--sx-gold); font-size: 18px; letter-spacing: 2px; animation: fadeUp 0.8s 0.25s both; }
+.sx-page-stars i { font-style: normal; color: rgba(243, 239, 232, 0.2); }
+.sx-page-body { position: relative; max-width: 760px; padding: 6px clamp(18px, 4vw, 56px) 110px; }
+.sx-page-over { font-family: var(--serif); font-size: clamp(17px, 1.5vw, 20px); line-height: 1.6; color: rgba(243, 239, 232, 0.9); }
+.sx-page-by { margin-top: 14px; font-family: var(--sans); font-size: 13px; color: var(--sx-muted); }
+.sx-page-by b { color: var(--sx-fg); }
+.sx-page-block { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--sx-line); }
+.sx-page-label { font-family: var(--sans); font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--sx-muted); margin-bottom: 6px; }
+.sx-page-block .vx-cats { margin-top: 0; }
+.sx-page .sx-remove { margin-top: 30px; }
+@media (max-aspect-ratio: 1/1) {
+  .sx-page-hero { height: 78vh; min-height: 480px; }
+  .sx-page-shade { background: linear-gradient(0deg, var(--sx-bg) 0%, rgba(13, 12, 14, 0.8) 30%, rgba(13, 12, 14, 0.05) 62%, rgba(13, 12, 14, 0.5) 100%); }
+  .sx-page-meta { font-size: 13px; }
+  .sx-home-list { padding-top: 84px; }
+  .sx-home-list .sx-sec-title { top: 72px; }
+}
