@@ -2310,3 +2310,23 @@ body.immersive .scene { padding: 0 !important; }
   .sx-home-list { padding-top: 84px; }
   .sx-home-list .sx-sec-title { top: 72px; }
 }
+
+/* L'étagère 3D courbe, dans « Notre liste » (fond sombre) */
+.sx-shelf3d { margin-top: 6px; }
+.sx-shelf3d .vx-shelfwrap { position: relative; height: clamp(300px, 52vh, 560px); margin: 0 calc(-1 * clamp(16px, 3.4vw, 48px)); }
+.stv.sx .vx-floor { background: radial-gradient(closest-side, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0)); }
+.stv.sx .vx-glyph { background: linear-gradient(180deg, #3A3530, #22201D 60%, #34302B); -webkit-background-clip: text; background-clip: text; opacity: 0.8; }
+.stv.sx .vx-tape.on .vx-face { filter: drop-shadow(0 26px 26px rgba(0, 0, 0, 0.7)); }
+.stv.sx .vx-caption { padding-top: 6px; }
+.stv.sx .vx-cap-mid { border: 0; background: none; padding: 4px 8px; color: inherit; cursor: pointer; }
+.stv.sx .vx-title { color: var(--sx-fg); font-weight: 800; letter-spacing: -0.03em; }
+.stv.sx .vx-meta { color: var(--sx-muted); }
+.stv.sx .vx-arrow { color: var(--sx-gold); }
+.stv.sx .vx-time { margin-top: 14px; }
+.stv.sx .vx-tick-bar { background: rgba(243, 239, 232, 0.3); }
+.stv.sx .vx-tick.on .vx-tick-bar, .stv.sx .vx-tick.on::after { background: var(--sx-gold); }
+.stv.sx .vx-tick.on .vx-tick-year { color: var(--sx-gold); }
+.sx-shelf-hint { margin-top: 10px; text-align: center; font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--sx-muted); }
+.stv.sx .sx-view button { width: auto; min-width: 34px; padding: 0 10px; font-family: var(--sans); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; }
+@media (max-aspect-ratio: 1/1) { .sx-shelf3d .vx-shelfwrap { height: clamp(280px, 46vh, 420px); } }
+@media (max-aspect-ratio: 1/1) { .sx-home-list .sx-list-title { font-size: 28px; white-space: nowrap; } .sx-home-list .sx-list-head { gap: 8px; } }

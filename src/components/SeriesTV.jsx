@@ -210,6 +210,116 @@ function HeroVideo({ videoKey }) {
   )
 }
 
+// ---- L'étagère 3D courbe (les boîtiers) -------------------------------------------------
+const SPINES = [
+  ['#1C1A17', '#EDE3CC'], ['#ECE2CB', '#1C1A17'], ['#6E1F1A', '#F1E4C8'], ['#1F3A2E', '#E9DFC9'],
+  ['#1E2B4A', '#EBDDB6'], ['#B5832E', '#1C1A17'], ['#5A3B26', '#EADCC0'], ['#3B3A37', '#E4D9C2'],
+  ['#C9BFAA', '#2A2620'], ['#8C2F22', '#F3E7CF'],
+]
+const spineOf = s => {
+  let h = 0
+  for (const c of s.name || '') h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return SPINES[h % SPINES.length]
+}
+const CASE = 0.7                       // largeur / hauteur d'un boîtier, vu de face
+
+/** Un boîtier vu de face, fin comme un Blu-ray : le bandeau bleu en haut, l'affiche, le reflet. */
+function CaseFront({ show, size = 'w500' }) {
+  return (
+    <span className="bx-front">
+      <span className="bx-band"><b>{isMovie(show) ? 'Film' : 'Série'}</b><i>{year(show) || ''}</i></span>
+      <span className="bx-art">
+        {show.poster_path ? <img src={tmdbImg(show.poster_path, size)} alt="" draggable="false" loading="lazy" /> : <span className="bx-name">{show.name}</span>}
+      </span>
+      <span className="bx-sheen" aria-hidden="true" />
+    </span>
+  )
+}
+
+/** Un boîtier vu de côté : une tranche fine, le titre écrit de haut en bas. */
+function CaseSpine({ show }) {
+  const [bg, fg] = spineOf(show)
+  return (
+    <span className="bx-spine" style={{ background: bg, color: fg }}>
+      <span className="bx-spine-cap" />
+      <span className="bx-spine-name">{show.name}</span>
+      <span className="bx-spine-year">{year(show) || ''}</span>
+    </span>
+  )
+}
+
+/** La frise du bas : un trait par série, les années en dessous. */
+function Timeline({ list, idx, onPick }) {
+  const n = list.length
+  const every = Math.max(1, Math.ceil(n / 7))
+  return (
+    <div className="vx-time">
+      <div className="vx-time-line" />
+      {list.map((s, i) => {
+        const x = n > 1 ? (i / (n - 1)) * 100 : 50
+        const y = year(s)
+        const label = i === idx || (i % every === 0 && Math.abs(i - idx) >= every / 2)
+        return (
+          <button key={s.id} type="button" className={'vx-tick' + (i === idx ? ' on' : '')} style={{ left: `${x}%` }} onClick={() => onPick(i)} aria-label={s.name}>
+            <span className="vx-tick-bar" />
+            {label && y && <span className="vx-tick-year">{y}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Taille des boîtiers de l'étagère courbe, selon la place et le zoom. */
+const shelfMetrics = (W, H, zoom) => {
+  const frontH = clamp(Math.min(H * 0.84, W * 0.46 / CASE) * zoom, 90, 600)
+  return { frontH, frontW: frontH * CASE, spineH: frontH * 0.97, spineW: frontH * 0.072, gap: frontH * 0.012 }
+}
+
+/**
+ * L'étagère courbe : les boîtiers sur un arc, celui du milieu de face, les autres de tranche,
+ * de plus en plus loin. On la fait tourner au doigt, à la molette, aux flèches.
+ */
+function Shelf({ list, pos, dragging, onPick, onOpen, onPlay, canPlay, stageRef, size, zoom }) {
+  const { H, W } = size
+  const { frontH, frontW, spineH, spineW, gap } = shelfMetrics(W, H, zoom)
+  const R = Math.max(W * 0.4, frontH * 1.45)          // rayon de l'arc : plus il est petit, plus l'étagère se courbe
+  const near = frontW / 2 + spineW / 2 + gap, step = spineW + gap
+  const active = Math.round(pos)
+  const span = Math.ceil((W / 2) / step) + 4
+  const out = []
+  for (let i = Math.max(0, active - span); i <= Math.min(list.length - 1, active + span); i++) {
+    const d = i - pos, ad = Math.abs(d)
+    const w = clamp(1 - ad, 0, 1)                       // 1 : de face, 0 : de tranche
+    const arc = ad < 1 ? d * near : Math.sign(d) * (near + (ad - 1) * step)
+    const a = arc / R
+    if (Math.abs(a) > 1.45) continue
+    const x = R * Math.sin(a), z = R * (Math.cos(a) - 1)
+    const width = spineW + (frontW - spineW) * w, height = spineH + (frontH - spineH) * w
+    const s = list[i]
+    out.push(
+      <div key={s.id} className={'vx-tape' + (i === active ? ' on' : '')}
+        style={{ width, height, zIndex: 1000 - Math.round(ad * 2), transform: `translate3d(${x - width / 2}px, ${-height / 2}px, ${z}px) rotateY(${a}rad)`, transition: dragging ? 'none' : undefined }}>
+        <button type="button" className="vx-tape-btn" onClick={() => (i === active ? onOpen() : onPick(i))} aria-label={i === active ? `Voir la fiche de ${s.name}` : s.name} tabIndex={ad > 6 ? -1 : 0}>
+          <span className="vx-face" style={{ opacity: w }}><CaseFront show={s} /></span>
+          <span className="vx-face" style={{ opacity: 1 - w }}><CaseSpine show={s} /></span>
+        </button>
+        {i === active && canPlay && !dragging && (
+          <button type="button" className="vx-play" onClick={onPlay} aria-label={`Lancer le générique de ${s.name}`}><span /></button>
+        )}
+      </div>,
+    )
+  }
+  return (
+    <div className="vx-stage" ref={stageRef}>
+      <div className="vx-glyph l" aria-hidden="true">物語</div>
+      <div className="vx-glyph r" aria-hidden="true">連続劇</div>
+      <div className="vx-floor" style={{ width: Math.min(W * 0.9, frontH * 3.2), top: `calc(50% + ${frontH / 2 - 4}px)` }} />
+      <div className="vx-ring">{out}</div>
+    </div>
+  )
+}
+
 /** Les grandes images d'une œuvre, qui défilent en fondu (avec un lent mouvement de caméra). */
 function Slideshow({ s }) {
   const [imgs, setImgs] = useState(() => [s.backdrop_path || s.poster_path].filter(Boolean))
@@ -379,6 +489,14 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
   const [playing, setPlaying] = useState(null)   // l'œuvre dont on regarde la vidéo
   const [videos, setVideos] = useState({})     // œuvre → vidéos (générique d'abord)
   const homeRef = useRef(null)
+  // l'étagère 3D (par défaut) ou la liste
+  const [layout, setLayoutState] = useState(() => { try { return localStorage.getItem('levana.series.vue3d') || '3d' } catch { return '3d' } })
+  const setLayout = v => { setLayoutState(v); try { localStorage.setItem('levana.series.vue3d', v) } catch { /* ignore */ } }
+  const [shelfId, setShelfId] = useState(null)
+  const [drag, setDrag] = useState(null)        // on fait tourner l'étagère au doigt
+  const [size, setSize] = useState({ W: 800, H: 400 })
+  const stageRef = useRef(null)
+  const wheel = useRef(0)
   const [scrolled, setScrolled] = useState(false)   // l'en-tête prend un fond dès qu'on descend
   const cur = series.find(s => s.id === id) || null
   const have = useMemo(() => new Set(series.map(workKey)), [series])
@@ -398,6 +516,40 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
     return () => { live = false }
   }, [wantKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const vidsOf = s => (s && videos[workKey(s)]) || []
+
+  // l'étagère 3D : nos titres dans l'ordre du tri (par catégorie : catégorie après catégorie)
+  const shelfList = useMemo(() => (sort === 'cat'
+    ? groups.flatMap(g => [...g.items].sort(sorters.cat))
+    : [...shown].sort(sorters[sort] || sorters.added)), [groups, shown, sort])
+  const sIdx = Math.max(0, shelfList.findIndex(x => x.id === shelfId))
+  const shelfCur = shelfList[sIdx] || null
+  const pos = drag ? drag.p : sIdx
+  const pick = useCallback(i => { const x = shelfList[clamp(i, 0, shelfList.length - 1)]; if (x) setShelfId(x.id) }, [shelfList])
+  useEffect(() => { if (shelfList.length && !shelfList.some(x => x.id === shelfId)) setShelfId(shelfList[Math.floor((shelfList.length - 1) / 2)].id) }, [shelfList, shelfId])
+  useEffect(() => {
+    const el = stageRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setSize({ W: el.clientWidth, H: el.clientHeight }))
+    ro.observe(el)
+    setSize({ W: el.clientWidth, H: el.clientHeight })
+    return () => ro.disconnect()
+  }, [view, layout, shelfList.length > 0]) // eslint-disable-line react-hooks/exhaustive-deps
+  const step = () => { const m = shelfMetrics(size.W, size.H, 1); return m.spineW + m.gap }
+  const onDown = e => { if (e.button > 0) return; setDrag({ x0: e.clientX, p0: sIdx, p: sIdx, moved: false, id: e.pointerId }) }
+  const onMove = e => {
+    if (!drag || drag.id !== e.pointerId) return
+    const dx = e.clientX - drag.x0
+    if (!drag.moved && Math.abs(dx) < 6) return
+    if (!drag.moved) e.currentTarget.setPointerCapture?.(e.pointerId)
+    setDrag({ ...drag, moved: true, p: clamp(drag.p0 - dx / (step() * 1.6), -0.4, shelfList.length - 0.6) })
+  }
+  const onUp = e => { if (!drag || drag.id !== e.pointerId) return; const d = drag; setDrag(null); if (d.moved) pick(Math.round(d.p)) }
+  const onClickCapture = e => { if (drag?.moved) { e.stopPropagation(); e.preventDefault() } }
+  const onWheel = e => {
+    const v = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+    wheel.current += v
+    if (Math.abs(wheel.current) > 40) { pick(sIdx + (wheel.current > 0 ? 1 : -1)); wheel.current = 0 }
+  }
   const stopVideo = useCallback(() => setPlaying(null), [])
 
   const close = useCallback(() => {
@@ -454,6 +606,13 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
                         : `${shown.length} titre${shown.length > 1 ? 's' : ''}`}
                     </p>
                   </div>
+                  <div className="sx-tools">
+                  <div className="sx-view" role="tablist" aria-label="Affichage">
+                    <button type="button" role="tab" aria-selected={layout === '3d'} className={layout === '3d' ? 'on' : ''} onClick={() => setLayout('3d')} aria-label="L'étagère en 3D">3D</button>
+                    <button type="button" role="tab" aria-selected={layout === 'list'} className={layout === 'list' ? 'on' : ''} onClick={() => setLayout('list')} aria-label="En liste">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11" /><rect x="3.5" y="4.5" width="3" height="3" rx="0.6" /><rect x="3.5" y="10.5" width="3" height="3" rx="0.6" /><rect x="3.5" y="16.5" width="3" height="3" rx="0.6" /></svg>
+                    </button>
+                  </div>
                   {shown.length > 1 && (
                     <label className="sx-sort">
                       <span className="sr-only">Trier</span>
@@ -462,9 +621,29 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
                       </select>
                     </label>
                   )}
+                  </div>
                 </header>
                 {!shown.length && <p className="sx-empty">Rien ici pour l’instant : ajoute {kind === 'movie' ? 'un film' : kind === 'tv' ? 'une série' : 'un film ou une série'}.</p>}
-                {(() => {
+                {layout === '3d' && shelfList.length > 0 ? (
+                  <div className="sx-shelf3d">
+                    <div className="vx-shelfwrap" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onClickCapture={onClickCapture} onWheel={onWheel}>
+                      <Shelf list={shelfList} pos={pos} dragging={!!drag?.moved} onPick={pick} onOpen={() => shelfCur && setId(shelfCur.id)}
+                        onPlay={() => shelfCur && setPlaying(shelfCur)} canPlay={false} stageRef={stageRef} size={size} zoom={1} />
+                    </div>
+                    {shelfCur && (
+                      <div className="vx-caption">
+                        <button type="button" className="vx-arrow" onClick={() => pick(sIdx - 1)} disabled={sIdx === 0} aria-label="Précédent">←</button>
+                        <button type="button" className="vx-cap-mid" key={shelfCur.id} onClick={() => setId(shelfCur.id)}>
+                          <h3 className="vx-title">{shelfCur.name}</h3>
+                          <p className="vx-meta">{[kindLabel(shelfCur), year(shelfCur), lengthLabel(shelfCur), categoryOf(shelfCur)].filter(Boolean).join('  ·  ')}</p>
+                        </button>
+                        <button type="button" className="vx-arrow" onClick={() => pick(sIdx + 1)} disabled={sIdx >= shelfList.length - 1} aria-label="Suivant">→</button>
+                      </div>
+                    )}
+                    <Timeline list={shelfList} idx={sIdx} onPick={pick} />
+                    <p className="sx-shelf-hint">Glisse pour faire défiler · touche le boîtier du milieu pour l’ouvrir</p>
+                  </div>
+                ) : (() => {
                   // rangée par catégorie : un intertitre par catégorie ; sinon une seule suite
                   const sections = sort === 'cat'
                     ? groups.map(g => ({ g, name: g.name, items: [...g.items].sort(sorters.cat) }))
