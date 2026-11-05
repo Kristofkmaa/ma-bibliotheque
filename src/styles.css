@@ -2186,3 +2186,5 @@ body.immersive .scene { padding: 0 !important; }
 @media (max-width: 767px) {
   .salon-ctrls { flex-direction: column; top: calc(112px + env(safe-area-inset-top)); right: 10px; }
 }
+.stv-player-frame { position: relative; }
+.stv-tap { position: absolute; left: 50%; bottom: 18px; translate: -50% 0; padding: 8px 14px; border-radius: 16px; background: rgba(0, 0, 0, 0.7); color: #F3EFE8; font-family: var(--sans); font-size: 12px; font-weight: 600; pointer-events: none; animation: fadeUp 0.4s both; white-space: nowrap; }

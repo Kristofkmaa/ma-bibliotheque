@@ -121,6 +121,9 @@ const isOpening = v => v?.type === 'Opening Credits'
  */
 function Player({ show, videos, onDone }) {
   const [i, setI] = useState(0)
+  const [started, setStarted] = useState(false)
+  const [late, setLate] = useState(false)
+  useEffect(() => { setStarted(false); setLate(false); const t = setTimeout(() => setLate(true), 2500); return () => clearTimeout(t) }, [i])
   const frame = useRef(null)
   const v = videos[i]
   useEffect(() => {
@@ -130,6 +133,7 @@ function Player({ show, videos, onDone }) {
       if (!/(^|\.)youtube(-nocookie)?\.com$/.test(host)) return
       let d
       try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data } catch { return }
+      if ((d?.event === 'onStateChange' && d.info === 1) || (d?.event === 'infoDelivery' && d.info?.playerState === 1)) setStarted(true)
       if (d?.event === 'onError') { if (i + 1 < videos.length) setI(i + 1); else onDone() }
       else if ((d?.event === 'onStateChange' && d.info === 0) || (d?.event === 'infoDelivery' && d.info?.playerState === 0)) onDone()
     }
@@ -156,6 +160,7 @@ function Player({ show, videos, onDone }) {
       <div className="stv-player-frame">
         <iframe ref={frame} key={v.key} src={src} title={`${isOpening(v) ? 'Générique' : 'Bande-annonce'} de ${show.name}`} onLoad={listen}
           allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
+        {late && !started && <p className="stv-tap">Touche la vidéo pour la lancer</p>}
       </div>
     </div>
   )

@@ -14,6 +14,11 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying 
   const fails = useRef(0)
   const playing = useRef(false)
   const frame = useRef(null)
+  // un seul lecteur pour toute la soirée : on lui fait charger la vidéo suivante (l'iPhone le
+  // laisse alors continuer, avec le son s'il est allumé ; un nouveau lecteur, lui, resterait muet ou bloqué)
+  const firstKey = useRef(null)
+  const curKey = useRef(null)
+  const ready = useRef(false)
   const soundRef = useRef(sound)
   soundRef.current = sound
   // le son : coupé par défaut ; le bouton du salon le rallume (le geste du doigt l'autorise)
@@ -36,7 +41,16 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying 
   }, [sig]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const v = queue.length ? queue[i % queue.length] : null
+  if (v && !firstKey.current) firstKey.current = v.key
   const next = () => { playing.current = false; setShown(false); setI(k => k + 1) }
+  const command = (func, args = []) => frame.current?.contentWindow?.postMessage(JSON.stringify({ id: 'tvbg', channel: 'widget', event: 'command', func, args }), '*')
+  // la vidéo change : le même lecteur la charge
+  useEffect(() => {
+    if (!v || !ready.current) return
+    if (v.key === curKey.current) { command('seekTo', [0, true]); command('playVideo') }
+    else command('loadVideoById', [v.key])
+    curKey.current = v.key
+  }, [i, v?.key]) // eslint-disable-line react-hooks/exhaustive-deps
   // le bouton « générique suivant » du salon
   useEffect(() => { if (skip) next() }, [skip]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -66,13 +80,17 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying 
     send({ event: 'command', func: 'addEventListener', args: ['onStateChange'] })
     send({ event: 'command', func: 'addEventListener', args: ['onError'] })
     applySound()
+    ready.current = true
+    curKey.current = firstKey.current
+    // la file a déjà avancé pendant le chargement : on rattrape
+    if (v && v.key !== curKey.current) { command('loadVideoById', [v.key]); curKey.current = v.key }
   }
 
   // trois vidéos de suite qui ne démarrent pas : la lecture automatique est bloquée, on laisse tomber
   if (!v || fails.current >= 3) return null
-  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.key)}?autoplay=1&mute=1&playsinline=1&controls=0&disablekb=1&fs=0&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`
+  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(firstKey.current)}?autoplay=1&mute=1&playsinline=1&controls=0&disablekb=1&fs=0&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`
   return (
-    <iframe ref={frame} key={v.key + i} src={src} title={`Générique de ${v.name}`} onLoad={listen} tabIndex={-1}
+    <iframe ref={frame} src={src} title={`Générique de ${v.name}`} onLoad={listen} tabIndex={-1}
       className={shown ? 'on' : ''} allow="autoplay; encrypted-media" referrerPolicy="strict-origin-when-cross-origin" />
   )
 }
