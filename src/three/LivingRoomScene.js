@@ -818,6 +818,14 @@ export class LivingRoomScene {
     const glass = new THREE.Mesh(this._geo(new THREE.CircleGeometry(0.038, 24)), new THREE.MeshBasicMaterial({ color: 0xdfeaff, toneMapped: false }))
     glass.rotation.y = -Math.PI / 2
     glass.position.set(-0.216, 0, 0.06)
+    this.lensGlass = glass       // on « entre » dans le menu par l'objectif
+    // le halo de l'objectif, qui s'allume quand on s'en approche
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glow, color: 0xfff1d6, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }))
+    halo.position.set(-0.235, 0, 0.06)
+    halo.scale.setScalar(0.11)
+    this.disposables.push(halo.material)
+    this.lensHalo = halo
+    grp.add(halo)
     // grille d'aération et voyant
     for (let i = 0; i < 5; i++) {
       const v = this._rbox(0.012, 0.05, 0.004, 0.002, dark)
@@ -929,10 +937,10 @@ export class LivingRoomScene {
       const dist = Math.min(2.4 * 0.6 / (t * this.camera.aspect), 0.7 / 0.3 / 2 / t)
       return { target, az: Math.PI / 2, el: 0.3, dist }
     }
-    // face à l'écran, tout près : l'écran remplit la vue (on entre dans la télé)
-    const target = this.tvScreen.getWorldPosition(new THREE.Vector3())
-    const dist = Math.min(SCR.w / 2 / (t * this.camera.aspect), SCR.h / 2 / t) * 0.94
-    return { target, az: Math.PI / 2, el: 0, dist }
+    // face à l'objectif du projecteur, tout près : on entre dans la lumière
+    this.lensGlass.updateWorldMatrix(true, false)
+    const target = this.lensGlass.getWorldPosition(new THREE.Vector3())
+    return { target, az: -Math.PI / 2, el: 0.32, dist: 0.2 }
   }
 
   /** Zoom : sur l'image projetée (« tv »), ou sur le meuble et ses boîtiers (« cab »). */
@@ -1000,6 +1008,11 @@ export class LivingRoomScene {
     if (z.dir > 0 && z.k >= 1 && !z.inside) { z.inside = true; this.cb.onTvInside?.(z.kind) }
     if (z.dir < 0 && z.inside) { z.inside = false; this.cb.onTvInside?.(false) }
     if (this.cabGlass) this.cabGlass.opacity = z.kind === 'cab' ? 1 - clamp(e * 1.4, 0, 1) : 1
+    if (this.lensHalo) {
+      const L = z.kind === 'tv' ? clamp((z.k - 0.35) / 0.65, 0, 1) : 0
+      this.lensHalo.material.opacity = 0.75 * L * L
+      this.lensGlass.material.color.setRGB(0.87 + 0.13 * L, 0.92 + 0.06 * L, 1 - 0.12 * L)
+    }
     this._placeCamera(a.az + shortAngle(a.az, b.az) * e, a.el + (b.el - a.el) * eEl, dist, tgt)
     if (z.dir < 0 && z.k <= 0) {
       this.tvZoom = null

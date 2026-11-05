@@ -2330,3 +2330,17 @@ body.immersive .scene { padding: 0 !important; }
 .stv.sx .sx-view button { width: auto; min-width: 34px; padding: 0 10px; font-family: var(--sans); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; }
 @media (max-aspect-ratio: 1/1) { .sx-shelf3d .vx-shelfwrap { height: clamp(280px, 46vh, 420px); } }
 @media (max-aspect-ratio: 1/1) { .sx-home-list .sx-list-title { font-size: 28px; white-space: nowrap; } .sx-home-list .sx-list-head { gap: 8px; } }
+
+/* Entrer dans le menu par l'objectif du projecteur : il s'ouvre en cercle de lumière */
+.stv.sx { animation: projIn 0.95s cubic-bezier(.2, .8, .2, 1) both; }
+.stv.sx.closing { animation: projOut 0.34s cubic-bezier(.6, 0, .8, .4) both; }
+@keyframes projIn {
+  0% { clip-path: circle(1.5% at 50% 50%); filter: brightness(3.2) saturate(0.2); }
+  45% { filter: brightness(1.6) saturate(0.7); }
+  100% { clip-path: circle(75% at 50% 50%); filter: none; }
+}
+@keyframes projOut {
+  0% { clip-path: circle(75% at 50% 50%); filter: none; }
+  100% { clip-path: circle(1.5% at 50% 50%); filter: brightness(3) saturate(0.2); }
+}
+@media (prefers-reduced-motion: reduce) { .stv.sx, .stv.sx.closing { animation-duration: 0.01s; } }
