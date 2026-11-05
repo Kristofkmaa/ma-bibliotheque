@@ -1862,3 +1862,10 @@ body.immersive .scene { padding: 0 !important; }
   .vx-zoom { bottom: 74px; }
 }
 @media (min-width: 768px) { .stv-tabs { display: none !important; } }
+
+/* Séries / Films : un petit sélecteur */
+.vx-seg { display: inline-flex; padding: 3px; border-radius: 18px; background: rgba(26, 24, 20, 0.06); margin: 4px 0 12px; animation: fadeUp 0.5s both; }
+.vx-seg button { height: 30px; padding: 0 16px; border: 0; border-radius: 15px; background: transparent; color: var(--stv-muted); font-family: var(--sans); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; transition: background-color 0.2s, color 0.2s; }
+.vx-seg button.on { background: var(--stv-accent); color: #fff; }
+.vx-seg-top { position: relative; z-index: 3; justify-self: start; margin: 2px clamp(16px, 3.4vw, 48px) 0; }
+.stv.vhs .stv-screen.vx-v-catalog:has(.vx-seg-top) { grid-template-rows: auto auto minmax(0, 1fr); }

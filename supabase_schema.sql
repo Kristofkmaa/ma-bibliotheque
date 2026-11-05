@@ -141,3 +141,9 @@ create index if not exists idx_user_series_user on user_series(user_id, added_at
 
 -- Catégories de séries (à exécuter une fois ; sans elle, les catégories restent dans le navigateur)
 alter table user_series add column if not exists category text;
+
+-- Films (en plus des séries) : à exécuter une fois
+alter table user_series add column if not exists media text not null default 'tv';
+alter table user_series add column if not exists runtime integer;
+alter table user_series drop constraint if exists user_series_user_id_tmdb_id_key;
+create unique index if not exists user_series_work on user_series(user_id, media, tmdb_id);

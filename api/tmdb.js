@@ -4,6 +4,7 @@
  *   /api/tmdb?q=friends   → recherche de séries
  *   /api/tmdb?id=1668     → fiche d'une série (saisons, genres…)
  *   /api/tmdb?videos=1668 → ses vidéos YouTube : le générique d'abord, sinon les bandes-annonces
+ * Avec &type=movie, les mêmes appels pour les films (recherche, fiche, bandes-annonces).
  * La clé peut être la « clé d'API » (v3) ou le « jeton d'accès en lecture » (v4, commence par eyJ).
  */
 const BASE = 'https://api.themoviedb.org/3'
@@ -14,10 +15,11 @@ const rankVideo = v => TYPE_RANK[v.type] * 10 + (v.iso_639_1 === 'fr' ? 0 : v.is
 
 const pickShow = s => ({
   tmdb_id: s.id,
-  name: s.name || s.original_name || '',
-  original_name: s.original_name || '',
+  media: s.title != null || s.release_date != null ? 'movie' : 'tv',
+  name: s.name || s.title || s.original_name || s.original_title || '',
+  original_name: s.original_name || s.original_title || '',
   overview: s.overview || '',
-  first_air_date: s.first_air_date || '',
+  first_air_date: s.first_air_date || s.release_date || '',
   poster_path: s.poster_path || null,
   backdrop_path: s.backdrop_path || null,
   vote: typeof s.vote_average === 'number' ? Math.round(s.vote_average * 10) / 10 : null,
@@ -39,10 +41,11 @@ export default async function handler(req, res) {
     const q = String(req.query.q || '').trim().slice(0, 120)
     const id = parseInt(req.query.id, 10)
     const vid = parseInt(req.query.videos, 10)
+    const kind = req.query.type === 'movie' ? 'movie' : 'tv'
     let out
     if (vid > 0) {
       // vidéos en français et en anglais d'un coup, on trie nous-mêmes
-      const data = await call(`/tv/${vid}/videos`, { include_video_language: 'fr,en,null' })
+      const data = await call(`/${kind}/${vid}/videos`, { include_video_language: 'fr,en,null' })
       const vids = (data.results || [])
         .filter(v => v.site === 'YouTube' && v.key && v.type in TYPE_RANK)
         .sort((a, b) => rankVideo(a) - rankVideo(b))
@@ -50,8 +53,19 @@ export default async function handler(req, res) {
         .map(v => ({ key: v.key, type: v.type, name: v.name || '', lang: v.iso_639_1 || '' }))
       out = { videos: vids }
     } else if (q) {
-      const data = await call('/search/tv', { query: q, include_adult: 'false', page: '1' })
-      out = { results: (data.results || []).slice(0, 18).map(pickShow) }
+      const data = await call(`/search/${kind}`, { query: q, include_adult: 'false', page: '1' })
+      out = { results: (data.results || []).slice(0, 18).map(r => ({ ...pickShow(r), media: kind })) }
+    } else if (id > 0 && kind === 'movie') {
+      const s = await call(`/movie/${id}`, { append_to_response: 'credits' })
+      out = {
+        ...pickShow(s),
+        media: 'movie',
+        genres: (s.genres || []).map(g => g.name).slice(0, 3),
+        runtime: s.runtime || null,
+        seasons: null,
+        // pour un film : le ou la cinéaste, à la place de la chaîne
+        networks: (s.credits?.crew || []).filter(c => c.job === 'Director').map(c => c.name).slice(0, 2),
+      }
     } else if (id > 0) {
       const s = await call(`/tv/${id}`)
       out = {

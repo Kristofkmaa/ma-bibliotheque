@@ -187,7 +187,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
           <p className="salon-tabs-hint">Glisse pour tourner la pièce</p>
           <button type="button" className="tab" onClick={() => sceneRef.current?.zoomTv()} disabled={going}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="1.5" /><path d="M8.5 20h7M10.5 9l4 2-4 2z" /></svg>
-            <span>Nos séries</span>
+            <span>Films & séries</span>
           </button>
         </nav>
       ) : (
@@ -197,7 +197,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
               Entrer dans ma bibliothèque <span aria-hidden="true">→</span>
             </button>
             <button type="button" className="lbl box salon-go" onClick={() => sceneRef.current?.zoomTv()} disabled={going}>
-              Nos séries <span aria-hidden="true">▶</span>
+              Films & séries <span aria-hidden="true">▶</span>
             </button>
           </div>
           <p className="salon-hint">Fais glisser pour regarder autour, clique sur les objets</p>

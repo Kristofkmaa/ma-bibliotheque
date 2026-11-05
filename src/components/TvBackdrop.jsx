@@ -27,10 +27,10 @@ export default function TvBackdrop({ series, sound = false, onPlaying }) {
   useEffect(() => { onPlaying?.(shown) }, [shown]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // la liste des vidéos, dans l'ordre de nos séries préférées
-  const sig = series.map(s => s.tmdb_id).join(',')
+  const sig = series.map(s => (s.media || 'tv') + s.tmdb_id).join(',')
   useEffect(() => {
     let live = true
-    Promise.all(series.slice(0, 20).map(s => seriesVideos(s.tmdb_id).then(v => (v[0] ? { key: v[0].key, name: s.name } : null))))
+    Promise.all(series.slice(0, 20).map(s => seriesVideos(s.tmdb_id, s.media).then(v => (v[0] ? { key: v[0].key, name: s.name } : null))))
       .then(list => { if (live) { setQueue(list.filter(Boolean)); setI(0) } })
     return () => { live = false }
   }, [sig]) // eslint-disable-line react-hooks/exhaustive-deps

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { tmdbImg, searchSeries, seriesDetails, seriesVideos, year } from '../lib/tmdb'
+import { tmdbImg, searchSeries, seriesDetails, seriesVideos, year, isMovie, workKey, runtimeLabel } from '../lib/tmdb'
 
 /** Un titre dont les mots montent un à un, comme sortis d'une fente. */
 function Rise({ text, as: Tag = 'span', className, delay = 0, step = 0.06 }) {
@@ -27,11 +27,15 @@ function Stars({ value, onChange }) {
   )
 }
 
-const meta = s => [year(s), s.seasons ? `${s.seasons} saison${s.seasons > 1 ? 's' : ''}` : '', s.genres?.[0], s.networks?.[0]].filter(Boolean).join(' · ')
+const seasonsLabel = s => (s.seasons ? `${s.seasons} saison${s.seasons > 1 ? 's' : ''}` : '')
+/** Le détail d'une œuvre : saisons et chaîne pour une série, durée et cinéaste pour un film. */
+const lengthLabel = s => (isMovie(s) ? runtimeLabel(s.runtime) : seasonsLabel(s))
+const byLabel = s => (isMovie(s) ? (s.networks?.[0] ? `de ${s.networks[0]}` : '') : s.networks?.[0])
 
 /** La recherche, dans la télé : on tape un nom, les affiches montent. */
 function SeriesSearch({ have, onAdd }) {
   const empty = have.size === 0
+  const [media, setMedia] = useState('tv')
   const [q, setQ] = useState('')
   const [res, setRes] = useState(null)       // null : rien tapé ; [] : aucun résultat
   const [err, setErr] = useState('')
@@ -45,19 +49,19 @@ function SeriesSearch({ have, onAdd }) {
     let live = true
     setBusy(true)
     const t = setTimeout(() => {
-      searchSeries(term)
+      searchSeries(term, media)
         .then(r => { if (live) { setRes(r); setErr('') } })
         .catch(e => { if (live) { setRes([]); setErr(e.message) } })
         .finally(() => { if (live) setBusy(false) })
     }, 320)
     return () => { live = false; clearTimeout(t) }
-  }, [q])
+  }, [q, media])
 
   const add = async show => {
-    if (have.has(show.tmdb_id) || adding) return
+    if (have.has(workKey(show)) || adding) return
     setAdding(show.tmdb_id)
     let full = show
-    try { full = { ...show, ...(await seriesDetails(show.tmdb_id)) } } catch { /* la recherche suffit */ }
+    try { full = { ...show, ...(await seriesDetails(show.tmdb_id, show.media)) } } catch { /* la recherche suffit */ }
     setAdding(null)
     onAdd(full)
   }
@@ -66,23 +70,27 @@ function SeriesSearch({ have, onAdd }) {
     <div className="stv-search">
       {empty ? (
         <div className="stv-empty">
-          <Rise as="h2" className="stv-title" text="Nos séries" delay={0.15} />
-          <Rise as="p" className="stv-title it" text="préférées" delay={0.3} />
+          <Rise as="h2" className="stv-title" text="Nos films" delay={0.15} />
+          <Rise as="p" className="stv-title it" text="& séries" delay={0.3} />
         </div>
-      ) : <p className="stv-search-title">Ajouter une série</p>}
+      ) : <p className="stv-search-title">Ajouter {media === 'movie' ? 'un film' : 'une série'}</p>}
+      <div className="vx-seg" role="tablist" aria-label="Chercher">
+        <button type="button" role="tab" aria-selected={media === 'tv'} className={media === 'tv' ? 'on' : ''} onClick={() => setMedia('tv')}>Séries</button>
+        <button type="button" role="tab" aria-selected={media === 'movie'} className={media === 'movie' ? 'on' : ''} onClick={() => setMedia('movie')}>Films</button>
+      </div>
       <label className="stv-field">
-        <span className="sr-only">Nom de la série</span>
-        <input ref={input} value={q} onChange={e => setQ(e.target.value)} placeholder="Friends, Lupin, The Crown…"
+        <span className="sr-only">{media === 'movie' ? 'Titre du film' : 'Nom de la série'}</span>
+        <input ref={input} value={q} onChange={e => setQ(e.target.value)} placeholder={media === 'movie' ? 'Amélie, Inception, Le Parrain…' : 'Friends, Lupin, The Crown…'}
           autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="search" />
         {busy && <span className="stv-spin" aria-hidden="true" />}
       </label>
       {err && <p className="stv-msg">{/clé|key/i.test(err) ? 'La clé TMDB n’est pas encore réglée sur Vercel.' : 'La recherche ne répond pas, réessaie dans un instant.'}</p>}
-      {res && !res.length && !err && <p className="stv-msg">Aucune série trouvée pour « {q.trim()} ».</p>}
+      {res && !res.length && !err && <p className="stv-msg">{media === 'movie' ? 'Aucun film trouvé' : 'Aucune série trouvée'} pour « {q.trim()} ».</p>}
       {!res && !err && <p className="stv-msg soft">Tape au moins deux lettres.</p>}
       {res && res.length > 0 && (
         <ul className="stv-results">
           {res.map((s, i) => {
-            const got = have.has(s.tmdb_id)
+            const got = have.has(workKey(s))
             return (
               <li key={s.tmdb_id} style={{ animationDelay: `${Math.min(i, 12) * 0.04}s` }}>
                 <button type="button" className={'stv-result' + (got ? ' got' : '')} onClick={() => add(s)} disabled={got || adding === s.tmdb_id}>
@@ -176,7 +184,7 @@ export const categoryOf = s => s.category || s.genres?.[0] || 'Autres'
 function CaseFront({ show, size = 'w500' }) {
   return (
     <span className="bx-front">
-      <span className="bx-band"><b>Série</b><i>{year(show) || ''}</i></span>
+      <span className="bx-band"><b>{isMovie(show) ? 'Film' : 'Série'}</b><i>{year(show) || ''}</i></span>
       <span className="bx-art">
         {show.poster_path ? <img src={tmdbImg(show.poster_path, size)} alt="" draggable="false" loading="lazy" /> : <span className="bx-name">{show.name}</span>}
       </span>
@@ -409,15 +417,18 @@ function ZoomBar({ zoom, onZoom }) {
  */
 export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCategory, onClose }) {
   const byYear = (a, b) => (a.first_air_date || '9999').localeCompare(b.first_air_date || '9999') || a.name.localeCompare(b.name)
+  const [kind, setKind] = useState('all')     // tout, séries ou films
+  const hasBoth = series.some(isMovie) && series.some(s => !isMovie(s))
+  const shown = useMemo(() => (kind === 'all' || !hasBoth ? series : series.filter(s => (kind === 'movie') === isMovie(s))), [series, kind, hasBoth])
   const groups = useMemo(() => {
     const m = new Map()
-    for (const s of series) { const c = categoryOf(s); if (!m.has(c)) m.set(c, []); m.get(c).push(s) }
+    for (const s of shown) { const c = categoryOf(s); if (!m.has(c)) m.set(c, []); m.get(c).push(s) }
     return [...m].map(([name, items]) => ({ name, items: items.sort(byYear) }))
       .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name))
-  }, [series])
+  }, [shown])
   const allCats = useMemo(() => groups.map(g => g.name).sort((a, b) => a.localeCompare(b)), [groups])
   const [cat, setCat] = useState(null)          // l'étagère courbe : une catégorie (null : toutes)
-  const list = useMemo(() => (cat ? series.filter(s => categoryOf(s) === cat) : [...series]).sort(byYear), [series, cat])
+  const list = useMemo(() => (cat ? shown.filter(s => categoryOf(s) === cat) : [...shown]).sort(byYear), [shown, cat])
   const [id, setId] = useState(() => null)
   const [view, setView] = useState(() => (series.length ? 'catalog' : 'search'))   // catalog | shelf | detail | search
   const [back, setBack] = useState('catalog')   // d'où vient-on, pour la fiche
@@ -432,7 +443,7 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
   const wheel = useRef(0)
   const cur = series.find(s => s.id === id) || null
   const idx = Math.max(0, list.findIndex(s => s.id === id))
-  const have = useMemo(() => new Set(series.map(s => s.tmdb_id)), [series])
+  const have = useMemo(() => new Set(series.map(workKey)), [series])
   const pos = drag ? drag.p : idx
 
   useEffect(() => { if (view === 'shelf' && !list.some(s => s.id === id) && list.length) setId(list[Math.floor((list.length - 1) / 2)].id) }, [view, list, id])
@@ -454,12 +465,12 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
     if (!cur) return
     let live = true
     for (const s of [cur, list[idx + 1], list[idx - 1]].filter(Boolean)) {
-      if (!s.tmdb_id || videos[s.tmdb_id]) continue
-      seriesVideos(s.tmdb_id).then(v => { if (live) setVideos(m => ({ ...m, [s.tmdb_id]: v })) })
+      if (!s.tmdb_id || videos[workKey(s)]) continue
+      seriesVideos(s.tmdb_id, s.media).then(v => { if (live) setVideos(m => ({ ...m, [workKey(s)]: v })) })
     }
     return () => { live = false }
-  }, [cur?.tmdb_id]) // eslint-disable-line react-hooks/exhaustive-deps
-  const curVideos = (cur && videos[cur.tmdb_id]) || []
+  }, [cur && workKey(cur)]) // eslint-disable-line react-hooks/exhaustive-deps
+  const curVideos = (cur && videos[workKey(cur)]) || []
   const stopVideo = useCallback(() => setPlaying(false), [])
 
   const pick = useCallback(i => { const s = list[clamp(i, 0, list.length - 1)]; if (s) setId(s.id) }, [list])
@@ -522,11 +533,11 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
   const playLabel = curVideos.length ? (isOpening(curVideos[0]) ? 'Le générique' : 'La bande-annonce') : ''
 
   return createPortal(
-    <div className={'stv vhs' + (closing ? ' closing' : '')} role="dialog" aria-label="Nos séries">
+    <div className={'stv vhs' + (closing ? ' closing' : '')} role="dialog" aria-label="Nos films et séries">
       <div className="stv-bezel">
         <div className={'stv-screen vx-v-' + view} onScroll={e => { e.currentTarget.scrollTop = 0 }}>
           <header className="vx-top">
-            <p className="vx-brand">Nos séries <i /> Vidéothèque</p>
+            <p className="vx-brand">Films & séries <i /> Vidéothèque</p>
             <nav className="vx-nav">
               {view !== 'catalog' && series.length > 0 && <button type="button" className="vx-navbtn" onClick={() => setView('catalog')}>Catalogue</button>}
               {view !== 'search' && <button type="button" className="vx-navbtn" onClick={() => setView('search')}>+ Ajouter</button>}
@@ -538,6 +549,13 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
 
           {view === 'catalog' && (
             <>
+              {hasBoth && (
+                <div className="vx-seg vx-seg-top" role="tablist" aria-label="Afficher">
+                  {[['all', 'Tout'], ['tv', 'Séries'], ['movie', 'Films']].map(([k, l]) => (
+                    <button key={k} type="button" role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>
+                  ))}
+                </div>
+              )}
               <Catalog groups={groups} zoom={zoom} onZoom={setZoom} onOpen={s => openDetail(s, 'catalog')} onShelf={openShelf} onRename={renameGroup} />
               <ZoomBar zoom={zoom} onZoom={setZoom} />
             </>
@@ -558,7 +576,7 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
                   <button type="button" className="vx-arrow" onClick={() => go(-1)} disabled={idx === 0} aria-label="Série précédente">←</button>
                   <div className="vx-cap-mid" key={cur.id}>
                     <h2 className="vx-title">{cur.name}</h2>
-                    <p className="vx-meta">{[year(cur), cur.seasons ? `${cur.seasons} saison${cur.seasons > 1 ? 's' : ''}` : '', categoryOf(cur)].filter(Boolean).join('  ·  ')}</p>
+                    <p className="vx-meta">{[year(cur), lengthLabel(cur), categoryOf(cur)].filter(Boolean).join('  ·  ')}</p>
                   </div>
                   <button type="button" className="vx-arrow" onClick={() => go(1)} disabled={idx >= list.length - 1} aria-label="Série suivante">→</button>
                 </div>
@@ -574,7 +592,7 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
               <div className="vx-d-text">
                 <p className="vx-kicker">{categoryOf(cur)} <i /> {year(cur) || '—'}</p>
                 <h2 className="vx-d-title">{cur.name}</h2>
-                <p className="vx-d-meta">{[cur.seasons ? `${cur.seasons} saison${cur.seasons > 1 ? 's' : ''}` : '', cur.genres?.slice(0, 2).join(', '), cur.networks?.[0]].filter(Boolean).join('  ·  ')}</p>
+                <p className="vx-d-meta">{[isMovie(cur) ? 'Film' : 'Série', lengthLabel(cur), cur.genres?.slice(0, 2).join(', '), byLabel(cur)].filter(Boolean).join('  ·  ')}</p>
                 {cur.overview && <p className="vx-d-over">{cur.overview}</p>}
                 <Stars value={cur.rating} onChange={r => onUpdate(cur.id, { rating: r })} />
                 <CategoryPicker value={categoryOf(cur)} all={allCats} onChange={c => onUpdate(cur.id, { category: c })} />
@@ -582,7 +600,7 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
                   {playLabel && <button type="button" className="vx-btn" onClick={() => setPlaying(true)}><span className="vx-btn-ic" aria-hidden="true" />{playLabel}</button>}
                   <button type="button" className="vx-btn ghost" onClick={() => setView(back)}>← {back === 'shelf' ? 'L’étagère' : 'Le catalogue'}</button>
                 </div>
-                <button type="button" className="vx-remove" onClick={() => { onRemove(cur.id); setView(back) }}>Retirer de nos séries</button>
+                <button type="button" className="vx-remove" onClick={() => { onRemove(cur.id); setView(back) }}>Retirer {isMovie(cur) ? 'ce film' : 'cette série'}</button>
               </div>
               <div className="vx-d-tape"><CaseFront show={cur} size="w780" /></div>
             </section>
@@ -598,7 +616,7 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1" /></svg>
               <span>Catalogue</span>
             </button>
-            <button type="button" className="tab tab-shop" onClick={() => setView('search')} aria-label="Ajouter une série">
+            <button type="button" className="tab tab-shop" onClick={() => setView('search')} aria-label="Ajouter un film ou une série">
               <span className="tab-shop-bubble"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></span>
               <span>Ajouter</span>
             </button>

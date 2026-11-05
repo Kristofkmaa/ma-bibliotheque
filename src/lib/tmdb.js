@@ -28,17 +28,24 @@ async function get(params) {
   return data
 }
 
-export const searchSeries = q => get({ q }).then(d => d.results || [])
-export const seriesDetails = id => get({ id: String(id) })
+/** Recherche : séries (« tv ») ou films (« movie »). */
+export const searchSeries = (q, media = 'tv') => get({ q, type: media }).then(d => d.results || [])
+export const seriesDetails = (id, media = 'tv') => get({ id: String(id), type: media })
+export const isMovie = s => s?.media === 'movie'
+/** Clé unique d'une œuvre : un film et une série peuvent avoir le même numéro chez TMDB. */
+export const workKey = s => (isMovie(s) ? 'm' : 't') + s.tmdb_id
+/** « 2 h 05 » */
+export const runtimeLabel = m => (m ? (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`) : '')
 
 const videoCache = new Map()
 /** Les vidéos d'une série (générique d'abord, sinon bandes-annonces), gardées en mémoire. */
-export function seriesVideos(tmdbId) {
-  if (!videoCache.has(tmdbId)) {
-    const p = get({ videos: String(tmdbId) }).then(d => d.videos || [], () => { videoCache.delete(tmdbId); return [] })
-    videoCache.set(tmdbId, p)
+export function seriesVideos(tmdbId, media = 'tv') {
+  const k = media + tmdbId
+  if (!videoCache.has(k)) {
+    const p = get({ videos: String(tmdbId), type: media }).then(d => d.videos || [], () => { videoCache.delete(k); return [] })
+    videoCache.set(k, p)
   }
-  return videoCache.get(tmdbId)
+  return videoCache.get(k)
 }
 
 export const year = s => (s?.first_air_date || '').slice(0, 4)

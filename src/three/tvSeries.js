@@ -1,4 +1,4 @@
-import { tmdbImgCors, loadImage, year } from '../lib/tmdb'
+import { tmdbImgCors, loadImage, year, isMovie, runtimeLabel } from '../lib/tmdb'
 
 /**
  * L'écran de la télé vu du salon : nos séries rangées comme des cassettes VHS sur une étagère
@@ -84,9 +84,9 @@ export class TvSeries {
       g.fillStyle = MUTED; g.font = `600 22px ${SANS}`
       g.fillText(spaced('La télé du salon'), 120, 330)
       g.fillStyle = ACCENT; g.font = `600 130px ${SANS}`
-      g.fillText('Nos séries', 112, 470)
+      g.fillText('Nos films', 112, 470)
       g.fillStyle = INK
-      g.fillText('préférées', 112, 600)
+      g.fillText('& séries', 112, 600)
       g.fillStyle = MUTED; g.font = `italic 400 38px ${SERIF}`
       g.fillText('Touche la télé pour les ajouter', 120, 690)
       g.restore()
@@ -143,7 +143,7 @@ export class TvSeries {
     bg2.addColorStop(0, '#3D7BD8'); bg2.addColorStop(1, '#1F56B0')
     g.fillStyle = bg2; g.fillRect(fx + 4, fy + 4, fw - 8, band)
     g.fillStyle = '#fff'; g.font = `800 ${Math.round(band * 0.42)}px ${SANS}`; g.textBaseline = 'middle'; g.textAlign = 'left'
-    g.fillText(spaced('Série'), fx + fw * 0.07, fy + 4 + band / 2)
+    g.fillText(spaced(isMovie(s) ? 'Film' : 'Série'), fx + fw * 0.07, fy + 4 + band / 2)
     g.textAlign = 'right'; g.fillText(year(s) || '', fx + fw * 0.93, fy + 4 + band / 2)
     const p = this.imgs.get('p' + s.id)
     g.fillStyle = '#15120F'; g.fillRect(fx + 4, fy + 4 + band, fw - 8, fh - 8 - band)
@@ -158,7 +158,7 @@ export class TvSeries {
     g.fillStyle = ACCENT; g.font = `600 64px ${SANS}`
     g.fillText(wrap(g, s.name, 1100, 1)[0] || '', CX, 745)
     g.fillStyle = MUTED; g.font = `600 20px ${SANS}`
-    g.fillText(spaced([year(s), s.seasons ? `${s.seasons} saisons` : '', s.networks?.[0]].filter(Boolean).join('  ·  ')), CX, 784)
+    g.fillText(spaced([year(s), isMovie(s) ? runtimeLabel(s.runtime) : s.seasons ? `${s.seasons} saisons` : '', isMovie(s) ? 'Film' : s.networks?.[0]].filter(Boolean).join('  ·  ')), CX, 784)
     g.globalAlpha = 1
     // la frise des années
     g.fillStyle = 'rgba(26,24,20,0.16)'; g.fillRect(120, 836, LW - 240, 2)
@@ -169,7 +169,7 @@ export class TvSeries {
     }
     // en-tête
     g.textAlign = 'left'; g.fillStyle = INK; g.font = `600 18px ${SANS}`
-    g.fillText(spaced('Nos séries'), 70, 70)
+    g.fillText(spaced('Films & séries'), 70, 70)
     g.fillRect(250, 63, 90, 2)
     g.fillText(spaced('Vidéothèque'), 360, 70)
     g.textAlign = 'right'; g.fillStyle = MUTED

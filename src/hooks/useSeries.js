@@ -3,11 +3,13 @@ import { supabase, isDemoMode } from '../lib/supabase'
 import { uid } from '../lib/shelfOps'
 
 const LS_KEY = id => `levana.series.${id}`
-const CAT_KEY = id => `levana.series.cats.${id}`      // catégories, gardées aussi ici (si la colonne manque)
+const EXTRA_KEY = id => `levana.series.extra.${id}`   // catégorie, film ou série, durée : gardés aussi ici (si les colonnes manquent)
+const EXTRA = ['category', 'media', 'runtime']
 
 const normalize = s => ({
   id: s.id || uid(),
   tmdb_id: s.tmdb_id,
+  media: s.media === 'movie' ? 'movie' : 'tv',
   name: s.name || '',
   overview: s.overview || '',
   first_air_date: s.first_air_date || '',
@@ -17,6 +19,7 @@ const normalize = s => ({
   seasons: s.seasons ?? null,
   networks: Array.isArray(s.networks) ? s.networks : [],
   rating: s.rating ?? null,
+  runtime: s.runtime ?? null,
   category: s.category || null,
   added_at: s.added_at || new Date().toISOString(),
 })
@@ -27,16 +30,27 @@ function lsLoad(id) {
 function lsSave(id, list) {
   try { localStorage.setItem(LS_KEY(id), JSON.stringify(list)) } catch { /* ignore */ }
 }
-function catsLoad(id) {
-  try { return JSON.parse(localStorage.getItem(CAT_KEY(id))) || {} } catch { return {} }
+function extraLoad(id) {
+  try { return JSON.parse(localStorage.getItem(EXTRA_KEY(id))) || {} } catch { return {} }
 }
-function catsSave(id, list) {
+function extraSave(id, list) {
   const m = {}
-  for (const s of list) if (s.category) m[s.tmdb_id] = s.category
-  try { localStorage.setItem(CAT_KEY(id), JSON.stringify(m)) } catch { /* ignore */ }
+  for (const s of list) {
+    const e = {}
+    if (s.category) e.category = s.category
+    if (s.media === 'movie') e.media = 'movie'
+    if (s.runtime) e.runtime = s.runtime
+    if (Object.keys(e).length) m[s.id] = e
+  }
+  try { localStorage.setItem(EXTRA_KEY(id), JSON.stringify(m)) } catch { /* ignore */ }
 }
-// la catégorie choisie ici l'emporte si Supabase ne la connaît pas (colonne pas encore créée)
-const withCats = (list, m) => list.map(s => (s.category || !m[s.tmdb_id] ? s : { ...s, category: m[s.tmdb_id] }))
+// ce qui est gardé ici complète ce que Supabase ne connaît pas (colonnes pas encore créées)
+const withExtra = (list, m) => list.map(s => {
+  const e = m[s.id]
+  if (!e) return s
+  return { ...s, category: s.category || e.category || null, media: s.media === 'movie' ? 'movie' : e.media || s.media, runtime: s.runtime || e.runtime || null }
+})
+const sameWork = (a, b) => a.tmdb_id === b.tmdb_id && (a.media || 'tv') === (b.media || 'tv')
 
 /**
  * Nos séries préférées (table Supabase `user_series`). Comme pour les étagères : tant que la
@@ -51,7 +65,7 @@ export function useSeries(userId) {
   useEffect(() => {
     if (!userId) return
     let cancelled = false
-    const done = list => { if (!cancelled) { list = withCats(list, catsLoad(userId)); ref.current = list; setSeries(list) } }
+    const done = list => { if (!cancelled) { list = withExtra(list, extraLoad(userId)); ref.current = list; setSeries(list) } }
     if (isDemoMode) { done(lsLoad(userId)); return }
     supabase.from('user_series').select('*').eq('user_id', userId).order('added_at', { ascending: false })
       .then(async ({ data, error }) => {
@@ -67,18 +81,24 @@ export function useSeries(userId) {
     return () => { cancelled = true }
   }, [userId])
 
-  const set = useCallback(next => { ref.current = next; setSeries(next); catsSave(userId, next); if (local.current) lsSave(userId, next) }, [userId])
+  const set = useCallback(next => { ref.current = next; setSeries(next); extraSave(userId, next); if (local.current) lsSave(userId, next) }, [userId])
   const remote = useCallback(async fn => {
     if (local.current) return
     try { const { error } = await fn(); if (error) throw error } catch { local.current = true; lsSave(userId, ref.current) }
   }, [userId])
 
   const addSeries = useCallback(show => {
-    if (ref.current.some(s => s.tmdb_id === show.tmdb_id)) return null
+    if (ref.current.some(s => sameWork(s, show))) return null
     const row = normalize({ ...show, id: uid(), added_at: new Date().toISOString() })
     set([row, ...ref.current])
-    const { category, ...base } = row
-    remote(() => supabase.from('user_series').insert({ ...(category ? row : base), user_id: userId }))
+    // d'abord avec toutes les colonnes ; si Supabase ne les a pas encore, sans elles (elles restent ici)
+    remote(async () => {
+      const full = await supabase.from('user_series').insert({ ...row, user_id: userId })
+      if (!full.error) return full
+      const base = { ...row, user_id: userId }
+      for (const k of EXTRA) delete base[k]
+      return supabase.from('user_series').insert(base)
+    })
     return row
   }, [set, remote, userId])
 

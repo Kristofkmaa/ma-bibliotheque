@@ -751,7 +751,7 @@ export class LivingRoomScene {
       knob.position.set(sx * 0.05, leg + Hh / 2, D / 2 + 0.015)
       grp.add(knob)
     }
-    this._register('cabinet', grp, 'Nos séries')
+    this._register('cabinet', grp, 'Films & séries')
     this.wallOf('left').attached.push(grp)
 
     // l'image projetée directement sur le mur : bords fondus, halo de lumière autour
@@ -779,7 +779,7 @@ export class LivingRoomScene {
     scr.add(screen)
     this.tvScreen = screen
     this._drawTv()
-    this._register('tv', scr, 'Nos séries')
+    this._register('tv', scr, 'Films & séries')
     this.wallOf('left').attached.push(scr)
 
     this._buildProjector()
@@ -819,7 +819,7 @@ export class LivingRoomScene {
     top.position.set(0.04, 0.06 + rodLen, 0)
     grp.add(lens, glass, led, rod, plate, top)
     grp.traverse(o => { if (o.isMesh) o.castShadow = o !== glass && o !== led })
-    this._register('projector', grp, 'Nos séries')
+    this._register('projector', grp, 'Films & séries')
 
     // le faisceau : une pyramide de lumière très légère, de l'objectif aux coins de la toile
     const o = new THREE.Vector3(PROJ.x - 0.22 * BIG.projector, PROJ.y, TV.z + 0.06 * BIG.projector)
@@ -1062,7 +1062,7 @@ export class LivingRoomScene {
 
   /** Les bulles au-dessus de la télé et du panier. */
   _placeBubbles(dt) {
-    if (!this.bubbles?.tv) this._setBubble('tv', 'Nos séries')
+    if (!this.bubbles?.tv) this._setBubble('tv', 'Films & séries')
     this.bornAt ||= performance.now()
     const free = !this.fly && !this.tvZoom && performance.now() - this.bornAt > 1200
     const f = 1 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))
