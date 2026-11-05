@@ -227,7 +227,7 @@ function Library({ user, onSignOut }) {
     <div className="scene">
       <header className="top-bar">
         <div className="top-left">
-          <button type="button" className="lbl box" onClick={() => openSearch()}>+ Ajouter un livre</button>
+          <button type="button" className="lbl box add-btn" onClick={() => openSearch()}>+ <span className="add-long">Ajouter un livre</span><span className="add-short">Ajouter</span></button>
         </div>
         <Logo />
         <div className="top-right">
@@ -243,11 +243,12 @@ function Library({ user, onSignOut }) {
       <div className="scene-tabs">
         <button type="button" className="lbl box cobalt ms-open" onClick={e => { e.currentTarget.blur(); setShelvesOpen({ id: null }) }}>
           <svg width="13" height="11" viewBox="0 0 13 11" aria-hidden="true"><path d="M0.5 0.5h12M0.5 5.5h12M0.5 10.5h12M0.5 0.5v10M12.5 0.5v10" stroke="currentColor" fill="none" /></svg>
-          Mes étagères
+          <span><span className="ms-my">Mes </span>étagères</span>
         </button>
         <LibrarySearch books={books} shelves={effShelves} onPick={id => setFocusId(id)} />
-        <label className="lbl scene-sort">
+        <label className="lbl scene-sort" aria-label="Ranger par">
           <span>Ranger par</span>
+          <svg className="sort-ico" width="14" height="12" viewBox="0 0 14 12" aria-hidden="true"><path d="M1 2h12M3 6h8M5.5 10h3" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" /></svg>
           <select value={sort} onChange={e => setSort(e.target.value)}>
             {SORTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
@@ -330,6 +331,7 @@ function Library({ user, onSignOut }) {
             onEntered={next => { markSalonSeen(); setSalon(null); if (next === 'guide' && manual && basket.items.length) setGuide(true) }}
             onOpenBook={b => (b ? openBook(b, null) : openSearch())}
             onAddBooks={() => openSearch()}
+            onSignOut={onSignOut}
             getLibrary={() => bookcaseApi.current?.scene?.()}
           />
         </Suspense>

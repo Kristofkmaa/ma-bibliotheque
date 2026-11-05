@@ -96,6 +96,8 @@ export default function Bookcase3D({
   }, [])
 
   const L = useMemo(() => worldLayout(size.w, size.h, size.mobile), [size])
+  // téléphone : une étagère tient sur une seule rangée (on la fait défiler du doigt)
+  const shelfRow = manual && L.mobile ? Infinity : L.perRow
 
   // ---- Données --------------------------------------------------------------------------
   const byId = useMemo(() => new Map(allBooks.map(b => [b.id, b])), [allBooks])
@@ -106,8 +108,8 @@ export default function Bookcase3D({
     [manual, eff, dragView],
   )
   const rowsAll = useMemo(
-    () => buildRows({ manual, shelves: display, autoBooks: books, byId, visible, canEdit, perRow: L.perRow, minRows: L.rows }),
-    [manual, display, books, byId, visible, canEdit, L.perRow, L.rows],
+    () => buildRows({ manual, shelves: display, autoBooks: books, byId, visible, canEdit, perRow: shelfRow, minRows: L.rows }),
+    [manual, display, books, byId, visible, canEdit, shelfRow, L.rows],
   )
 
   // ---- Portes : elles ne se ferment que pour changer de tri ou de vue -----------------------
@@ -203,7 +205,7 @@ export default function Bookcase3D({
   }, [])
 
   // tous les rayons sans le livre déplacé (pour viser l'emplacement)
-  dataRef.current.rowsWithout = id => buildRows({ manual: true, shelves: previewDrag(eff, id, null), autoBooks: [], byId, visible, canEdit: true, perRow: L.perRow, minRows: L.rows })
+  dataRef.current.rowsWithout = id => buildRows({ manual: true, shelves: previewDrag(eff, id, null), autoBooks: [], byId, visible, canEdit: true, perRow: shelfRow, minRows: L.rows })
 
   // ---- Livres venus du panier : on vise une étagère, un emplacement s'ouvre -----------------
   const extTarget = useRef(null)

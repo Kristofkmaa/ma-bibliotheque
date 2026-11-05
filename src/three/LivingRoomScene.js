@@ -1271,16 +1271,20 @@ export class LivingRoomScene {
     g.add(copy)
     this.room.add(g)
     g.updateMatrixWorld(true)
-    // portes : les plans qui les découpent suivent le meuble
-    const doors = []
-    lib.caseParts.forEach(p => [p.doorL, p.doorR].forEach(o => {
-      const c = map.get(o)
-      if (!c) return
-      const m = o.material.clone()
-      m.clippingPlanes = (o.material.clippingPlanes || []).map(pl => pl.clone().applyMatrix4(g.matrixWorld))
-      c.material = m
-      doors.push([o.material, m])
-    }))
+    // portes et livres découpés aux montants : leurs plans de découpe suivent le meuble du salon
+    const clones = new Map()
+    const fix = m => {
+      if (!m?.clippingPlanes?.length) return m
+      let c = clones.get(m)
+      if (!c) {
+        c = m.clone()
+        c.clippingPlanes = m.clippingPlanes.map(pl => pl.clone().applyMatrix4(g.matrixWorld))
+        clones.set(m, c)
+      }
+      return c
+    }
+    copy.traverse(o => { if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map(fix) : fix(o.material) })
+    const doors = [...clones.entries()]
     const hits = []
     copy.traverse(o => {
       o.layers.enable(1)

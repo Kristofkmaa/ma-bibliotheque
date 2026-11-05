@@ -26,7 +26,7 @@ const DOOR_T = 0.025
 
 /** Géométrie partagée avec React : nombre de rayons, largeur du meuble, livres par rayon. */
 export function worldLayout(wPx, hPx, mobile) {
-  const rows = mobile ? (hPx > 520 ? 3 : 2) : (hPx > 760 ? 3 : 2)
+  const rows = mobile ? (hPx > 600 ? 4 : hPx > 430 ? 3 : 2) : (hPx > 760 ? 3 : 2)
   const caseH = rows * (RH + PT) + PT
   // zone très large et basse (tiroir ouvert, grand écran) : le meuble ne s'étire pas, il garde de grands livres
   const aspect = Math.max(0.45, Math.min(2.6, wPx / Math.max(1, hPx)))
@@ -105,7 +105,9 @@ export class BookcaseScene {
     this.doorsGroup = new THREE.Group()
     this.root.add(this.caseGroup, this.booksGroup, this.doorsGroup)
 
-    this.pagesMat = new THREE.MeshStandardMaterial({ map: pagesTexture(), roughness: 0.95 })
+    this.clips = [new THREE.Plane(new THREE.Vector3(1, 0, 0), 1), new THREE.Plane(new THREE.Vector3(-1, 0, 0), 1)]
+    this.rowOff = []     // téléphone : décalage horizontal de chaque rangée (on la fait défiler du doigt)
+    this.pagesMat = new THREE.MeshStandardMaterial({ map: pagesTexture(), roughness: 0.95, clippingPlanes: this.clips, clipShadows: true })
     this.grain = grainTexture()
 
     this.books = new Map()   // id -> entrée 3D (livres des étagères proches de l'écran)
@@ -276,11 +278,47 @@ export class BookcaseScene {
     this.setZoom(true)
     this.kick()
   }
+  // ---- Rangées qui défilent (téléphone) ---------------------------------------------------------
+  _off(r) { return this.rowOff[r]?.v || 0 }
+  _offSpring(r) { return (this.rowOff[r] ||= new Spring(0, 120, 1)) }
+  /** Décalage le plus à gauche possible : le dernier livre arrive au montant droit. */
+  _minOff(r) {
+    const { CW } = this.layout
+    return Math.min(0, CW / 2 - 0.2 - (this.rowEnds?.[r] ?? -CW / 2))
+  }
+  _overflows(r) { return this._minOff(r) < -0.02 }
+  _clampOff(r, v, rubber = false) {
+    const lo = this._minOff(r)
+    if (!rubber) return clamp(v, lo, 0)
+    if (v > 0) return v * 0.35
+    if (v < lo) return lo + (v - lo) * 0.35
+    return v
+  }
+  /** Rayon sous un point de l'écran (null en dehors). */
+  _rowAt(cx, cy) {
+    const rc = this.renderer.domElement.getBoundingClientRect()
+    this.ndc.set(((cx - rc.left) / rc.width) * 2 - 1, -((cy - rc.top) / rc.height) * 2 + 1)
+    const q = this._frontPoint(SD / 2)
+    if (!q) return null
+    for (let r = 0; r < this.rowCount; r++) { const y0 = this.rowBase(r); if (q.y >= y0 - PT && q.y <= y0 + RH) return r }
+    return null
+  }
+  /** Amène un livre dans la partie visible de sa rangée. */
+  _revealInRow(id) {
+    const base = this.bases.get(id)
+    if (!base || !this.layout?.mobile) return
+    const { CW } = this.layout
+    const sp = this._offSpring(base.row)
+    const x = base.x + sp.t
+    if (x > CW / 2 - 0.5 || x < -CW / 2 + 0.4) sp.t = this._clampOff(base.row, -base.x)
+    this.kick()
+  }
+
   /** À l'écran : la place du prochain livre au bout d'un rayon (un livre du panier s'y envole). */
   slotRect(r) {
     if (!this.layout || r == null || r < 0 || r >= this.rowCount) return null
     const { CW } = this.layout
-    const end = this.rowEnds?.[r] ?? (-CW / 2 + PADX)
+    const end = (this.rowEnds?.[r] ?? (-CW / 2 + PADX)) + this._off(r)
     const x = Math.min(CW / 2 - 0.35, end + 0.4)
     const y0 = this.rowBase(r)
     const rc = this.renderer.domElement.getBoundingClientRect()
@@ -303,6 +341,7 @@ export class BookcaseScene {
     const base = this.bases.get(id)
     if (!base) return false
     this.scrollToRow(base.row)
+    this._revealInRow(id)
     clearTimeout(this.spotTimer)
     this.spotTimer = setTimeout(() => {
       const e = this.books.get(id)
@@ -347,8 +386,9 @@ export class BookcaseScene {
     const rows = this.rowCount
     const H = rows * (RH + PT) + PT
     this.caseParts = []
-    const clipL = new THREE.Plane(new THREE.Vector3(1, 0, 0), CW / 2)
-    const clipR = new THREE.Plane(new THREE.Vector3(-1, 0, 0), CW / 2)
+    // les mêmes plans découpent portes et livres aux montants du meuble (rangées qui défilent)
+    const [clipL, clipR] = this.clips
+    clipL.constant = CW / 2; clipR.constant = CW / 2
     for (let r = 0; r < rows; r++) {
       const y0 = this.rowBase(r)
       const part = { r }
@@ -425,9 +465,10 @@ export class BookcaseScene {
   _makeBook(book) {
     const { h, t, d } = bookDims(book)
     const [bg] = spineColors(book)
-    const back = new THREE.MeshStandardMaterial({ color: new THREE.Color(bg).multiplyScalar(0.8), roughness: 0.7 })
-    const spine = new THREE.MeshStandardMaterial({ map: spineTexture(book), roughness: 0.6 })
-    const cover = new THREE.MeshStandardMaterial({ roughness: 0.55 })
+    const clip = { clippingPlanes: this.clips, clipShadows: true }
+    const back = new THREE.MeshStandardMaterial({ color: new THREE.Color(bg).multiplyScalar(0.8), roughness: 0.7, ...clip })
+    const spine = new THREE.MeshStandardMaterial({ map: spineTexture(book), roughness: 0.6, ...clip })
+    const cover = new THREE.MeshStandardMaterial({ roughness: 0.55, ...clip })
     const entry = { id: book.id, book, h, t, d }
     // ordre des faces : +x couverture, -x 4e de couverture, +y/-y tête et pied, +z dos, -z gouttière
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(t, h, d), [cover, back, this.pagesMat, this.pagesMat, spine, this.pagesMat])
@@ -472,7 +513,7 @@ export class BookcaseScene {
       const tex = bookmarkTexture(spineColorsIsBlue(e.book) ? 1 : 0).clone()
       tex.needsUpdate = true
       tex.repeat.set(1 / w, 1 / L); tex.offset.set(0.5, 0)
-      const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55, side: THREE.DoubleSide })
+      const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55, side: THREE.DoubleSide, clippingPlanes: this.clips })
       const mark = new THREE.Mesh(new THREE.ShapeGeometry(shape), mat)
       mark.rotation.y = Math.PI / 2            // dans le plan des pages
       mark.rotation.z = 0.06                    // légèrement penché, comme glissé à la main
@@ -548,7 +589,7 @@ export class BookcaseScene {
       const first = items[0] ? (items[0].t * cb + items[0].d * sb) / 2 : 0
       const lastExt = items.length ? (items[items.length - 1].t * cb + items[items.length - 1].d * sb) / 2 : 0
       const avail = CW - PADX - 0.12 - first - lastExt - need
-      const gap = items.length > 1 ? Math.max(0.012, Math.min(GAP, avail / (items.length - 1))) : GAP
+      const gap = this.layout.mobile ? GAP : items.length > 1 ? Math.max(0.012, Math.min(GAP, avail / (items.length - 1))) : GAP
       let x = -CW / 2 + PADX + first
       items.forEach((it, i) => {
         if (i) x += (items[i - 1].t + it.t) / (2 * cb) + gap
@@ -606,7 +647,7 @@ export class BookcaseScene {
         e.x.snap(base.x); e.z.snap(base.z); e.yaw.snap(-BETA)
         e.y.snap(base.y + drop)
         if (drop) { e.y.t = base.y; e.delay = this.intro ? Math.min(order, 40) * 16 : 0 }
-        e.wrap.position.set(e.x.v, e.y.v, e.z.v)
+        e.wrap.position.set(e.x.v + this._off(e.row), e.y.v, e.z.v)
         e.mesh.rotation.y = e.yaw.v
         order++
       }
@@ -630,7 +671,7 @@ export class BookcaseScene {
       const fullyOpen = !empty && end > CW - 0.25
       const open = this.doorsOpen && !!this.inView?.has(r)
       part.left.t = !open || empty ? half : -0.2
-      part.right.t = !open || empty ? half : fullyOpen ? CW + 0.3 : end
+      part.right.t = !open || empty ? half : fullyOpen || this.layout.mobile ? CW + 0.3 : end
     })
     this.kick()
   }
@@ -664,12 +705,29 @@ export class BookcaseScene {
       if (!p.moved && dist > (p.type === 'mouse' ? 6 : 10)) {
         p.moved = true
         clearTimeout(p.timer)
-        if (p.id && p.type === 'mouse' && this.cb.canDrag?.() && this.zoom.t > 0.5) { this.onHoverMove(e); this._startDrag(); return }
+        // téléphone : un geste plutôt horizontal sur une rangée trop longue la fait défiler
+        if (this.layout?.mobile && p.row != null && this._overflows(p.row) && Math.abs(e.clientX - p.x) > Math.abs(e.clientY - p.y)) {
+          const sp = this._offSpring(p.row)
+          p.panX = { r: p.row, x: e.clientX, off: sp.v, lastX: e.clientX, lastT: performance.now(), vel: 0 }
+          this._setHover(null)
+        }
+        if (!p.panX && p.id && p.type === 'mouse' && this.cb.canDrag?.() && this.zoom.t > 0.5) { this.onHoverMove(e); this._startDrag(); return }
+        if (p.panX) return
         // sinon on fait défiler le mur (on le « tire » du doigt ou de la souris)
         p.pan = true
         this.panning = { y: e.clientY, scroll: this.scroll.v, lastY: e.clientY, lastT: performance.now(), vel: 0 }
         el.style.cursor = 'grabbing'
         this._setHover(null)
+      }
+      if (p.panX) {
+        e.preventDefault()
+        const px = p.panX, now = performance.now()
+        const v = (e.clientX - px.lastX) / Math.max(1, now - px.lastT)
+        px.vel = px.vel * 0.6 + v * 0.4; px.lastX = e.clientX; px.lastT = now
+        this._offSpring(px.r).snap(this._clampOff(px.r, px.off + (e.clientX - px.x) * this._upp(), true))
+        this.pointerDirty = true
+        this.kick()
+        return
       }
       if (p.pan && this.panning) {
         e.preventDefault()
@@ -696,7 +754,7 @@ export class BookcaseScene {
       }
       const overview = this.zoom.t <= 0.5
       const hit = overview ? null : this._pick(e)
-      this.press = { id: hit, x: e.clientX, y: e.clientY, type: e.pointerType, overview }
+      this.press = { id: hit, x: e.clientX, y: e.clientY, type: e.pointerType, overview, row: overview ? null : this._rowAt(e.clientX, e.clientY) }
       if (hit && e.pointerType !== 'mouse' && this.cb.canDrag?.()) {
         this.press.timer = setTimeout(() => { if (this.press && !this.press.moved && !this.drag) this._startDrag() }, 320)
       }
@@ -711,6 +769,13 @@ export class BookcaseScene {
       if (this.drag) { this._endDrag(true); return }
       if (!press) return
       el.style.cursor = ''
+      if (press.panX) {
+        // élan : la rangée continue un peu, puis se cale entre ses bornes
+        const px = press.panX, sp = this._offSpring(px.r)
+        sp.t = this._clampOff(px.r, sp.v + px.vel * 220 * this._upp())
+        this.kick()
+        return
+      }
       if (press.pan && this.panning) {
         // élan : le mur continue un peu sur sa lancée
         const fling = this.panning.vel * 280 * this._upp()
@@ -841,7 +906,8 @@ export class BookcaseScene {
       const row = this.rowsData[r]
       if (!row) return null
       const xs = row.books.filter(b => !b.placeholder).map(b => this.bases.get(b.id)?.x ?? 0)
-      return { row: r, index: xs.filter(x => x < q.x).length }
+      const qx = q.x - this._off(r)
+      return { row: r, index: xs.filter(x => x < qx).length }
     }
     return null
   }
@@ -865,7 +931,8 @@ export class BookcaseScene {
         const row = this.rowsData[r]
         if (!row) break
         const xs = row.books.filter(b => !b.placeholder && b.id !== d.id).map(b => this.bases.get(b.id)?.x ?? 0)
-        target = { row: r, index: xs.filter(x => x < q.x).length }
+        const qx = q.x - this._off(r)
+        target = { row: r, index: xs.filter(x => x < qx).length }
         break
       }
     }
@@ -883,6 +950,7 @@ export class BookcaseScene {
     const base = this.bases.get(d.id)
     if (base) d.entry.x.t = base.x
     this._materialize()
+    if (d.entry.row != null) d.entry.x.v -= this._off(d.entry.row)
     this.kick()
   }
 
@@ -978,11 +1046,19 @@ export class BookcaseScene {
     if (ptrChanged || this.wasWaving) this._wave()
     this.wasWaving = !!this.pointer && near
 
+    // rangées qui défilent
+    for (let r = 0; r < this.rowOff.length; r++) {
+      const sp = this.rowOff[r]
+      if (!sp || this.press?.panX?.r === r) continue
+      if (!this.press?.panX) sp.t = this._clampOff(r, sp.t)
+      if (!sp.done) { for (let i = 0; i < sub; i++) sp.step(h); moving = true }
+    }
+    const offOf = e => (this.drag?.entry === e ? 0 : this._off(e.row))
     for (const e of this.books.values()) {
-      if (e.waiting) { e.wrap.position.set(e.x.v, e.y.v, e.z.v); continue }
-      if (e.delay > 0) { e.delay -= dt * 1000; moving = true; e.wrap.position.set(e.x.v, e.y.v, e.z.v); continue }
+      if (e.waiting) { e.wrap.position.set(e.x.v + offOf(e), e.y.v, e.z.v); continue }
+      if (e.delay > 0) { e.delay -= dt * 1000; moving = true; e.wrap.position.set(e.x.v + offOf(e), e.y.v, e.z.v); continue }
       for (let i = 0; i < sub; i++) { e.x.step(h); e.y.step(h); e.z.step(h); e.yaw.step(h) }
-      e.wrap.position.set(e.x.v, e.y.v, e.z.v)
+      e.wrap.position.set(e.x.v + offOf(e), e.y.v, e.z.v)
       e.mesh.rotation.y = e.yaw.v
       if (e.mark && e.markGrow) {
         const s = Math.min(1, e.mark.scale.y + dt * 3.2)
@@ -1013,7 +1089,7 @@ export class BookcaseScene {
     }
 
     this.renderer.render(this.scene, this.camera)
-    this._adapt(dt)
+    if (this._adapt(dt)) moving = true     // qualité réduite : on redessine aussitôt (sinon le mur resterait vide)
     this._emitOverlay()
     if (moving || this.drag || this.pointerDirty || this.panning) requestAnimationFrame(this._frame)
     else this.running = false
@@ -1035,12 +1111,15 @@ export class BookcaseScene {
       pf.level = 1
       this.renderer.setPixelRatio(1)
       this.renderer.setSize(this.w, this.h, false)
+      return true      // le canevas vient d'être vidé : il faut le redessiner
     } else if (avg > 0.034 && pf.level === 1) {
       pf.level = 2
       this.renderer.shadowMap.type = THREE.PCFShadowMap
       this.key.shadow.mapSize.set(1024, 1024)
       this.key.shadow.map?.dispose(); this.key.shadow.map = null
+      return true
     }
+    return false
   }
 
   /** Étiquettes des planches : positionnées directement (sans repasser par React). */

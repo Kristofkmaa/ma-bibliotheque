@@ -17,7 +17,7 @@ function greeting(hour) {
  * la télé passe le tuto (on la touche pour le voir en grand) ; le panier sur la table basse
  * ouvre la recherche, ou, s'il reste des livres dedans, le rangement guidé.
  */
-export default function LivingRoom({ books, shelves, basketItems, from, onEntered, onOpenBook, onAddBooks, getLibrary }) {
+export default function LivingRoom({ books, shelves, basketItems, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
   const rootRef = useRef(null)
   const hostRef = useRef(null)
   const topRef = useRef(null)
@@ -177,6 +177,7 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
         <p className="salon-hint">
           {mobile ? 'Glisse le doigt pour regarder autour, touche les objets' : 'Fais glisser pour regarder autour, clique sur les objets'}
         </p>
+        {onSignOut && <button type="button" className="lbl salon-out" onClick={onSignOut}>Déconnexion</button>}
       </div>
     </div>
   )

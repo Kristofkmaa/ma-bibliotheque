@@ -281,6 +281,8 @@ export function BasketTray({ items, shelves, books, api, mobile, canDrop, open, 
     const id = `basket:${book.googleId}`
     let ghost = null, timer = null, dead = false
     const src = el.querySelector('img')?.src
+    // le rang défile à la main (le navigateur ne doit pas voler le geste quand on monte en biais)
+    const rowEl = el.closest('.tray-row'), scroll0 = rowEl?.scrollLeft || 0
 
     const begin = () => {
       if (ghost || dead || !canDrop) return
@@ -297,10 +299,11 @@ export function BasketTray({ items, shelves, books, api, mobile, canDrop, open, 
     }
     const onMove = ev => {
       const dx = ev.clientX - start.x, dy = ev.clientY - start.y
+      if (dead) { if (rowEl) rowEl.scrollLeft = scroll0 - dx; return }
       if (!ghost) {
         if (Math.hypot(dx, dy) < 7) return
-        // doigt : vers le haut on prend le livre ; sur le côté on fait défiler la rangée
-        if (!touch || (dy < 0 && Math.abs(dy) > Math.abs(dx) * 0.8)) begin()
+        // doigt : vers le haut (même en biais) on prend le livre ; sur le côté on fait défiler le rang
+        if (!touch || (dy < 0 && Math.abs(dy) > Math.abs(dx) * 0.5)) begin()
         else { dead = true; clearTimeout(timer); return }
         if (!ghost) return
       }
