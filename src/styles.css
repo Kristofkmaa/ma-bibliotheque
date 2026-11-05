@@ -2366,3 +2366,14 @@ body.immersive .scene { padding: 0 !important; }
 }
 .stv.sx .sx-home { position: relative; z-index: 1; }
 .stv.sx .sx-top.solid { background: rgba(13, 12, 14, 0.7); }
+
+/* assis dans le canapé */
+.salon-stand {
+  position: absolute; z-index: 5; left: 50%; translate: -50% 0; bottom: calc(84px + env(safe-area-inset-bottom));
+  height: 40px; padding: 0 18px 0 14px; border-radius: 20px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink);
+  display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  box-shadow: 0 10px 22px -12px rgba(20, 16, 10, 0.5); animation: fadeUp 0.45s both;
+}
+.salon-stand svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.salon.cinema .salon-stand { background: #1C1A17; color: #F1ECE3; border-color: rgba(255, 255, 255, 0.15); }
+@media (min-width: 768px) { .salon-stand { bottom: 150px; } }

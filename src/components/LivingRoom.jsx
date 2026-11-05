@@ -38,6 +38,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   const [sound, setSound] = useState(false)      // le son de la télé (coupé à l'arrivée)
   const [onAir, setOnAir] = useState(false)      // un générique passe
   const [skip, setSkip] = useState(0)            // « générique suivant »
+  const [seated, setSeated] = useState(false)    // assis dans le canapé
   // rideaux fermés : tout le salon passe en sombre (mode cinéma)
   const [cinema, setCinema] = useState(() => { try { return localStorage.getItem('levana.salon.rideaux') === '1' } catch { return false } })
   const mobile = useIsMobile()
@@ -80,6 +81,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       onTvZoom: on => { setTv(on); if (on) { store.set(BUBBLE_KEY, 'off'); setBubbleOff(true) } },
       onTvInside: setInside,
       onCinema: setCinema,
+      onSeat: setSeated,
       tvVideo: () => tvVideo.current,
       tvBubble: () => cb.current.bubbleOn,
       onTvBubbleClose: () => { store.set(BUBBLE_KEY, 'off'); setBubbleOff(true) },
@@ -146,6 +148,14 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       <div className="tv-video" ref={tvVideo} aria-hidden="true">
         {!tv && !going && tvSeries.length > 0 && <TvBackdrop series={tvSeries} sound={sound} skip={skip} onPlaying={setOnAir} onNow={id => sceneRef.current?.showWork(id)} />}
       </div>
+      {/* assis dans le canapé : un bouton pour se lever */}
+      {seated && !tv && !going && (
+        <button type="button" className="salon-stand" onClick={() => sceneRef.current?.stand()}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V6M6.5 11.5L12 6l5.5 5.5" /></svg>
+          Se lever
+        </button>
+      )}
+
       {/* les commandes du salon : le son, le générique suivant, les rideaux */}
       {!tv && !going && (
         <div className="salon-ctrls" role="toolbar" aria-label="Le salon">
@@ -213,7 +223,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16M20 4v16M4 9h16M4 14.5h16M4 20h16M7 9V6M9 9V5.5M12 14.5v-3.5M14.5 14.5v-3" /></svg>
             <span>Ma bibliothèque</span>
           </button>
-          <p className="salon-tabs-hint">Glisse pour tourner la pièce</p>
+          <p className="salon-tabs-hint">{seated ? 'Glisse pour tourner la tête' : 'Pince pour t’asseoir dans le canapé'}</p>
           <button type="button" className="tab" onClick={() => sceneRef.current?.zoomTv()} disabled={going}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="1.5" /><path d="M8.5 20h7M10.5 9l4 2-4 2z" /></svg>
             <span>Films & séries</span>
@@ -229,7 +239,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
               Films & séries <span aria-hidden="true">▶</span>
             </button>
           </div>
-          <p className="salon-hint">Fais glisser pour regarder autour, clique sur les objets</p>
+          <p className="salon-hint">{seated ? 'Fais glisser pour tourner la tête · molette en arrière pour te lever' : 'Fais glisser pour regarder autour · molette en avant pour t’asseoir dans le canapé'}</p>
           {onSignOut && <button type="button" className="lbl salon-out" onClick={onSignOut}>Déconnexion</button>}
         </div>
       )}

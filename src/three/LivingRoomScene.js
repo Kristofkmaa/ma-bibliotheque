@@ -380,6 +380,8 @@ export class LivingRoomScene {
     this.fill.intensity = m.fill
     this.baseLights = { hemi: m.hemi[2], key: m.key[1], fill: m.fill }
     this.mix = 0     // 0 : lumière du salon ; 1 : lumière de la bibliothèque
+    // assis dans le canapé (molette en avant / pincer) : on regarde l'écran, on tourne la tête
+    this.seat = { k: new Spring(0, 30, 1), on: false, yaw: 0.12, pitch: 0.02, then: null }
     this.firePower = new Spring(m.fire, 30, 0.5)
     this.fireFull = m.fire
     this.fireLow = store('levana.salon.feu') === 'bas'
@@ -1825,6 +1827,8 @@ export class LivingRoomScene {
     this._pick = pick
     this._down = e => {
       if (this.fly) return
+      this.touches = (this.touches || 0) + (e.pointerType === 'touch' ? 1 : 0)
+      if (this.touches > 1) { this.pointer = null; return }
       el.setPointerCapture?.(e.pointerId)
       this.pointer = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: performance.now(), drag: false, vx: 0, vy: 0, lt: performance.now() }
       this.idleAt = this.time
@@ -1834,7 +1838,11 @@ export class LivingRoomScene {
       if (p && p.id === e.pointerId) {
         const dx = e.clientX - p.x, dy = e.clientY - p.y
         if (!p.drag && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) > 7) { p.drag = true; this._setHover(null) }
-        if (p.drag && !this.tvZoom) {
+        if (p.drag && !this.tvZoom && this.seat.on) {
+          const k = 2.2 / Math.max(320, this.w)
+          this.seat.yaw = clamp(this.seat.yaw - dx * k, -0.55, 1.0)
+          this.seat.pitch = clamp(this.seat.pitch + dy * k * 0.7, -0.4, 0.3)
+        } else if (p.drag && !this.tvZoom) {
           const k = 2.6 / Math.max(320, this.w)
           this.az.t = this.az.t - dx * k      // tour complet autour de la pièce
           this.el.t = clamp(this.el.t + dy * k * 0.8, EL_MIN - 0.05, EL_MAX + 0.05)
@@ -1848,10 +1856,12 @@ export class LivingRoomScene {
       if (e.pointerType === 'mouse' && !this.fly && !this.tvZoom) this.hoverXY = { x: e.clientX, y: e.clientY }
     }
     this._up = e => {
+      if (e.pointerType === 'touch') this.touches = Math.max(0, (this.touches || 0) - 1)
       const p = this.pointer
       if (!p || p.id !== e.pointerId) return
       this.pointer = null
       if (this.tvZoom) return
+      if (p.drag && this.seat.on) return
       if (p.drag) {
         const k = 2.6 / Math.max(320, this.w)
         this.az.t = this.az.t - p.vx * 160 * k
@@ -1863,6 +1873,27 @@ export class LivingRoomScene {
       if (kind) this.tap(kind)
     }
     this._leave = () => { this.hoverXY = null; this._setHover(null) }
+    // molette en avant : on s'assoit dans le canapé ; en arrière : on se relève
+    this._wheel = e => {
+      if (this.fly || this.tvZoom) return
+      e.preventDefault()
+      this.wheelAcc = (this.wheelAcc || 0) + e.deltaY
+      if (this.wheelAcc < -50) { this.wheelAcc = 0; this.sit() } else if (this.wheelAcc > 50) { this.wheelAcc = 0; if (this.seat.on) this.stand() }
+    }
+    // pincer : écarter les doigts pour s'asseoir, les resserrer pour se lever
+    const dist2 = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    this._ts = e => { if (e.touches.length === 2) this.pinch0 = dist2(e.touches) }
+    this._tm = e => {
+      if (e.touches.length !== 2 || !this.pinch0) return
+      e.preventDefault()
+      const r = dist2(e.touches) / this.pinch0
+      if (r > 1.22 && !this.seat.on) { this.sit(); this.pinch0 = null } else if (r < 0.82 && this.seat.on) { this.stand(); this.pinch0 = null }
+    }
+    this._te = e => { if (e.touches.length < 2) this.pinch0 = null }
+    el.addEventListener('wheel', this._wheel, { passive: false })
+    el.addEventListener('touchstart', this._ts, { passive: true })
+    el.addEventListener('touchmove', this._tm, { passive: false })
+    el.addEventListener('touchend', this._te)
     el.addEventListener('pointerdown', this._down)
     window.addEventListener('pointermove', this._move)
     window.addEventListener('pointerup', this._up)
@@ -1879,8 +1910,37 @@ export class LivingRoomScene {
     this.cb.onHover?.(kind ? { kind, label: this.items.get(kind)?.label, x, y } : null)
   }
 
+  // ---- Assis dans le canapé ----------------------------------------------------------------
+  /** S'asseoir : la caméra va se poser à hauteur des yeux dans le canapé, face à l'image. */
+  sit() {
+    if (this.fly || this.tvZoom || this.seat.on) return
+    this.seat.on = true
+    this.seat.then = null
+    this.seat.yaw = 0.12; this.seat.pitch = 0.02
+    this.seat.k.t = 1
+    this._setHover(null)
+    this.cb.onSeat?.(true)
+  }
+  /** Se lever (puis, éventuellement, faire quelque chose : entrer dans la bibliothèque…). */
+  stand(then) {
+    if (!this.seat.on && !this.seat.then) { then?.(); return }
+    this.seat.on = false
+    this.seat.then = then || null
+    this.seat.k.t = 0
+    this.cb.onSeat?.(false)
+  }
+  _seatPose() {
+    const eye = new THREE.Vector3(SOFA.x - 0.2, 1.32, SOFA.z)     // au bord du canapé, au-dessus des coussins
+    const y = this.seat.yaw, p = this.seat.pitch
+    // yaw 0 : droit devant (l'image, mur de gauche) ; vers la droite : la bibliothèque (mur du fond)
+    const look = eye.clone().add(new THREE.Vector3(-Math.cos(y) * Math.cos(p), Math.sin(p), -Math.sin(y) * Math.cos(p)))
+    return { eye, look }
+  }
+
   /** Ce que fait chaque objet quand on le touche. */
   tap(kind) {
+    // assis : pour aller dans la télé, le meuble ou la bibliothèque, on se lève d'abord
+    if (this.seat?.on && ['tv', 'projector', 'tvbubble', 'cabinet', 'bookcase'].includes(kind)) { this.stand(() => this.tap(kind)); return }
     const it = this.items.get(kind)
     if (it) it.bounce.vel += kind === 'bookcase' ? 0.6 : 1.4
     this.shadowDirty = 2
@@ -1922,8 +1982,29 @@ export class LivingRoomScene {
       }
       for (let i = 0; i < sub; i++) { this.az.step(h); this.el.step(h) }
       const idle = this.pointer ? 0 : clamp((this.time - (this.idleAt || 0) - 2) / 3, 0, 1)
-      this.lastDrift = Math.sin(this.time * 0.23) * 0.035 * idle
+      this.lastDrift = Math.sin(this.time * 0.23) * 0.035 * idle * (this.seat.on ? 0 : 1)
       this._placeCamera(this.az.v + this.lastDrift, this.el.v, this.dist, this.target)
+      // assis dans le canapé : on glisse de la vue d'ensemble jusqu'à la place, à hauteur des yeux
+      for (let i = 0; i < sub; i++) this.seat.k.step(h)
+      const sk = clamp(this.seat.k.v, 0, 1)
+      const cam = this.camera
+      if (sk > 0.001) {
+        const e = ease(sk)
+        const { eye, look } = this._seatPose()
+        cam.position.lerp(eye, e)
+        cam.lookAt(this.target.clone().lerp(look, e))
+        const fov = FOV + ((this.camera.aspect < 1 ? 72 : 52) - FOV) * e
+        if (Math.abs(cam.fov - fov) > 1e-3) { cam.fov = fov; cam.updateProjectionMatrix() }
+        if (!this.seat.k.done) this.shadowDirty = Math.max(this.shadowDirty, 1)
+      } else if (cam.fov !== FOV) { cam.fov = FOV; cam.updateProjectionMatrix() }
+      if (!this.seat.on && this.seat.then && sk <= 0.03) {
+        const f = this.seat.then
+        this.seat.then = null
+        this.seat.k.snap(0)
+        cam.fov = FOV; cam.updateProjectionMatrix()
+        this._placeCamera(this.az.v, this.el.v, this.dist, this.target)
+        f()
+      }
     }
     // lumières : salon → bibliothèque
     const sal = 1 - this.mix
@@ -2098,6 +2179,10 @@ export class LivingRoomScene {
     document.removeEventListener('visibilitychange', this._onVis)
     const el = this.renderer.domElement
     el.removeEventListener('pointerdown', this._down)
+    el.removeEventListener('wheel', this._wheel)
+    el.removeEventListener('touchstart', this._ts)
+    el.removeEventListener('touchmove', this._tm)
+    el.removeEventListener('touchend', this._te)
     window.removeEventListener('pointermove', this._move)
     window.removeEventListener('pointerup', this._up)
     window.removeEventListener('pointercancel', this._up)
