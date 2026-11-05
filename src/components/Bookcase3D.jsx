@@ -6,7 +6,7 @@ import {
   PH, effectiveShelves, previewDrag, moveBook, createShelf,
   renameShelf, setShelfSkin, applySkinToAll, moveShelf, deleteShelf, adoptLoose,
 } from '../lib/shelfOps'
-import { BookcaseScene, worldLayout } from '../three/BookcaseScene'
+import { BookcaseScene, worldLayout, RH, PT } from '../three/BookcaseScene'
 import Caption from './Caption'
 import ShelfEditor from './ShelfEditor'
 
@@ -408,7 +408,7 @@ export default function Bookcase3D({
               <button
                 key={s.key} type="button" tabIndex={-1}
                 className={'rail-tick' + (s === currentSection ? ' on' : '')}
-                style={{ top: `${((s.row * 1.29 + 0.07) / (totalRows * 1.29 + 0.07)) * 100}%` }}
+                style={{ top: `${((s.row * (RH + PT) + PT) / (totalRows * (RH + PT) + PT)) * 100}%` }}
                 title={s.label}
                 onClick={() => sceneRef.current?.scrollToRow(s.row)}
               />

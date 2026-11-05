@@ -15,7 +15,7 @@ import { noTouchSelect } from './webgl'
 
 // ---- Dimensions du monde (1 = hauteur d'un grand livre) -------------------------------------
 export const RH = 1.22     // hauteur utile d'un rayon
-export const PT = 0.07     // épaisseur d'une planche
+export const PT = 0.14     // épaisseur d'une planche (assez pour y visser la plaque du nom)
 export const SD = 0.92     // profondeur du meuble
 export const ST = 0.08     // épaisseur des montants
 const PADX = 0.16          // marge intérieure gauche
@@ -415,6 +415,9 @@ export class BookcaseScene {
     // les mêmes plans découpent portes et livres aux montants du meuble (rangées qui défilent)
     const [clipL, clipR] = this.clips
     clipL.constant = CW / 2; clipR.constant = CW / 2
+    // les portes recouvrent aussi le devant des montants : aucune fente entre porte et meuble
+    this.doorClips ||= [new THREE.Plane(new THREE.Vector3(1, 0, 0), 1), new THREE.Plane(new THREE.Vector3(-1, 0, 0), 1)]
+    this.doorClips[0].constant = CW / 2 + ST; this.doorClips[1].constant = CW / 2 + ST
     for (let r = 0; r < rows; r++) {
       const y0 = this.rowBase(r)
       const part = { r }
@@ -434,17 +437,18 @@ export class BookcaseScene {
       this.caseGroup.add(plank, back, sideL, sideR)
       // joint fin entre deux modules (devant et sur les côtés) : chaque étagère est un bloc à part
       if (r > 0) {
-        const seam = new THREE.Mesh(this.seamGeo ||= new THREE.BoxGeometry(1, 1, 1), this.seamMat ||= new THREE.MeshBasicMaterial({ color: 0x1c140c, transparent: true, opacity: 0.55 }))
-        seam.scale.set(CW + 2 * ST + 0.004, 0.009, SD + 0.044)
+        const seam = new THREE.Mesh(this.seamGeo ||= new THREE.BoxGeometry(1, 1, 1), this.seamMat ||= new THREE.MeshBasicMaterial({ color: 0x1c140c, transparent: true, opacity: 0.55, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }))
+        seam.scale.set(CW + 2 * ST + 0.012, 0.012, SD + 0.052)
         seam.position.set(0, y0 + RH + PT / 2, 0.02)      // limite entre ce module et celui du dessus
         this.caseGroup.add(seam)
       }
       part.plank = plank
-      const doorMatL = new THREE.MeshStandardMaterial({ color: '#E2D6BC', map: doorTexture('panneau'), roughness: 0.7, clippingPlanes: [clipL, clipR], clipShadows: true })
+      const doorMatL = new THREE.MeshStandardMaterial({ color: '#E2D6BC', map: doorTexture('panneau'), roughness: 0.7, clippingPlanes: this.doorClips, clipShadows: true })
       const doorMatR = doorMatL.clone()
       const half = CW / 2 + 0.01
-      const dl = new THREE.Mesh(new THREE.BoxGeometry(half, RH - 0.02, DOOR_T), doorMatL)
-      const dr = new THREE.Mesh(new THREE.BoxGeometry(CW, RH - 0.02, DOOR_T), doorMatR)
+      // de planche à planche (pas de jour en haut ni en bas), et par-dessus les montants
+      const dl = new THREE.Mesh(new THREE.BoxGeometry(half + ST, RH - 0.002, DOOR_T), doorMatL)
+      const dr = new THREE.Mesh(new THREE.BoxGeometry(CW + ST, RH - 0.002, DOOR_T), doorMatR)
       const dz = SD / 2 + 0.06
       dl.position.set(0, y0 + RH / 2, dz); dr.position.set(0, y0 + RH / 2, dz + DOOR_T + 0.012) // jamais dans le même plan : pas de scintillement
       dl.castShadow = dr.castShadow = true
@@ -476,14 +480,14 @@ export class BookcaseScene {
       part.plaqueText = label
       if (!label) return
       const { tex, aspect } = plaqueTexture(label)
-      const h = this.layout.mobile ? 0.23 : 0.16
+      const h = PT * 0.86
       const w = Math.min(CW * 0.62, h * aspect)
       this.brassMat ||= new THREE.MeshStandardMaterial({ color: '#B8914A', metalness: 0.55, roughness: 0.4 })
       part.plaqueMat?.dispose()
-      part.plaqueMat = new THREE.MeshStandardMaterial({ map: tex, metalness: 0.35, roughness: 0.45 })
+      part.plaqueMat = new THREE.MeshStandardMaterial({ map: tex, metalness: 0.35, roughness: 0.45, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.014), [this.brassMat, this.brassMat, this.brassMat, this.brassMat, part.plaqueMat, this.brassMat])
-      // vissée sur la planche, elle déborde un peu dessous (au-dessus des livres du rayon inférieur)
-      m.position.set(-CW / 2 + 0.1 + w / 2, this.rowBase(r) - PT / 2 - (h - PT) * 0.35, SD / 2 + 0.04 + 0.008)
+      // vissée sur le chant de la planche, entre les portes du dessus et du dessous
+      m.position.set(-CW / 2 + 0.1 + w / 2, this.rowBase(r) - PT / 2, SD / 2 + 0.04 + 0.009)
       m.userData.plaque = r
       m.castShadow = true
       this.caseGroup.add(m)
@@ -1157,8 +1161,8 @@ export class BookcaseScene {
       const half = CW / 2 + 0.01
       for (const part of this.caseParts) {
         for (let i = 0; i < sub; i++) { part.left.step(h); part.right.step(h); part.born.step(h) }
-        part.doorL.position.x = -CW / 2 + part.left.v - half / 2
-        part.doorR.position.x = -CW / 2 + part.right.v + CW / 2
+        part.doorL.position.x = -CW / 2 + part.left.v - (half + ST) / 2
+        part.doorR.position.x = -CW / 2 + part.right.v + CW / 2 + ST / 2
         const b = Math.max(0, Math.min(1, part.born.v))
         part.plank.scale.x = Math.max(0.001, b)
         if (!(part.left.done && part.right.done && part.born.done)) moving = true

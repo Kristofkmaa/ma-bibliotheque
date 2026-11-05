@@ -237,9 +237,9 @@ export function plaqueTexture(text) {
   const m = document.createElement('canvas').getContext('2d')
   const label = text.toUpperCase()
   const spaced = label.split('').join(String.fromCharCode(8202))
-  m.font = `600 46px ${SANS}`
-  const tw = Math.min(1400, m.measureText(spaced).width)
-  const W = Math.ceil(tw + 92)
+  m.font = `600 62px ${SANS}`
+  const tw = Math.min(1600, m.measureText(spaced).width)
+  const W = Math.ceil(tw + 84)
   const tex = canvasTexture(key + '|t', W, H, (ctx, w, h) => {
     const g = ctx.createLinearGradient(0, 0, 0, h)
     g.addColorStop(0, '#E9CF8C'); g.addColorStop(0.45, '#C9A45A'); g.addColorStop(1, '#9C7A35')
@@ -249,14 +249,14 @@ export function plaqueTexture(text) {
     ctx.fillStyle = 'rgba(70,45,10,0.35)'; ctx.fillRect(0, h - 6, w, 6)
     ctx.strokeStyle = 'rgba(70,45,10,0.45)'; ctx.lineWidth = 3; ctx.strokeRect(10, 10, w - 20, h - 20)
     // vis
-    for (const x of [24, w - 24]) {
+    for (const x of [22, w - 22]) {
       ctx.fillStyle = '#8A6A2C'; ctx.beginPath(); ctx.arc(x, h / 2, 7, 0, 7); ctx.fill()
       ctx.strokeStyle = 'rgba(255,240,200,0.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 4, h / 2 - 3); ctx.lineTo(x + 4, h / 2 + 3); ctx.stroke()
     }
     // texte gravé : ombre claire dessous, sombre dessus
-    ctx.font = `600 46px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillStyle = 'rgba(255,244,210,0.75)'; ctx.fillText(spaced, w / 2, h / 2 + 3, w - 80)
-    ctx.fillStyle = '#3B2A10'; ctx.fillText(spaced, w / 2, h / 2 + 1, w - 80)
+    ctx.font = `600 62px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillStyle = 'rgba(255,244,210,0.75)'; ctx.fillText(spaced, w / 2, h / 2 + 4, w - 72)
+    ctx.fillStyle = '#3B2A10'; ctx.fillText(spaced, w / 2, h / 2 + 2, w - 72)
   }, { scale: 2 })
   const out = { tex, aspect: W / H }
   cache.set(key, out)

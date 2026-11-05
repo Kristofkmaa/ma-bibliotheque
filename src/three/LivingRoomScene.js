@@ -923,18 +923,92 @@ export class LivingRoomScene {
     }
   }
 
-  /** Les bulles au-dessus de la télé et du panier suivent la caméra. */
-  _placeBubbles() {
-    const S = this.renderer.domElement.getBoundingClientRect()
-    const show = !this.fly && !this.tvZoom
-    const tvShown = (this.wallOf('left').f ?? 1) > 0.5
-    for (const [kind, pos] of [['tv', new THREE.Vector3(-R + 0.2, 1.47, TV.z)], ['basket', new THREE.Vector3(TABLE.x + 0.17, 0.86, TABLE.z + 0.04)]]) {
-      const el = this.cb.bubble?.(kind)
-      if (!el) continue
-      const v = pos.project(this.camera)
-      const x = S.left + ((v.x + 1) / 2) * S.width, y = S.top + ((1 - v.y) / 2) * S.height
-      el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
-      el.classList.toggle('off', !show || (kind === 'tv' && !tvShown))
+  // ---- Bulles (dans la 3D : elles suivent la pièce exactement, sans retard) ----------------
+  _bubbleTexture(text, kind) {
+    const S = 2, H = 96, TAIL = 16
+    const m = document.createElement('canvas').getContext('2d')
+    m.font = `italic 400 34px "Newsreader", Georgia, serif`
+    const tw = m.measureText(text).width
+    const icon = 40
+    const W = Math.ceil(tw + icon + 64)
+    const c = document.createElement('canvas')
+    c.width = W * S; c.height = (H + TAIL + 6) * S
+    const g = c.getContext('2d')
+    g.scale(S, S)
+    const r = (H - 8) / 2
+    g.shadowColor = 'rgba(20,16,10,0.25)'; g.shadowBlur = 10; g.shadowOffsetY = 4
+    g.fillStyle = '#F4F2ED'; g.strokeStyle = '#141414'; g.lineWidth = 2
+    g.beginPath()
+    g.moveTo(4 + r, 4); g.lineTo(W - 4 - r, 4); g.arc(W - 4 - r, 4 + r, r, -Math.PI / 2, Math.PI / 2)
+    g.lineTo(W / 2 + 13, H - 4); g.lineTo(W / 2, H - 4 + TAIL); g.lineTo(W / 2 - 13, H - 4)
+    g.lineTo(4 + r, H - 4); g.arc(4 + r, 4 + r, r, Math.PI / 2, -Math.PI / 2)
+    g.closePath(); g.fill()
+    g.shadowColor = 'transparent'; g.stroke()
+    const cy = 4 + r
+    if (kind === 'tv') {
+      g.fillStyle = '#1F3FB0'; g.beginPath(); g.arc(30 + 14, cy, 20, 0, 7); g.fill()
+      g.fillStyle = '#fff'; g.beginPath(); g.moveTo(39, cy - 9); g.lineTo(53, cy); g.lineTo(39, cy + 9); g.closePath(); g.fill()
+    } else {
+      g.fillStyle = '#C9614F'; g.beginPath(); g.arc(30 + 14, cy, 9, 0, 7); g.fill()
+    }
+    g.fillStyle = kind === 'tv' ? '#141414' : '#7A2E1F'
+    g.font = `italic 400 34px "Newsreader", Georgia, serif`; g.textBaseline = 'middle'
+    g.fillText(text, 30 + icon + 8, cy + 2)
+    const t = new THREE.CanvasTexture(c)
+    t.colorSpace = THREE.SRGBColorSpace
+    t.anisotropy = 4
+    return { tex: t, w: W, h: H + TAIL + 6 }
+  }
+
+  _setBubble(kind, text) {
+    this.bubbles ||= {}
+    let b = this.bubbles[kind]
+    if (b && b.text === text) return b
+    if (!text) { if (b) b.sprite.visible = false; if (b) b.text = ''; return b }
+    const { tex, w, h } = this._bubbleTexture(text, kind)
+    if (!b) {
+      const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, transparent: true, sizeAttenuation: false })
+      const sp = new THREE.Sprite(mat)
+      sp.center.set(0.5, 0)
+      sp.renderOrder = 30
+      sp.userData.kind = kind === 'tv' ? 'tvbubble' : 'basketbubble'
+      this.scene.add(sp)
+      this.hitMeshes.push(sp)
+      b = this.bubbles[kind] = { sprite: sp, mat, op: new Spring(0, 90, 1) }
+      this.disposables.push(mat)
+    } else {
+      b.mat.map.dispose()
+      b.mat.map = tex
+      b.mat.needsUpdate = true
+    }
+    b.text = text; b.w = w; b.h = h
+    this.disposables.push(tex)
+    return b
+  }
+
+  /** Les bulles au-dessus de la télé et du panier. */
+  _placeBubbles(dt) {
+    if (!this.bubbles?.tv) this._setBubble('tv', 'Le tuto du site')
+    this.bornAt ||= performance.now()
+    const free = !this.fly && !this.tvZoom && performance.now() - this.bornAt > 1200
+    const f = 1 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))
+    const px = 40     // hauteur à l'écran (px) de la pastille
+    for (const [kind, pos, on] of [
+      ['tv', new THREE.Vector3(-R + 0.2, 1.5, TV.z), free && (this.wallOf('left').f ?? 1) > 0.5],
+      ['basket', new THREE.Vector3(TABLE.x + 0.17, 0.9, TABLE.z + 0.04), free && !!this.bubbles?.basket?.text],
+    ]) {
+      const b = this.bubbles?.[kind]
+      if (!b) continue
+      b.op.t = on ? 1 : 0
+      b.op.step(dt)
+      const o = clamp(b.op.v, 0, 1)
+      b.mat.opacity = o
+      b.sprite.visible = o > 0.01
+      const k = (2 * px) / (f * Math.max(1, this.h)) * (b.h / 96)
+      const pop = 0.75 + 0.25 * o
+      b.sprite.scale.set(k * (b.w / b.h) * pop, k * pop, 1)
+      b.sprite.position.copy(pos)
+      b.sprite.position.y += Math.sin(this.time * 2 + (kind === 'tv' ? 0 : 1.7)) * 0.025
     }
   }
 
@@ -1117,6 +1191,8 @@ export class LivingRoomScene {
 
   /** Les livres du panier dépassent de la corbeille. */
   setBasket(items) {
+    const count = items.length
+    this._setBubble('basket', count ? (count > 1 ? `${count} livres à ranger` : '1 livre à ranger') : '')
     const sig = items.map(b => b.googleId).join(',')
     if (sig === this.basketSig) return
     this.basketSig = sig
@@ -1678,6 +1754,8 @@ export class LivingRoomScene {
       case 'sofa': this.cushions.forEach((c, i) => { c.s.vel -= 1.1 + (i % 3) * 0.2 }); break
       case 'plant': this.leaves.forEach((l, i) => { l.sway.vel += (i % 2 ? 1 : -1) * 3 }); break
       case 'tv': if (this.tvZoom) this.tutNext(); else this.zoomTv(); break
+      case 'tvbubble': this.zoomTv(); break
+      case 'basketbubble': this.cb.onBasket?.(); break
       case 'basket': this.cb.onBasket?.(); break
       default: this.cb.onTap?.(kind)
     }
@@ -1834,7 +1912,7 @@ export class LivingRoomScene {
     this.tvAcc = (this.tvAcc || 0) + dt
     const sharp = this._placeTvOverlay()
     if (!sharp && this.tvAcc >= (this.tvZoom ? 1 / 30 : 1 / 12)) { this.tvAcc = 0; this._drawTv() }
-    this._placeBubbles()
+    this._placeBubbles(dt)
 
     if (moving) this.shadowDirty = Math.max(this.shadowDirty, 1)
     if (this.shadowDirty > 0) { this.renderer.shadowMap.needsUpdate = true; this.shadowDirty-- }

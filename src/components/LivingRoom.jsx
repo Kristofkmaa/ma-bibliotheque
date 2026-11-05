@@ -132,16 +132,7 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
       <div className="salon-stage" ref={hostRef} />
       <canvas className="tv-overlay" ref={tvOverlay} style={{ display: 'none' }} aria-hidden="true" />
 
-      {/* bulles au-dessus de la télé et du panier (placées par la scène) */}
-      <button type="button" className="salon-bubble tv-bubble off" ref={tvBubble} onClick={() => sceneRef.current?.zoomTv()}>
-        <span className="sbub-in"><span className="sbub-play" aria-hidden="true">▶</span> Le tuto du site</span>
-      </button>
-      {count > 0 && (
-        <button type="button" className="salon-bubble basket-bubble off" ref={basketBubble} onClick={() => go('guide')}>
-          <span className="sbub-in"><span className="sbub-dot" aria-hidden="true" />{count > 1 ? `${count} livres à ranger` : '1 livre à ranger'}</span>
-        </button>
-      )}
-
+      {/* les bulles (tuto, livres à ranger) sont dessinées dans la scène 3D */}
       {tv && (
         <div className="tv-caption" key={slide}>
           <p className="tv-cap-title">{STEPS[slide]?.title}</p>
