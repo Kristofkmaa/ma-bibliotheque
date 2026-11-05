@@ -2394,3 +2394,20 @@ body.immersive .scene { padding: 0 !important; }
 .sx-li-pub { flex: none; margin-left: 4px; padding: 1px 6px; border-radius: 3px; background: rgba(232, 176, 75, 0.14); color: var(--sx-gold); font-size: 11px; font-weight: 800; }
 .stv-cc { margin-left: auto; margin-right: 10px; height: 30px; padding: 0 10px; border-radius: 6px; border: 1.5px solid rgba(239, 233, 221, 0.6); background: transparent; color: #EFE9DD; font-family: var(--sans); font-size: 12px; font-weight: 800; letter-spacing: 0.06em; }
 .stv-cc.on { background: #EFE9DD; color: #111; border-color: #EFE9DD; }
+
+/* Où regarder (en France) */
+.sx-btn.watch { background: var(--sx-fg); color: #111; text-decoration: none; padding: 0 18px 0 8px; }
+.sx-btn.watch img { width: 30px; height: 30px; border-radius: 7px; display: block; }
+.sx-where { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
+.sx-where-label { font-family: var(--sans); font-size: 11px; font-weight: 600; color: var(--sx-muted); margin-bottom: 8px; }
+.sx-where-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.sx-prov {
+  display: inline-flex; align-items: center; gap: 10px; height: 46px; padding: 0 14px 0 6px; border-radius: 12px;
+  background: rgba(243, 239, 232, 0.07); border: 1px solid var(--sx-line); color: var(--sx-fg); text-decoration: none;
+  font-family: var(--sans); font-size: 13px; font-weight: 700; transition: background-color 0.2s, transform 0.2s;
+}
+.sx-prov:active { transform: scale(0.97); }
+@media (hover: hover) { .sx-prov:hover { background: rgba(243, 239, 232, 0.14); } }
+.sx-prov img { width: 34px; height: 34px; border-radius: 8px; display: block; }
+.sx-prov-noimg { width: 34px; height: 34px; border-radius: 8px; background: #333; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
+.sx-where-credit { font-family: var(--sans); font-size: 11px; color: var(--sx-muted); line-height: 1.4; }

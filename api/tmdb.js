@@ -5,6 +5,7 @@
  *   /api/tmdb?id=1668     → fiche d'une série (saisons, genres…)
  *   /api/tmdb?videos=1668 → ses vidéos YouTube : le générique d'abord, sinon les bandes-annonces
  *   /api/tmdb?images=1668 → ses grandes images (pour les faire défiler derrière le titre)
+ *   /api/tmdb?providers=1668 → où le regarder en France (abonnement, location, achat ; données JustWatch)
  * Avec &type=movie, les mêmes appels pour les films (recherche, fiche, bandes-annonces, images).
  * La clé peut être la « clé d'API » (v3) ou le « jeton d'accès en lecture » (v4, commence par eyJ).
  */
@@ -44,9 +45,16 @@ export default async function handler(req, res) {
     const id = parseInt(req.query.id, 10)
     const vid = parseInt(req.query.videos, 10)
     const img = parseInt(req.query.images, 10)
+    const prov = parseInt(req.query.providers, 10)
     const kind = req.query.type === 'movie' ? 'movie' : 'tv'
     let out
-    if (img > 0) {
+    if (prov > 0) {
+      const data = await call(`/${kind}/${prov}/watch/providers`, { language: '' })
+      const fr = data.results?.FR || {}
+      const pick = list => (list || []).sort((a, b) => (a.display_priority ?? 99) - (b.display_priority ?? 99))
+        .map(p => ({ id: p.provider_id, name: p.provider_name, logo: p.logo_path || null }))
+      out = { link: fr.link || null, flatrate: pick(fr.flatrate), free: pick([...(fr.free || []), ...(fr.ads || [])]), rent: pick(fr.rent), buy: pick(fr.buy) }
+    } else if (img > 0) {
       // les images sans texte d'abord (null), puis françaises, puis anglaises ; les mieux notées
       const data = await call(`/${kind}/${img}/images`, { language: '', include_image_language: 'null,fr,en' })
       const rank = b => (b.iso_639_1 == null ? 0 : 1) * 10 - (b.vote_average || 0)

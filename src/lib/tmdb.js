@@ -61,6 +61,35 @@ export function seriesImages(tmdbId, media = 'tv') {
   return imageCache.get(k)
 }
 
+const provCache = new Map()
+/** Où regarder une œuvre en France : { link, flatrate, free, rent, buy } (données JustWatch, via TMDB). */
+export function seriesProviders(tmdbId, media = 'tv') {
+  const k = media + tmdbId
+  if (!provCache.has(k)) {
+    const p = get({ providers: String(tmdbId), type: media }).catch(() => { provCache.delete(k); return null })
+    provCache.set(k, p)
+  }
+  return provCache.get(k)
+}
+
+/**
+ * L'adresse qui ouvre la plateforme sur ce titre (sur téléphone, son appli s'ouvre si elle est
+ * installée). On cherche le titre chez elle ; à défaut, la page de disponibilité TMDB.
+ */
+export function providerUrl(p, title, fallback) {
+  const q = encodeURIComponent(title || '')
+  const n = (p.name || '').toLowerCase()
+  if (n.includes('netflix')) return `https://www.netflix.com/search?q=${q}`
+  if (n.includes('amazon') || n.includes('prime video')) return `https://www.primevideo.com/search/ref=atv_nb_sug?phrase=${q}`
+  if (n.includes('disney')) return `https://www.disneyplus.com/search?q=${q}`
+  if (n.includes('apple tv')) return `https://tv.apple.com/search?term=${q}`
+  if (n === 'max' || n.includes('hbo')) return `https://play.max.com/search?q=${q}`
+  if (n.includes('paramount')) return `https://www.paramountplus.com/search/?q=${q}`
+  if (n.includes('youtube')) return `https://www.youtube.com/results?search_query=${q}`
+  if (n.includes('google play')) return `https://play.google.com/store/search?q=${q}&c=movies`
+  return fallback || `https://www.justwatch.com/fr/recherche?q=${q}`
+}
+
 const videoCache = new Map()
 /** Les vidéos d'une série (générique d'abord, sinon bandes-annonces), gardées en mémoire. */
 export function seriesVideos(tmdbId, media = 'tv') {

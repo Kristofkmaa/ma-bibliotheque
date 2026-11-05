@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { tmdbImg, searchSeries, seriesDetails, seriesVideos, seriesImages, year, isMovie, workKey, runtimeLabel, publicRating, fmtVote, fmtVotes } from '../lib/tmdb'
+import { tmdbImg, searchSeries, seriesDetails, seriesVideos, seriesImages, year, isMovie, workKey, runtimeLabel, publicRating, fmtVote, fmtVotes, seriesProviders, providerUrl } from '../lib/tmdb'
 
 /** Un titre dont les mots montent un à un, comme sortis d'une fente. */
 function Rise({ text, as: Tag = 'span', className, delay = 0, step = 0.06 }) {
@@ -399,6 +399,31 @@ function PublicScore({ pub }) {
   )
 }
 
+/** Où regarder en France : les plateformes, par abonnement, gratuites, en location, à l'achat. */
+function WhereToWatch({ s, prov }) {
+  if (prov === undefined) return <p className="sx-pub-none">…</p>
+  const groups = prov ? [['Avec abonnement', prov.flatrate], ['Gratuit', prov.free], ['En location', prov.rent], ['À l’achat', prov.buy]].filter(([, l]) => l?.length) : []
+  if (!groups.length) return <p className="sx-pub-none">Pas disponible en streaming en France pour l’instant.</p>
+  return (
+    <div className="sx-where">
+      {groups.map(([label, list]) => (
+        <div className="sx-where-row" key={label}>
+          <p className="sx-where-label">{label}</p>
+          <div className="sx-where-list">
+            {list.map(p => (
+              <a key={p.id} className="sx-prov" href={providerUrl(p, s.name, prov.link)} target="_blank" rel="noopener noreferrer" title={`Ouvrir ${p.name}`}>
+                {p.logo ? <img src={tmdbImg(p.logo, 'w92')} alt="" /> : <span className="sx-prov-noimg">{p.name.slice(0, 2)}</span>}
+                <span>{p.name}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      ))}
+      <p className="sx-where-credit">Disponibilités : JustWatch, via TMDB · ouvre l’appli de la plateforme, puis envoie le titre sur ta télé</p>
+    </div>
+  )
+}
+
 /**
  * La page d'un titre, en plein écran : ses images défilent derrière le grand titre, puis sa
  * bande-annonce démarre sans le son ; en dessous, le résumé, la note, la catégorie.
@@ -407,6 +432,10 @@ function DetailPage({ s, pub, videos, allCats, onBack, onPlay, onUpdate, onRemov
   const [late, setLate] = useState(false)
   useEffect(() => { setLate(false); const t = setTimeout(() => setLate(true), 6000); return () => clearTimeout(t) }, [s.id])
   const v = videos?.[0]
+  // où le regarder (en France) : le premier service par abonnement devient le grand bouton
+  const [prov, setProv] = useState(undefined)
+  useEffect(() => { let live = true; seriesProviders(s.tmdb_id, s.media).then(r => { if (live) setProv(r) }); return () => { live = false } }, [s.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const main = prov?.flatrate?.[0] || prov?.free?.[0] || null
   return (
     <div className="sx-page" role="dialog" aria-label={s.name}>
       <div className="sx-page-scroll">
@@ -424,13 +453,22 @@ function DetailPage({ s, pub, videos, allCats, onBack, onPlay, onUpdate, onRemov
             </p>
             {s.rating ? <p className="sx-page-stars" aria-label={`${s.rating} étoiles sur 5`}>{'★'.repeat(s.rating)}<i>{'★'.repeat(5 - s.rating)}</i></p> : null}
             <div className="sx-actions">
-              {v && <button type="button" className="sx-btn play" onClick={onPlay}><span className="sx-tri" aria-hidden="true" />{isOpening(v) ? 'Générique' : 'Bande-annonce'}</button>}
+              {main && (
+                <a className="sx-btn watch" href={providerUrl(main, s.name, prov.link)} target="_blank" rel="noopener noreferrer">
+                  {main.logo && <img src={tmdbImg(main.logo, 'w92')} alt="" />}Regarder sur {main.name}
+                </a>
+              )}
+              {v && <button type="button" className={'sx-btn' + (main ? '' : ' play')} onClick={onPlay}><span className="sx-tri" aria-hidden="true" />{isOpening(v) ? 'Générique' : 'Bande-annonce'}</button>}
             </div>
           </div>
         </section>
         <section className="sx-page-body">
           {s.overview && <p className="sx-page-over">{s.overview}</p>}
           {byLabel(s) && <p className="sx-page-by">{isMovie(s) ? 'Réalisation' : 'Chaîne'} · <b>{isMovie(s) ? s.networks?.[0] : byLabel(s)}</b></p>}
+          <div className="sx-page-block">
+            <p className="sx-page-label">Où regarder en France</p>
+            <WhereToWatch s={s} prov={prov} />
+          </div>
           <div className="sx-page-notes">
             <div className="sx-page-block">
               <p className="sx-page-label">Notre note</p>
