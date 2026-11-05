@@ -1,9 +1,9 @@
 import { tmdbImgCors, loadImage, year } from '../lib/tmdb'
 
 /**
- * L'écran de la télé vu du salon : nos séries, façon page de magazine — fond papier, grand
- * titre en serif, l'image de la série à droite, et les affiches qui montent depuis le bas
- * de l'écran (celle à l'honneur plus haut que les autres). Une série toutes les 8 secondes.
+ * L'écran de la télé vu du salon : nos séries rangées comme des cassettes VHS sur une étagère
+ * courbe (celle du milieu de face, les autres de tranche), le titre en bleu dessous, la frise
+ * des années en bas — comme dans la télé quand on y entre. Une cassette toutes les 8 secondes.
  * Repère logique 1600 × 900, mis à l'échelle de la cible.
  */
 
@@ -12,10 +12,15 @@ const SLIDE = 8
 const LW = 1600, LH = 900
 const SERIF = '"Newsreader", Georgia, serif'
 const SANS = '"Inter Tight", system-ui, sans-serif'
-const PAPER = '#EFE9DD', INK = '#16130F', MUTED = '#6B6358', ACCENT = '#1F3FB0'
+const PAPER = '#F5EFE3', INK = '#1A1814', MUTED = '#8A8273', ACCENT = '#2342D6'
+const SPINES = [
+  ['#1C1A17', '#EDE3CC'], ['#ECE2CB', '#1C1A17'], ['#6E1F1A', '#F1E4C8'], ['#1F3A2E', '#E9DFC9'],
+  ['#1E2B4A', '#EBDDB6'], ['#B5832E', '#1C1A17'], ['#5A3B26', '#EADCC0'], ['#3B3A37', '#E4D9C2'],
+  ['#C9BFAA', '#2A2620'], ['#8C2F22', '#F3E7CF'],
+]
+const spineOf = s => { let h = 0; for (const c of s.name || '') h = (h * 31 + c.charCodeAt(0)) >>> 0; return SPINES[h % SPINES.length] }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
 const out = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3)
-const back = t => { t = clamp(t, 0, 1); const c = 1.4; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2) }
 const spaced = s => s.toUpperCase().split('').join(String.fromCharCode(8202))
 
 function wrap(g, text, maxW, maxLines) {
@@ -49,9 +54,10 @@ export class TvSeries {
     const sig = list.map(s => s.id + (s.rating || '')).join(',')
     if (sig === this.sig) return
     this.sig = sig
+    list = [...list].sort((a, b) => (a.first_air_date || '9999').localeCompare(b.first_air_date || '9999') || a.name.localeCompare(b.name))
     this.list = list
     this.i = Math.min(this.i, Math.max(0, list.length - 1))
-    for (const s of list) for (const [k, p, size] of [['p', s.poster_path, 'w342'], ['b', s.backdrop_path, 'w780']]) {
+    for (const s of list) for (const [k, p, size] of [['p', s.poster_path, 'w342']]) {
       const key = k + s.id
       if (this.imgs.has(key) || !p) continue
       this.imgs.set(key, null)
@@ -77,66 +83,92 @@ export class TvSeries {
     if (!s) {
       g.fillStyle = MUTED; g.font = `600 22px ${SANS}`
       g.fillText(spaced('La télé du salon'), 120, 330)
-      g.fillStyle = INK; g.font = `500 120px ${SERIF}`
+      g.fillStyle = ACCENT; g.font = `600 130px ${SANS}`
       g.fillText('Nos séries', 112, 470)
-      g.font = `italic 400 120px ${SERIF}`; g.fillStyle = ACCENT
-      g.fillText('préférées', 112, 590)
+      g.fillStyle = INK
+      g.fillText('préférées', 112, 600)
       g.fillStyle = MUTED; g.font = `italic 400 38px ${SERIF}`
       g.fillText('Touche la télé pour les ajouter', 120, 690)
       g.restore()
       return
     }
     const t = this.t, n = this.list.length
-    const enter = out(t / 0.9), leave = clamp((t - (SLIDE - 0.5)) / 0.5, 0, 1) * (n > 1 ? 1 : 0)
-    const a = enter * (1 - leave)
-
-    // l'image de la série, à droite, qui avance doucement
-    const bx = 860, by = 70, bw = 680, bh = 470
-    const bimg = this.imgs.get('b' + s.id) || this.imgs.get('p' + s.id)
-    g.save()
-    g.globalAlpha = a
-    g.beginPath(); g.rect(bx, by, bw, bh); g.clip()
-    if (bimg) {
-      const z = 1.06 + 0.05 * (t / SLIDE)
-      cover(g, bimg, bx - bw * (z - 1) / 2, by - bh * (z - 1) / 2 + (1 - enter) * 30, bw * z, bh * z)
-    } else { g.fillStyle = '#D9D0C0'; g.fillRect(bx, by, bw, bh) }
-    g.restore()
-
-    // le texte
-    g.save()
-    g.globalAlpha = a
-    g.translate(0, (1 - enter) * 26)
-    g.fillStyle = MUTED; g.font = `600 22px ${SANS}`
-    g.fillText(spaced(`Nos séries · ${String(this.i + 1).padStart(2, '0')} / ${String(n).padStart(2, '0')}`), 110, 150)
-    g.fillStyle = INK; g.font = `500 96px ${SERIF}`
-    const tl = wrap(g, s.name, 660, 3)
-    tl.forEach((l, k) => g.fillText(l, 104, 250 + k * 96))
-    let y = 250 + (tl.length - 1) * 96 + 70
-    g.fillStyle = ACCENT; g.font = `italic 400 36px ${SERIF}`
-    const meta = [year(s), s.seasons ? `${s.seasons} saison${s.seasons > 1 ? 's' : ''}` : '', s.genres?.[0]].filter(Boolean).join(' · ')
-    if (meta) { g.fillText(meta, 110, y); y += 52 }
-    if (s.rating) { g.fillStyle = '#C8932E'; g.font = `400 34px ${SANS}`; g.fillText('★'.repeat(s.rating), 110, y); y += 48 }
-    g.fillStyle = MUTED; g.font = `400 28px ${SERIF}`
-    wrap(g, s.overview, 640, 2).forEach((l, k) => g.fillText(l, 110, y + k * 38))
-    g.restore()
-
-    // les affiches qui montent depuis le bas de l'écran
-    const pw = 150, ph = 225, gap = 26
-    const shown = Math.min(n, 8)
-    const x0 = LW - 60 - shown * (pw + gap) + gap
-    for (let k = 0; k < shown; k++) {
-      const idx = (this.i + k) % n, ser = this.list[idx]
-      const rise = back((t - k * 0.08) / 0.9)
-      const lift = k === 0 ? 150 : 60 + ((k * 37) % 3) * 18
-      const x = x0 + k * (pw + gap), y = LH - lift * rise + 18
-      g.save()
-      g.shadowColor = 'rgba(30,20,10,0.28)'; g.shadowBlur = 24; g.shadowOffsetY = 10
-      const p = this.imgs.get('p' + ser.id)
-      if (p) cover(g, p, x, y, pw, ph)
-      else { g.fillStyle = '#CFC4B2'; g.fillRect(x, y, pw, ph) }
-      g.restore()
-      if (k === 0) { g.fillStyle = ACCENT; g.fillRect(x, y - 16, 40, 5) }
+    const k = out(t / 0.8)            // la cassette du milieu se retourne
+    // l'étagère courbe : les cassettes de tranche rapetissent en s'éloignant du milieu
+    const FH = 520, FW = FH * 0.62, SH = FH * 0.84, SW = FH * 0.15, GAP = FH * 0.028, CX = LW / 2, CY = 390
+    const R = 950, near = FW / 2 + SW / 2 + GAP, step = SW + GAP
+    const items = []
+    for (let i = Math.max(0, this.i - 12); i <= Math.min(n - 1, this.i + 12); i++) {
+      const d = i - this.i, ad = Math.abs(d)
+      if (!d) continue
+      const arc = Math.sign(d) * (near + (ad - 1) * step), a = arc / R
+      const sc = 900 / (900 + R * (1 - Math.cos(a)))
+      items.push({ s: this.list[i], x: CX + R * Math.sin(a) * sc, sc, ad, a })
     }
+    // ombre au sol
+    const sh = g.createRadialGradient(CX, CY + FH / 2 + 10, 10, CX, CY + FH / 2 + 10, 640)
+    sh.addColorStop(0, 'rgba(60,42,20,0.22)'); sh.addColorStop(1, 'rgba(60,42,20,0)')
+    g.save(); g.scale(1, 0.06); g.fillStyle = sh; g.beginPath(); g.arc(CX, (CY + FH / 2 + 10) / 0.06, 640, 0, 7); g.fill(); g.restore()
+    items.sort((p, q) => q.ad - p.ad)
+    for (const it of items) {
+      const [bg, fg] = spineOf(it.s)
+      const w = SW * it.sc * Math.max(0.35, Math.cos(it.a)), h = SH * it.sc
+      const x = it.x - w / 2, y = CY - h / 2
+      g.save()
+      g.shadowColor = 'rgba(30,20,8,0.3)'; g.shadowBlur = 16; g.shadowOffsetY = 10
+      g.fillStyle = bg; g.fillRect(x, y, w, h)
+      g.restore()
+      const sg = g.createLinearGradient(x, 0, x + w, 0)
+      sg.addColorStop(0, 'rgba(255,255,255,0.14)'); sg.addColorStop(0.4, 'rgba(255,255,255,0)'); sg.addColorStop(1, 'rgba(0,0,0,0.2)')
+      g.fillStyle = sg; g.fillRect(x, y, w, h)
+      g.save()
+      g.translate(x + w / 2, y + h / 2); g.rotate(Math.PI / 2)
+      g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle'
+      g.font = `600 ${Math.round(26 * it.sc)}px ${SERIF}`
+      let name = (it.s.name || '').toUpperCase()
+      while (name.length > 3 && g.measureText(name).width > h * 0.7) name = name.slice(0, -2) + '…'
+      g.fillText(name, 0, 0)
+      g.restore()
+    }
+    // la cassette du milieu, de face
+    const fw = SW + (FW - SW) * k, fh = SH + (FH - SH) * k
+    const fx = CX - fw / 2, fy = CY - fh / 2
+    g.save()
+    g.shadowColor = 'rgba(40,28,12,0.4)'; g.shadowBlur = 40; g.shadowOffsetY = 24
+    g.fillStyle = '#15120F'; g.fillRect(fx, fy, fw, fh)
+    g.restore()
+    const p = this.imgs.get('p' + s.id)
+    if (p) { g.globalAlpha = k; cover(g, p, fx + 7, fy + 7, fw - 14, fh - 14); g.globalAlpha = 1 }
+    const sheen = g.createLinearGradient(fx, fy, fx + fw, fy + fh)
+    sheen.addColorStop(0, 'rgba(255,255,255,0.18)'); sheen.addColorStop(0.3, 'rgba(255,255,255,0)')
+    g.fillStyle = sheen; g.fillRect(fx, fy, fw, fh)
+    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3
+    g.strokeRect(fx + fw - 74, fy + fh - 44, 52, 26)
+    g.fillStyle = '#fff'; g.font = `800 17px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'
+    g.fillText('VHS', fx + fw - 48, fy + fh - 30)
+
+    // le titre, en bleu, sous l'étagère
+    g.globalAlpha = out((t - 0.2) / 0.6)
+    g.textAlign = 'center'; g.textBaseline = 'alphabetic'
+    g.fillStyle = ACCENT; g.font = `600 64px ${SANS}`
+    g.fillText(wrap(g, s.name, 1100, 1)[0] || '', CX, 745)
+    g.fillStyle = MUTED; g.font = `600 20px ${SANS}`
+    g.fillText(spaced([year(s), s.seasons ? `${s.seasons} saisons` : '', s.networks?.[0]].filter(Boolean).join('  ·  ')), CX, 784)
+    g.globalAlpha = 1
+    // la frise des années
+    g.fillStyle = 'rgba(26,24,20,0.16)'; g.fillRect(120, 836, LW - 240, 2)
+    for (let i = 0; i < n; i++) {
+      const x = 120 + (n > 1 ? i / (n - 1) : 0.5) * (LW - 240)
+      g.fillStyle = i === this.i ? ACCENT : 'rgba(26,24,20,0.35)'
+      if (i === this.i) { g.fillRect(x - 2, 820, 4, 32); g.beginPath(); g.arc(x, 837, 7, 0, 7); g.fill() } else g.fillRect(x - 1, 828, 2, 18)
+    }
+    // en-tête
+    g.textAlign = 'left'; g.fillStyle = INK; g.font = `600 18px ${SANS}`
+    g.fillText(spaced('Nos séries'), 70, 70)
+    g.fillRect(250, 63, 90, 2)
+    g.fillText(spaced('Archive VHS'), 360, 70)
+    g.textAlign = 'right'; g.fillStyle = MUTED
+    g.fillText(spaced(`N° ${String(this.i + 1).padStart(2, '0')} / ${String(n).padStart(2, '0')}`), LW - 70, 70)
     g.restore()
   }
 }

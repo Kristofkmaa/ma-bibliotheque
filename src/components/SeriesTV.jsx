@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { tmdbImg, searchSeries, seriesDetails, seriesVideos, year } from '../lib/tmdb'
 
-const SLIDE_MS = 8000
-
 /** Un titre dont les mots montent un à un, comme sortis d'une fente. */
 function Rise({ text, as: Tag = 'span', className, delay = 0, step = 0.06 }) {
   const words = (text || '').split(/\s+/).filter(Boolean)
@@ -154,33 +152,149 @@ function Player({ show, videos, onDone }) {
   )
 }
 
+// Les tranches : des couleurs de vieilles cassettes, choisies d'après le nom de la série
+const SPINES = [
+  ['#1C1A17', '#EDE3CC'], ['#ECE2CB', '#1C1A17'], ['#6E1F1A', '#F1E4C8'], ['#1F3A2E', '#E9DFC9'],
+  ['#1E2B4A', '#EBDDB6'], ['#B5832E', '#1C1A17'], ['#5A3B26', '#EADCC0'], ['#3B3A37', '#E4D9C2'],
+  ['#C9BFAA', '#2A2620'], ['#8C2F22', '#F3E7CF'],
+]
+const spineOf = s => {
+  let h = 0
+  for (const c of s.name || '') h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return SPINES[h % SPINES.length]
+}
+const pad = n => String(n).padStart(2, '0')
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
+
+/** Une cassette vue de face : l'affiche dans son boîtier, l'usure, le petit logo VHS. */
+function VhsFront({ show, size = 'w500' }) {
+  return (
+    <span className="vx-front">
+      {show.poster_path ? <img src={tmdbImg(show.poster_path, size)} alt="" draggable="false" /> : <span className="vx-front-name">{show.name}</span>}
+      <span className="vx-wear" aria-hidden="true" />
+      <span className="vx-badge" aria-hidden="true">VHS</span>
+    </span>
+  )
+}
+
+/** Une cassette vue de côté : la tranche, le titre écrit de haut en bas. */
+function VhsSpine({ show }) {
+  const [bg, fg] = spineOf(show)
+  return (
+    <span className="vx-spine" style={{ background: bg, color: fg }}>
+      <span className="vx-spine-year">{year(show) || '—'}</span>
+      <span className="vx-spine-rule" />
+      <span className="vx-spine-name">{show.name}</span>
+      <span className="vx-spine-rule" />
+      <span className="vx-spine-vhs">VHS</span>
+    </span>
+  )
+}
+
+/** La frise du bas : un trait par série, les années en dessous. */
+function Timeline({ list, idx, onPick }) {
+  const n = list.length
+  const every = Math.max(1, Math.ceil(n / 7))
+  return (
+    <div className="vx-time">
+      <div className="vx-time-line" />
+      {list.map((s, i) => {
+        const x = n > 1 ? (i / (n - 1)) * 100 : 50
+        const y = year(s)
+        const label = i === idx || (i % every === 0 && Math.abs(i - idx) >= every / 2)
+        return (
+          <button key={s.id} type="button" className={'vx-tick' + (i === idx ? ' on' : '')} style={{ left: `${x}%` }} onClick={() => onPick(i)} aria-label={s.name}>
+            <span className="vx-tick-bar" />
+            {label && y && <span className="vx-tick-year">{y}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * L'étagère courbe : les cassettes sur un arc, celle du milieu de face, les autres de tranche,
+ * de plus en plus loin. On la fait tourner au doigt, à la molette, aux flèches.
+ */
+function Shelf({ list, pos, dragging, onPick, onOpen, onPlay, canPlay, stageRef, size }) {
+  const { H, W } = size
+  const frontH = clamp(Math.min(H * 0.84, W * 0.5 / 0.62), 120, 560)
+  const frontW = frontH * 0.62, spineH = frontH * 0.84, spineW = frontH * 0.15, gap = frontH * 0.028
+  const R = Math.max(W * 0.4, frontH * 1.45)          // rayon de l'arc : plus il est petit, plus l'étagère se courbe
+  const near = frontW / 2 + spineW / 2 + gap, step = spineW + gap
+  const active = Math.round(pos)
+  const out = []
+  for (let i = Math.max(0, active - 14); i <= Math.min(list.length - 1, active + 14); i++) {
+    const d = i - pos, ad = Math.abs(d)
+    const w = clamp(1 - ad, 0, 1)                       // 1 : de face, 0 : de tranche
+    const arc = ad < 1 ? d * near : Math.sign(d) * (near + (ad - 1) * step)
+    const a = arc / R
+    const x = R * Math.sin(a), z = R * (Math.cos(a) - 1)
+    const width = spineW + (frontW - spineW) * w, height = spineH + (frontH - spineH) * w
+    const s = list[i]
+    out.push(
+      <div key={s.id} className={'vx-tape' + (i === active ? ' on' : '')}
+        style={{ width, height, zIndex: 100 - Math.round(ad * 2), transform: `translate3d(${x - width / 2}px, ${-height / 2}px, ${z}px) rotateY(${a}rad)`, transition: dragging ? 'none' : undefined }}>
+        <button type="button" className="vx-tape-btn" onClick={() => (i === active ? onOpen() : onPick(i))} aria-label={i === active ? `Voir la fiche de ${s.name}` : s.name} tabIndex={ad > 6 ? -1 : 0}>
+          <span className="vx-face" style={{ opacity: w }}><VhsFront show={s} /></span>
+          <span className="vx-face" style={{ opacity: 1 - w }}><VhsSpine show={s} /></span>
+        </button>
+        {i === active && canPlay && !dragging && (
+          <button type="button" className="vx-play" onClick={onPlay} aria-label={`Lancer le générique de ${s.name}`}><span /></button>
+        )}
+      </div>,
+    )
+  }
+  return (
+    <div className="vx-stage" ref={stageRef}>
+      <div className="vx-glyph l" aria-hidden="true">物語</div>
+      <div className="vx-glyph r" aria-hidden="true">連続劇</div>
+      <div className="vx-floor" style={{ width: Math.min(W * 0.9, frontH * 3.2), top: `calc(50% + ${frontH / 2 - 4}px)` }} />
+      <div className="vx-ring">{out}</div>
+    </div>
+  )
+}
+
 /**
  * Nos séries, à l'intérieur de la télé : on a zoomé à bloc, il ne reste que le contour de
- * l'écran. Une série à l'honneur (grand titre, image, note), les affiches qui montent depuis
- * le bas, et la recherche pour en ajouter.
+ * l'écran. Nos séries rangées comme des cassettes VHS sur une étagère courbe, par année ;
+ * celle du milieu se retourne de face, on la touche pour sa fiche (et son générique).
  */
 export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onClose }) {
-  const list = useMemo(() => [...series].sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.added_at || '').localeCompare(a.added_at || '')), [series])
-  const [id, setId] = useState(() => list[0]?.id || null)
-  const [searching, setSearching] = useState(() => !series.length)
+  const list = useMemo(() => [...series].sort((a, b) => (a.first_air_date || '9999').localeCompare(b.first_air_date || '9999') || a.name.localeCompare(b.name)), [series])
+  const [id, setId] = useState(() => list[Math.floor((list.length - 1) / 2)]?.id || null)
+  const [view, setView] = useState(() => (series.length ? 'shelf' : 'search'))   // shelf | detail | search
   const [closing, setClosing] = useState(false)
-  const [paused, setPaused] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [videos, setVideos] = useState({})     // tmdb_id → vidéos (générique d'abord)
+  const [drag, setDrag] = useState(null)       // { x0, p0, p }
+  const [size, setSize] = useState({ W: 800, H: 400 })
+  const stageRef = useRef(null)
+  const wheel = useRef(0)
   const idx = Math.max(0, list.findIndex(s => s.id === id))
   const cur = list[idx] || null
   const have = useMemo(() => new Set(series.map(s => s.tmdb_id)), [series])
-  const rail = useRef(null)
-  const touch = useRef(null)
+  const pos = drag ? drag.p : idx
 
   useEffect(() => { if (!cur && list.length) setId(list[0].id) }, [cur, list])
+  useEffect(() => { if (!list.length && view !== 'search') setView('search') }, [list.length, view])
 
-  // les vidéos de la série à l'honneur (et de la suivante, pour que le bouton soit prêt)
+  // taille de la scène (l'étagère s'adapte à l'écran)
+  useEffect(() => {
+    const el = stageRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setSize({ W: el.clientWidth, H: el.clientHeight }))
+    ro.observe(el)
+    setSize({ W: el.clientWidth, H: el.clientHeight })
+    return () => ro.disconnect()
+  }, [view])
+
+  // les vidéos de la série au milieu (et de ses voisines, pour que le bouton soit prêt)
   useEffect(() => {
     if (!cur) return
     let live = true
-    const want = [cur, list[(idx + 1) % list.length]].filter(Boolean)
-    for (const s of want) {
+    for (const s of [cur, list[idx + 1], list[idx - 1]].filter(Boolean)) {
       if (!s.tmdb_id || videos[s.tmdb_id]) continue
       seriesVideos(s.tmdb_id).then(v => { if (live) setVideos(m => ({ ...m, [s.tmdb_id]: v })) })
     }
@@ -189,20 +303,8 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onClose })
   const curVideos = (cur && videos[cur.tmdb_id]) || []
   const stopVideo = useCallback(() => setPlaying(false), [])
 
-  const go = useCallback(d => { if (list.length) setId(list[(idx + d + list.length) % list.length].id) }, [list, idx])
-
-  // défilement automatique, tant qu'on ne touche à rien
-  useEffect(() => {
-    if (searching || paused || playing || list.length < 2) return
-    const t = setTimeout(() => go(1), SLIDE_MS)
-    return () => clearTimeout(t)
-  }, [go, searching, paused, playing, list.length, id])
-
-  // l'affiche à l'honneur reste visible dans la rangée
-  useEffect(() => {
-    const r = rail.current, el = r?.querySelector('.stv-poster.on')
-    if (r && el) r.scrollTo({ left: el.offsetLeft - (r.clientWidth - el.offsetWidth) / 2, behavior: 'smooth' })
-  }, [id])
+  const pick = useCallback(i => { const s = list[clamp(i, 0, list.length - 1)]; if (s) setId(s.id) }, [list])
+  const go = useCallback(d => pick(idx + d), [pick, idx])
 
   const close = useCallback(() => {
     if (closing) return
@@ -212,71 +314,101 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onClose })
 
   useEffect(() => {
     const k = e => {
-      if (e.key === 'Escape') { if (playing) setPlaying(false); else if (searching && list.length) setSearching(false); else close() }
-      else if (playing) return
-      else if (!searching && e.key === 'ArrowRight') go(1)
-      else if (!searching && e.key === 'ArrowLeft') go(-1)
+      if (e.key === 'Escape') {
+        if (playing) setPlaying(false)
+        else if (view === 'detail' || (view === 'search' && list.length)) setView('shelf')
+        else close()
+      } else if (playing || view === 'search') return
+      else if (e.key === 'ArrowRight') go(1)
+      else if (e.key === 'ArrowLeft') go(-1)
+      else if (e.key === 'Enter' && view === 'shelf') setView('detail')
     }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
-  }, [searching, playing, list.length, close, go])
+  }, [view, playing, list.length, close, go])
 
-  const added = s => { const row = onAdd(s); if (row) setId(row.id); setSearching(false) }
-
-  const onTouchStart = e => { const t = e.touches[0]; touch.current = { x: t.clientX, y: t.clientY }; setPaused(true) }
-  const onTouchEnd = e => {
-    const s = touch.current; touch.current = null; setPaused(false)
-    if (!s) return
-    const t = e.changedTouches[0], dx = t.clientX - s.x, dy = t.clientY - s.y
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) go(dx < 0 ? 1 : -1)
+  // on fait tourner l'étagère au doigt (ou à la souris)
+  const step = () => { const H = size.H; const fh = clamp(Math.min(H * 0.84, size.W * 0.5 / 0.62), 120, 560); return fh * 0.178 }
+  const onDown = e => {
+    if (e.button > 0) return
+    setDrag({ x0: e.clientX, p0: idx, p: idx, moved: false, id: e.pointerId })
+  }
+  const onMove = e => {
+    if (!drag || drag.id !== e.pointerId) return
+    const dx = e.clientX - drag.x0
+    if (!drag.moved && Math.abs(dx) < 6) return
+    if (!drag.moved) e.currentTarget.setPointerCapture?.(e.pointerId)
+    setDrag({ ...drag, moved: true, p: clamp(drag.p0 - dx / step(), -0.4, list.length - 0.6) })
+  }
+  const onUp = e => {
+    if (!drag || drag.id !== e.pointerId) return
+    const d = drag
+    setDrag(null)
+    if (d.moved) pick(Math.round(d.p))
+  }
+  const onClickCapture = e => { if (drag?.moved) { e.stopPropagation(); e.preventDefault() } }
+  const onWheel = e => {
+    const v = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+    wheel.current += v
+    if (Math.abs(wheel.current) > 60) { go(wheel.current > 0 ? 1 : -1); wheel.current = 0 }
   }
 
+  const added = s => { const row = onAdd(s); if (row) setId(row.id); setView('shelf') }
+  const playLabel = curVideos.length ? (isOpening(curVideos[0]) ? 'Le générique' : 'La bande-annonce') : ''
+
   return createPortal(
-    <div className={'stv' + (closing ? ' closing' : '')} role="dialog" aria-label="Nos séries">
+    <div className={'stv vhs' + (closing ? ' closing' : '')} role="dialog" aria-label="Nos séries">
       <div className="stv-bezel">
         <div className="stv-screen" onScroll={e => { e.currentTarget.scrollTop = 0 }}>
-          <header className="stv-top">
-            <p className="stv-kicker">Nos séries{list.length > 0 && <span> · {String(idx + 1).padStart(2, '0')} / {String(list.length).padStart(2, '0')}</span>}</p>
-            <div className="stv-actions">
-              {!searching && <button type="button" className="stv-btn" onClick={() => setSearching(true)}><span aria-hidden="true">+</span> Ajouter</button>}
-              {searching && list.length > 0 && <button type="button" className="stv-btn" onClick={() => setSearching(false)}>Nos séries</button>}
-              <button type="button" className="stv-x" onClick={close} aria-label="Revenir au salon">×</button>
-            </div>
+          <header className="vx-top">
+            <p className="vx-brand">Nos séries <i /> Archive VHS</p>
+            <nav className="vx-nav">
+              {view === 'detail' && <button type="button" className="vx-navbtn" onClick={() => setView('shelf')}>Les cassettes</button>}
+              {view === 'shelf' && <button type="button" className="vx-navbtn" onClick={() => setView('search')}>+ Ajouter</button>}
+              {view === 'search' && list.length > 0 && <button type="button" className="vx-navbtn" onClick={() => setView('shelf')}>Les cassettes</button>}
+              <button type="button" className="vx-close" onClick={close} aria-label="Revenir au salon">×</button>
+            </nav>
           </header>
 
-          {searching ? (
-            <SeriesSearch have={have} onAdd={added} />
-          ) : cur ? (
+          {view === 'search' && <SeriesSearch have={have} onAdd={added} />}
+
+          {view === 'shelf' && cur && (
             <>
-              <section className="stv-hero" key={cur.id} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
-                onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-                <div className="stv-media">
-                  {(cur.backdrop_path || cur.poster_path) && <img src={tmdbImg(cur.backdrop_path || cur.poster_path, 'w1280')} alt="" />}
+              <div className="vx-shelfwrap" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onClickCapture={onClickCapture} onWheel={onWheel}>
+                <Shelf list={list} pos={pos} dragging={!!drag?.moved} onPick={pick} onOpen={() => setView('detail')}
+                  onPlay={() => setPlaying(true)} canPlay={curVideos.length > 0} stageRef={stageRef} size={size} />
+              </div>
+              <div className="vx-caption">
+                <button type="button" className="vx-arrow" onClick={() => go(-1)} disabled={idx === 0} aria-label="Cassette précédente">←</button>
+                <div className="vx-cap-mid" key={cur.id}>
+                  <h2 className="vx-title">{cur.name}</h2>
+                  <p className="vx-meta">{[year(cur), cur.seasons ? `${cur.seasons} saison${cur.seasons > 1 ? 's' : ''}` : '', cur.networks?.[0]].filter(Boolean).join('  ·  ')}</p>
                 </div>
-                <div className="stv-text">
-                  <Rise as="h2" className="stv-title" text={cur.name} delay={0.1} />
-                  {meta(cur) && <p className="stv-meta">{meta(cur)}</p>}
-                  <Stars value={cur.rating} onChange={r => onUpdate(cur.id, { rating: r })} />
-                  {curVideos.length > 0 && (
-                    <button type="button" className="stv-play" onClick={() => setPlaying(true)}>
-                      <span className="stv-play-ic" aria-hidden="true" />
-                      {isOpening(curVideos[0]) ? 'Le générique' : 'La bande-annonce'}
-                    </button>
-                  )}
-                  {cur.overview && <p className="stv-over">{cur.overview}</p>}
-                  <button type="button" className="stv-remove" onClick={() => { onRemove(cur.id); go(1) }}>Retirer de nos séries</button>
-                </div>
-              </section>
-              <nav className="stv-rail" ref={rail} aria-label="Toutes nos séries">
-                {list.map((s, i) => (
-                  <button key={s.id} type="button" className={'stv-poster' + (s.id === cur.id ? ' on' : '')} style={{ '--d': `${0.25 + Math.min(i, 10) * 0.06}s`, '--h': `${(i * 37) % 3}` }}
-                    onClick={() => setId(s.id)} aria-label={s.name} aria-current={s.id === cur.id}>
-                    {s.poster_path ? <img src={tmdbImg(s.poster_path, 'w342')} alt="" loading="lazy" /> : <span className="stv-noimg">{s.name}</span>}
-                  </button>
-                ))}
-              </nav>
+                <button type="button" className="vx-arrow" onClick={() => go(1)} disabled={idx >= list.length - 1} aria-label="Cassette suivante">→</button>
+              </div>
+              <Timeline list={list} idx={idx} onPick={pick} />
+              <footer className="vx-foot"><span>Archive personnelle · touche la cassette du milieu</span><span>N° {pad(idx + 1)} / {pad(list.length)}</span></footer>
             </>
-          ) : null}
+          )}
+
+          {view === 'detail' && cur && (
+            <section className="vx-detail" key={cur.id}>
+              <div className="vx-d-text">
+                <p className="vx-kicker">Fiche n° {pad(idx + 1)} <i /> {year(cur) || '—'}</p>
+                <h2 className="vx-d-title">{cur.name}</h2>
+                <p className="vx-d-meta">{[cur.seasons ? `${cur.seasons} saison${cur.seasons > 1 ? 's' : ''}` : '', cur.genres?.slice(0, 2).join(', '), cur.networks?.[0]].filter(Boolean).join('  ·  ')}</p>
+                {cur.overview && <p className="vx-d-over">{cur.overview}</p>}
+                <Stars value={cur.rating} onChange={r => onUpdate(cur.id, { rating: r })} />
+                <div className="vx-d-actions">
+                  {playLabel && <button type="button" className="vx-btn" onClick={() => setPlaying(true)}><span className="vx-btn-ic" aria-hidden="true" />{playLabel}</button>}
+                  <button type="button" className="vx-btn ghost" onClick={() => setView('shelf')}>← Les cassettes</button>
+                </div>
+                <button type="button" className="vx-remove" onClick={() => { onRemove(cur.id); go(idx < list.length - 1 ? 1 : -1); setView('shelf') }}>Retirer de nos séries</button>
+              </div>
+              <div className="vx-d-tape"><VhsFront show={cur} size="w780" /></div>
+            </section>
+          )}
+
           {playing && cur && curVideos.length > 0 && <Player show={cur} videos={curVideos} onDone={stopVideo} />}
         </div>
       </div>
