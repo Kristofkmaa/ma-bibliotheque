@@ -749,6 +749,9 @@ export class LivingRoomScene {
     inside.position.set(0, leg + Hh / 2, D / 2 + 0.003)
     grp.add(inside)
     const glass = new THREE.MeshBasicMaterial({ map: this._track(glassTexture()), transparent: true, depthWrite: false, toneMapped: false })
+    this.cabGlass = glass     // les portes s'effacent quand on s'approche du meuble
+    this.cabGroup = grp
+    this.cabFront = new THREE.Vector3(0, leg + Hh / 2, D / 2 + 0.02)
     const brass = this._mat(COL.brass, { metalness: 0.6, roughness: 0.3 })
     for (const sx of [-1, 1]) {
       const door = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(iw / 2 + 0.01, ih)), glass)
@@ -765,7 +768,7 @@ export class LivingRoomScene {
       grp.add(f)
     }
     this._drawCabinet()
-    this._register('cabinet', grp, 'Films & séries')
+    this._register('cabinet', grp, 'Notre vitrine')
     this.wallOf('left').attached.push(grp)
 
     // l'image projetée directement sur le mur : bords fondus, halo de lumière autour
@@ -915,18 +918,27 @@ export class LivingRoomScene {
 
   // ---- Zoom sur la télé (le tuto en grand) -------------------------------------------------
   _tvView() {
+    const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
+    if (this.tvZoom?.kind === 'cab') {
+      // devant le meuble, un peu au-dessus : la vitrine occupe le bas de l'écran
+      this.cabGroup.updateWorldMatrix(true, false)
+      const target = this.cabGroup.localToWorld(this.cabFront.clone())
+      target.y += 0.25
+      const dist = Math.min(2.4 * 0.6 / (t * this.camera.aspect), 0.7 / 0.3 / 2 / t)
+      return { target, az: Math.PI / 2, el: 0.3, dist }
+    }
     // face à l'écran, tout près : l'écran remplit la vue (on entre dans la télé)
     const target = this.tvScreen.getWorldPosition(new THREE.Vector3())
-    const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
     const dist = Math.min(SCR.w / 2 / (t * this.camera.aspect), SCR.h / 2 / t) * 0.94
     return { target, az: Math.PI / 2, el: 0, dist }
   }
 
-  zoomTv() {
+  /** Zoom : sur l'image projetée (« tv »), ou sur le meuble et ses boîtiers (« cab »). */
+  zoomTv(kind = 'tv') {
     if (this.fly || this.tvZoom) return
     this._setHover(null)
     this._drawTv()
-    this.tvZoom = { k: 0, dir: 1, from: { target: this.target.clone(), az: this.az.v + (this.lastDrift || 0), el: this.el.v, dist: this.dist } }
+    this.tvZoom = { kind, k: 0, dir: 1, from: { target: this.target.clone(), az: this.az.v + (this.lastDrift || 0), el: this.el.v, dist: this.dist } }
     this.cb.onTvZoom?.(true)
     this._emitSlide()
   }
@@ -972,7 +984,7 @@ export class LivingRoomScene {
   }
 
   /** Zoom terminé : on est dans la télé (le module des séries la recouvre). */
-  get inTv() { return !!this.tvZoom && this.tvZoom.dir > 0 && this.tvZoom.k >= 1 }
+  get inTv() { return !!this.tvZoom && this.tvZoom.kind === 'tv' && this.tvZoom.dir > 0 && this.tvZoom.k >= 1 }
 
   _stepTvZoom(dt) {
     const z = this.tvZoom
@@ -983,8 +995,9 @@ export class LivingRoomScene {
     const eEl = ease(clamp((z.k - 0.3) / 0.7, 0, 1))
     const tgt = a.target.clone().lerp(b.target, e)
     const dist = Math.exp(Math.log(a.dist) + (Math.log(b.dist) - Math.log(a.dist)) * e)
-    if (z.dir > 0 && z.k >= 1 && !z.inside) { z.inside = true; this.cb.onTvInside?.(true) }
+    if (z.dir > 0 && z.k >= 1 && !z.inside) { z.inside = true; this.cb.onTvInside?.(z.kind) }
     if (z.dir < 0 && z.inside) { z.inside = false; this.cb.onTvInside?.(false) }
+    if (this.cabGlass) this.cabGlass.opacity = z.kind === 'cab' ? 1 - clamp(e * 1.4, 0, 1) : 1
     this._placeCamera(a.az + shortAngle(a.az, b.az) * e, a.el + (b.el - a.el) * eEl, dist, tgt)
     if (z.dir < 0 && z.k <= 0) {
       this.tvZoom = null
@@ -1806,7 +1819,8 @@ export class LivingRoomScene {
       case 'lamp': this.setLamp(!this.lampState); break
       case 'sofa': this.cushions.forEach((c, i) => { c.s.vel -= 1.1 + (i % 3) * 0.2 }); break
       case 'plant': this.leaves.forEach((l, i) => { l.sway.vel += (i % 2 ? 1 : -1) * 3 }); break
-      case 'tv': case 'projector': case 'cabinet': if (!this.tvZoom) this.zoomTv(); break
+      case 'tv': case 'projector': if (!this.tvZoom) this.zoomTv('tv'); break
+      case 'cabinet': if (!this.tvZoom) this.zoomTv('cab'); break
       case 'tvbubble': this.zoomTv(); break
       case 'tvbubble-close': this.tvBubbleOn = false; this.cb.onTvBubbleClose?.(); break
       default: this.cb.onTap?.(kind)

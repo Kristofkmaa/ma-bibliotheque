@@ -3,6 +3,7 @@ import { LivingRoomScene, dayMode } from '../three/LivingRoomScene'
 import { useIsMobile } from '../hooks/useIsMobile'
 import SeriesTV from './SeriesTV'
 import TvBackdrop from './TvBackdrop'
+import Vitrine from './Vitrine'
 
 const store = {
   get: k => { try { return localStorage.getItem(k) } catch { return null } },
@@ -30,7 +31,8 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   const [hover, setHover] = useState(null)
   const [going, setGoing] = useState(from === 'back')
   const [tv, setTv] = useState(false)           // zoom sur la télé (en cours ou fini)
-  const [inside, setInside] = useState(false)   // zoom fini : on est dans la télé
+  const [inside, setInside] = useState(false)   // zoom fini : 'tv' (dans l'image projetée) ou 'cab' (devant la vitrine)
+  const [openWork, setOpenWork] = useState(null) // depuis la vitrine : la fiche ouverte (ou 'list' pour notre liste)
   const [bubbleOff, setBubbleOff] = useState(() => store.get(BUBBLE_KEY) === 'off')
   const tvVideo = useRef(null)
   const [sound, setSound] = useState(false)      // le son de la télé (coupé à l'arrivée)
@@ -109,11 +111,12 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
 
   // Échap pendant le zoom : on ressort (une fois dans la télé, c'est le module qui s'en charge)
   useEffect(() => {
-    if (!tv || inside) return
+    if (!tv || inside === 'tv' || openWork) return
     const onKey = e => { if (e.key === 'Escape') sceneRef.current?.unzoomTv() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [tv, inside])
+  }, [tv, inside, openWork])
+  useEffect(() => { if (!inside) setOpenWork(null) }, [inside])
 
   // les livres, dans l'ordre des étagères ; l'habillage de la première étagère
   const byId = useMemo(() => new Map(books.map(b => [b.id, b])), [books])
@@ -156,9 +159,18 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       )}
 
       {/* on a zoomé à bloc sur la télé : nos séries, il ne reste que le contour de l'écran */}
-      {inside && (
+      {inside === 'tv' && (
         <SeriesTV series={series || []} onAdd={onAddSeries} onUpdate={onUpdateSeries} onRemove={onRemoveSeries} onRenameCategory={onRenameCategory}
           onClose={() => sceneRef.current?.unzoomTv()} />
+      )}
+
+      {/* devant le meuble télé : la vitrine de nos films et séries */}
+      {inside === 'cab' && !openWork && (
+        <Vitrine series={series || []} onOpen={w => setOpenWork(w.id)} onList={() => setOpenWork('list')} onClose={() => sceneRef.current?.unzoomTv()} />
+      )}
+      {inside === 'cab' && openWork && (
+        <SeriesTV series={series || []} initialId={openWork === 'list' ? null : openWork} onAdd={onAddSeries} onUpdate={onUpdateSeries} onRemove={onRemoveSeries} onRenameCategory={onRenameCategory}
+          onClose={() => setOpenWork(null)} />
       )}
 
       <div className="salon-top" ref={topRef}>

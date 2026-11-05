@@ -97,6 +97,7 @@ function SeriesSearch({ have, onAdd }) {
                   <span className="stv-result-img">
                     {s.poster_path ? <img src={tmdbImg(s.poster_path, 'w185')} alt="" loading="lazy" /> : <span className="stv-noimg">{s.name}</span>}
                     <span className="stv-badge" aria-hidden="true">{got ? '✓' : adding === s.tmdb_id ? '…' : '+'}</span>
+                    {got && <span className="stv-inlist">Dans notre liste</span>}
                   </span>
                   <span className="stv-result-name">{s.name}</span>
                   <span className="stv-result-year">{year(s) || '—'}</span>
@@ -258,6 +259,29 @@ function Card({ s, onOpen, rank }) {
   )
 }
 
+/** Une affiche de notre liste : l'image en hauteur, la note, le titre dessous. */
+function Poster({ s, onOpen }) {
+  return (
+    <button type="button" className="sx-poster" onClick={() => onOpen(s)} aria-label={s.name}>
+      <span className="sx-poster-img">
+        {s.poster_path ? <img src={tmdbImg(s.poster_path, 'w342')} alt="" loading="lazy" draggable="false" /> : <span className="sx-poster-name">{s.name}</span>}
+        <span className={'sx-card-kind ' + (isMovie(s) ? 'm' : 't')}>{kindLabel(s)}</span>
+        {s.rating ? <span className="sx-poster-rate">★ {s.rating}</span> : null}
+      </span>
+      <span className="sx-poster-title">{s.name}</span>
+      <span className="sx-poster-meta">{[year(s), categoryOf(s)].filter(Boolean).join(' · ')}</span>
+    </button>
+  )
+}
+
+const SORTS = [['added', 'Ajout récent'], ['rating', 'Mieux notés'], ['az', 'A → Z'], ['year', 'Année']]
+const sorters = {
+  added: (a, b) => (b.added_at || '').localeCompare(a.added_at || ''),
+  rating: (a, b) => (b.rating || 0) - (a.rating || 0) || (b.added_at || '').localeCompare(a.added_at || ''),
+  az: (a, b) => a.name.localeCompare(b.name, 'fr'),
+  year: (a, b) => (b.first_air_date || '').localeCompare(a.first_air_date || ''),
+}
+
 /** Une rangée qui défile de côté, avec ses flèches sur ordinateur. */
 function CardRow({ title, items, onOpen, onRename, ranked }) {
   const track = useRef(null)
@@ -326,8 +350,12 @@ function ZoomBar({ zoom, onZoom }) {
  * à notre façon (fond sombre, la grande affiche, des rangées par catégorie, la fiche) ; et la
  * recherche pour en ajouter.
  */
-export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCategory, onClose }) {
-  const [kind, setKind] = useState('all')     // accueil (tout), séries ou films
+export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, onRemove, onRenameCategory, onClose }) {
+  const [kind, setKind] = useState('all')     // notre liste (tout), séries ou films
+  const [sort, setSortState] = useState(() => { try { return localStorage.getItem('levana.series.tri') || 'added' } catch { return 'added' } })
+  const setSort = v => { setSortState(v); try { localStorage.setItem('levana.series.tri', v) } catch { /* ignore */ } }
+  const [catFilter, setCatFilter] = useState(null)   // une catégorie, ou toutes
+  const [renaming, setRenaming] = useState(false)
   const shown = useMemo(() => (kind === 'all' ? series : series.filter(s => (kind === 'movie') === isMovie(s))), [series, kind])
   const byAdded = (a, b) => (b.added_at || '').localeCompare(a.added_at || '')
   const groups = useMemo(() => {
@@ -343,7 +371,7 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
   const featured = useMemo(() => (loved.length ? loved : recent).slice(0, 6), [loved, recent])
   const [hi, setHi] = useState(0)
   const hero = featured[hi % Math.max(1, featured.length)] || null
-  const [id, setId] = useState(null)          // la fiche ouverte
+  const [id, setId] = useState(initialId)     // la fiche ouverte
   const [view, setView] = useState(() => (series.length ? 'home' : 'search'))   // home | search
   const [closing, setClosing] = useState(false)
   const [playing, setPlaying] = useState(null)   // l'œuvre dont on regarde la vidéo
@@ -356,7 +384,8 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
   const have = useMemo(() => new Set(series.map(workKey)), [series])
 
   useEffect(() => { if (!series.length && view !== 'search') setView('search') }, [series.length, view])
-  useEffect(() => { setHi(0) }, [kind])
+  useEffect(() => { setHi(0); setCatFilter(null) }, [kind])
+  useEffect(() => { if (catFilter && !groups.some(g => g.name === catFilter)) setCatFilter(null) }, [groups, catFilter])
 
   // la grande affiche change toute seule (pas pendant une fiche ou une vidéo)
   useEffect(() => {
@@ -419,7 +448,10 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
   const added = s => { const row = onAdd(s); setView('home'); if (row) setId(row.id) }
   const renameGroup = (g, to) => onRenameCategory?.(g.name, to, g.items.map(s => s.id))
   const curVideos = vidsOf(cur)
-  const tabs = [['all', 'Accueil'], ['tv', 'Séries'], ['movie', 'Films']]
+  const tabs = [['all', 'Notre liste'], ['tv', 'Séries'], ['movie', 'Films']]
+  const nTv = series.filter(x => !isMovie(x)).length, nMovie = series.length - nTv
+  const listItems = [...(catFilter ? shown.filter(x => categoryOf(x) === catFilter) : shown)].sort(sorters[sort] || sorters.added)
+  const catGroup = catFilter ? groups.find(g => g.name === catFilter) : null
 
   return createPortal(
     <div className={'stv sx' + (closing ? ' closing' : '')} role="dialog" aria-label="Nos films et séries">
@@ -446,11 +478,54 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
               ) : (
                 <p className="sx-empty">Rien ici pour l’instant : ajoute {kind === 'movie' ? 'un film' : kind === 'tv' ? 'une série' : 'un film ou une série'}.</p>
               )}
-              <div className="sx-rows">
-                {loved.length > 0 && <CardRow title="Nos coups de cœur" items={loved} onOpen={s => setId(s.id)} ranked />}
-                {recent.length > 0 && <CardRow title="Ajoutés récemment" items={recent} onOpen={s => setId(s.id)} />}
-                {groups.map(g => <CardRow key={g.name} title={g.name} items={g.items} onOpen={s => setId(s.id)} onRename={to => renameGroup(g, to)} />)}
-              </div>
+              {loved.length > 0 && (
+                <div className="sx-rows">
+                  <CardRow title="Nos coups de cœur" items={loved} onOpen={s => setId(s.id)} ranked />
+                </div>
+              )}
+              {/* notre liste : toutes nos affiches, qu'on trie et qu'on filtre */}
+              {shown.length > 0 && (
+                <section className="sx-list" aria-label="Notre liste">
+                  <header className="sx-list-head">
+                    <div>
+                      <h2 className="sx-list-title">{kind === 'tv' ? 'Nos séries' : kind === 'movie' ? 'Nos films' : 'Notre liste'}</h2>
+                      <p className="sx-list-count">
+                        {kind === 'all'
+                          ? `${series.length} titre${series.length > 1 ? 's' : ''} · ${nTv} série${nTv > 1 ? 's' : ''} · ${nMovie} film${nMovie > 1 ? 's' : ''}`
+                          : `${shown.length} titre${shown.length > 1 ? 's' : ''}`}
+                      </p>
+                    </div>
+                    <label className="sx-sort">
+                      <span className="sr-only">Trier</span>
+                      <select value={sort} onChange={e => setSort(e.target.value)}>
+                        {SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                      </select>
+                    </label>
+                  </header>
+                  {groups.length > 1 && (
+                    <div className="sx-chips" role="tablist" aria-label="Catégories">
+                      <button type="button" role="tab" aria-selected={!catFilter} className={!catFilter ? 'on' : ''} onClick={() => setCatFilter(null)}>Toutes</button>
+                      {groups.map(g => (
+                        <button key={g.name} type="button" role="tab" aria-selected={catFilter === g.name} className={catFilter === g.name ? 'on' : ''} onClick={() => { setCatFilter(g.name); setRenaming(false) }}>
+                          {g.name} <span>{g.items.length}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {catGroup && (
+                    renaming ? (
+                      <input className="sx-rename sx-rename-cat" defaultValue={catGroup.name} autoFocus aria-label="Nouveau nom de la catégorie"
+                        onBlur={e => { const t = e.target.value.trim(); setRenaming(false); if (t && t !== catGroup.name) { renameGroup(catGroup, t); setCatFilter(t) } }}
+                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setRenaming(false) }} />
+                    ) : (
+                      <button type="button" className="sx-renamebtn" onClick={() => setRenaming(true)}>✎ Renommer « {catGroup.name} »</button>
+                    )
+                  )}
+                  <div className="sx-grid">
+                    {listItems.map(x => <Poster key={x.id} s={x} onOpen={o => setId(o.id)} />)}
+                  </div>
+                </section>
+              )}
               <ZoomBar zoom={zoom} onZoom={setZoom} />
             </div>
           )}
@@ -489,7 +564,7 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
             </button>
             <button type="button" className={'tab' + (view === 'home' && kind === 'all' ? ' on' : '')} onClick={() => goKind('all')}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="11" rx="1.5" /><path d="M7 19h10" /></svg>
-              <span>Accueil</span>
+              <span>Notre liste</span>
             </button>
             <button type="button" className="tab tab-shop" onClick={() => setView('search')} aria-label="Ajouter un film ou une série">
               <span className="tab-shop-bubble"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></span>
