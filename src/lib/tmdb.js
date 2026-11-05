@@ -30,7 +30,20 @@ async function get(params) {
 
 /** Recherche : séries (« tv ») ou films (« movie »). */
 export const searchSeries = (q, media = 'tv') => get({ q, type: media }).then(d => d.results || [])
-export const seriesDetails = (id, media = 'tv') => get({ id: String(id), type: media })
+const detailCache = new Map()
+export const seriesDetails = (id, media = 'tv') => {
+  const k = media + id
+  if (!detailCache.has(k)) detailCache.set(k, get({ id: String(id), type: media }).catch(e => { detailCache.delete(k); throw e }))
+  return detailCache.get(k)
+}
+
+/** La note du public (TMDB) : { vote: 8.2, votes: 14300 }, ou null. Gardée en mémoire. */
+export const publicRating = s => seriesDetails(s.tmdb_id, s.media)
+  .then(d => (d && d.vote != null && d.votes > 0 ? { vote: d.vote, votes: d.votes } : null), () => null)
+/** « 8,2 » */
+export const fmtVote = v => (v == null ? '' : v.toFixed(1).replace('.', ','))
+/** « 14 300 votes » */
+export const fmtVotes = n => `${n.toLocaleString('fr-FR')} vote${n > 1 ? 's' : ''}`
 export const isMovie = s => s?.media === 'movie'
 /** Clé unique d'une œuvre : un film et une série peuvent avoir le même numéro chez TMDB. */
 export const workKey = s => (isMovie(s) ? 'm' : 't') + s.tmdb_id

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { tmdbImg, searchSeries, seriesDetails, seriesVideos, seriesImages, year, isMovie, workKey, runtimeLabel } from '../lib/tmdb'
+import { tmdbImg, searchSeries, seriesDetails, seriesVideos, seriesImages, year, isMovie, workKey, runtimeLabel, publicRating, fmtVote, fmtVotes } from '../lib/tmdb'
 
 /** Un titre dont les mots montent un à un, comme sortis d'une fente. */
 function Rise({ text, as: Tag = 'span', className, delay = 0, step = 0.06 }) {
@@ -363,11 +363,25 @@ function Slideshow({ s }) {
   )
 }
 
+/** La note du public (TMDB) : la note sur 10, une jauge, le nombre de votes. */
+function PublicScore({ pub }) {
+  if (!pub) return <p className="sx-pub-none">Pas encore assez de votes du public.</p>
+  return (
+    <div className="sx-pub">
+      <p className="sx-pub-num"><b>{fmtVote(pub.vote)}</b><span>/10</span></p>
+      <div className="sx-pub-side">
+        <span className="sx-pub-bar"><i style={{ width: `${pub.vote * 10}%` }} /></span>
+        <span className="sx-pub-votes">{fmtVotes(pub.votes)} · TMDB</span>
+      </div>
+    </div>
+  )
+}
+
 /**
  * La page d'un titre, en plein écran : ses images défilent derrière le grand titre, puis sa
  * bande-annonce démarre sans le son ; en dessous, le résumé, la note, la catégorie.
  */
-function DetailPage({ s, videos, allCats, onBack, onPlay, onUpdate, onRemove }) {
+function DetailPage({ s, pub, videos, allCats, onBack, onPlay, onUpdate, onRemove }) {
   const [late, setLate] = useState(false)
   useEffect(() => { setLate(false); const t = setTimeout(() => setLate(true), 6000); return () => clearTimeout(t) }, [s.id])
   const v = videos?.[0]
@@ -382,7 +396,10 @@ function DetailPage({ s, videos, allCats, onBack, onPlay, onUpdate, onRemove }) 
           <div className="sx-page-head">
             <p className="sx-kicker">{kindLabel(s)} <i /> {categoryOf(s)}</p>
             <h2 className="sx-page-title">{s.name}</h2>
-            <p className="sx-page-meta">{[year(s), lengthLabel(s), (s.genres || []).slice(0, 2).join(', ')].filter(Boolean).join('   ·   ')}</p>
+            <p className="sx-page-meta">
+              {pub ? <span className="sx-pub-badge" title={`Note du public : ${fmtVote(pub.vote)}/10 (${fmtVotes(pub.votes)})`}>★ {fmtVote(pub.vote)}</span> : null}
+              {[year(s), lengthLabel(s), (s.genres || []).slice(0, 2).join(', ')].filter(Boolean).join('   ·   ')}
+            </p>
             {s.rating ? <p className="sx-page-stars" aria-label={`${s.rating} étoiles sur 5`}>{'★'.repeat(s.rating)}<i>{'★'.repeat(5 - s.rating)}</i></p> : null}
             <div className="sx-actions">
               {v && <button type="button" className="sx-btn play" onClick={onPlay}><span className="sx-tri" aria-hidden="true" />{isOpening(v) ? 'Générique' : 'Bande-annonce'}</button>}
@@ -392,9 +409,15 @@ function DetailPage({ s, videos, allCats, onBack, onPlay, onUpdate, onRemove }) 
         <section className="sx-page-body">
           {s.overview && <p className="sx-page-over">{s.overview}</p>}
           {byLabel(s) && <p className="sx-page-by">{isMovie(s) ? 'Réalisation' : 'Chaîne'} · <b>{isMovie(s) ? s.networks?.[0] : byLabel(s)}</b></p>}
-          <div className="sx-page-block">
-            <p className="sx-page-label">Notre note</p>
-            <Stars value={s.rating} onChange={r => onUpdate(s.id, { rating: r })} />
+          <div className="sx-page-notes">
+            <div className="sx-page-block">
+              <p className="sx-page-label">Notre note</p>
+              <Stars value={s.rating} onChange={r => onUpdate(s.id, { rating: r })} />
+            </div>
+            <div className="sx-page-block">
+              <p className="sx-page-label">Note du public</p>
+              {pub === undefined ? <p className="sx-pub-none">…</p> : <PublicScore pub={pub} />}
+            </div>
           </div>
           <div className="sx-page-block">
             <CategoryPicker value={categoryOf(s)} all={allCats} onChange={c => onUpdate(s.id, { category: c })} />
@@ -407,7 +430,7 @@ function DetailPage({ s, videos, allCats, onBack, onPlay, onUpdate, onRemove }) 
 }
 
 /** Une ligne de notre liste : la petite affiche, le titre, puis tout ce qu'il faut savoir. */
-function ListRow({ s, onOpen }) {
+function ListRow({ s, pub, onOpen }) {
   const genres = (s.genres || []).slice(0, 2).join(', ')
   return (
     <li>
@@ -420,6 +443,7 @@ function ListRow({ s, onOpen }) {
           <span className="sx-li-meta">
             <span className={'sx-li-kind ' + (isMovie(s) ? 'm' : 't')}>{kindLabel(s)}</span>
             {[year(s), lengthLabel(s)].filter(Boolean).join(' · ')}
+            {pub ? <span className="sx-li-pub" title={`Note du public : ${fmtVote(pub.vote)}/10`}>★ {fmtVote(pub.vote)}</span> : null}
           </span>
           <span className="sx-li-sub">
             {genres && <span>{genres}</span>}
@@ -449,7 +473,7 @@ function SectionTitle({ name, count, onRename }) {
   )
 }
 
-const SORTS = [['cat', 'Par catégorie'], ['added', 'Ajout récent'], ['rating', 'Mieux notés'], ['az', 'A → Z'], ['year', 'Année']]
+const SORTS = [['cat', 'Par catégorie'], ['added', 'Ajout récent'], ['rating', 'Nos mieux notés'], ['public', 'Mieux notés (public)'], ['az', 'A → Z'], ['year', 'Année']]
 const sorters = {
   cat: (a, b) => a.name.localeCompare(b.name, 'fr'),
   added: (a, b) => (b.added_at || '').localeCompare(a.added_at || ''),
@@ -533,10 +557,26 @@ export default function SeriesTV({ series, initialId = null, fromRect = null, on
   }, [wantKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const vidsOf = s => (s && videos[workKey(s)]) || []
 
+  // la note du public (TMDB) de chaque titre, demandée une fois (false : pas assez de votes)
+  const [pub, setPub] = useState({})
+  useEffect(() => {
+    let live = true
+    const todo = series.filter(x => !(x.id in pub))
+    let n = 0
+    const nextOne = () => {
+      const x = todo[n++]
+      if (!x || !live) return
+      publicRating(x).then(r => { if (live) { setPub(m => ({ ...m, [x.id]: r || false })); nextOne() } })
+    }
+    for (let k = 0; k < 4; k++) nextOne()
+    return () => { live = false }
+  }, [series.map(x => x.id).join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
+  const sortFn = sort === 'public' ? (a, b) => ((pub[b.id] || {}).vote || 0) - ((pub[a.id] || {}).vote || 0) : (sorters[sort] || sorters.added)
+
   // l'étagère 3D : nos titres dans l'ordre du tri (par catégorie : catégorie après catégorie)
   const shelfList = useMemo(() => (sort === 'cat'
     ? groups.flatMap(g => [...g.items].sort(sorters.cat))
-    : [...shown].sort(sorters[sort] || sorters.added)), [groups, shown, sort])
+    : [...shown].sort(sortFn)), [groups, shown, sort, pub]) // eslint-disable-line react-hooks/exhaustive-deps
   const sIdx = Math.max(0, shelfList.findIndex(x => x.id === shelfId))
   const shelfCur = shelfList[sIdx] || null
   const pos = drag ? drag.p : sIdx
@@ -670,7 +710,7 @@ export default function SeriesTV({ series, initialId = null, fromRect = null, on
                         <button type="button" className="vx-arrow" onClick={() => pick(sIdx - 1)} disabled={sIdx === 0} aria-label="Précédent">←</button>
                         <button type="button" className="vx-cap-mid" key={shelfCur.id} onClick={() => setId(shelfCur.id)}>
                           <h3 className="vx-title">{shelfCur.name}</h3>
-                          <p className="vx-meta">{[kindLabel(shelfCur), year(shelfCur), lengthLabel(shelfCur), categoryOf(shelfCur)].filter(Boolean).join('  ·  ')}</p>
+                          <p className="vx-meta">{[kindLabel(shelfCur), year(shelfCur), lengthLabel(shelfCur), pub[shelfCur.id] ? `★ ${fmtVote(pub[shelfCur.id].vote)}/10` : '', categoryOf(shelfCur)].filter(Boolean).join('  ·  ')}</p>
                         </button>
                         <button type="button" className="vx-arrow" onClick={() => pick(sIdx + 1)} disabled={sIdx >= shelfList.length - 1} aria-label="Suivant">→</button>
                       </div>
@@ -682,11 +722,11 @@ export default function SeriesTV({ series, initialId = null, fromRect = null, on
                   // rangée par catégorie : un intertitre par catégorie ; sinon une seule suite
                   const sections = sort === 'cat'
                     ? groups.map(g => ({ g, name: g.name, items: [...g.items].sort(sorters.cat) }))
-                    : [{ name: null, items: [...shown].sort(sorters[sort] || sorters.added) }]
+                    : [{ name: null, items: [...shown].sort(sortFn) }]
                   return sections.map(sec => (
                     <div className="sx-sec" key={sec.name || 'all'}>
                       {sec.name && <SectionTitle name={sec.name} count={sec.items.length} onRename={to => renameGroup(sec.g, to)} />}
-                      <ul className="sx-ul">{sec.items.map(x => <ListRow key={x.id} s={x} onOpen={o => setId(o.id)} />)}</ul>
+                      <ul className="sx-ul">{sec.items.map(x => <ListRow key={x.id} s={x} pub={pub[x.id]} onOpen={o => setId(o.id)} />)}</ul>
                     </div>
                   ))
                 })()}
@@ -695,7 +735,7 @@ export default function SeriesTV({ series, initialId = null, fromRect = null, on
           </>)}
 
           {cur && (
-            <DetailPage key={cur.id} s={cur} videos={curVideos} allCats={allCats} onBack={() => setId(null)} onPlay={() => setPlaying(cur)}
+            <DetailPage key={cur.id} s={cur} pub={pub[cur.id]} videos={curVideos} allCats={allCats} onBack={() => setId(null)} onPlay={() => setPlaying(cur)}
               onUpdate={onUpdate} onRemove={() => { onRemove(cur.id); setId(null) }} />
           )}
 

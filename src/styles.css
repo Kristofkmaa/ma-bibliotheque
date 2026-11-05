@@ -2377,3 +2377,18 @@ body.immersive .scene { padding: 0 !important; }
 .salon-stand svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .salon.cinema .salon-stand { background: #1C1A17; color: #F1ECE3; border-color: rgba(255, 255, 255, 0.15); }
 @media (min-width: 768px) { .salon-stand { bottom: 150px; } }
+
+/* La note du public (TMDB) */
+.sx-pub-badge { display: inline-block; margin-right: 12px; padding: 2px 8px; border-radius: 4px; background: rgba(232, 176, 75, 0.18); color: var(--sx-gold); font-weight: 800; letter-spacing: 0.02em; }
+.sx-page-notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); column-gap: 32px; }
+.sx-pub { display: flex; align-items: center; gap: 16px; margin-top: 6px; }
+.sx-pub-num { font-family: var(--sans); line-height: 1; color: var(--sx-fg); }
+.sx-pub-num b { font-size: 38px; font-weight: 800; letter-spacing: -0.03em; }
+.sx-pub-num span { font-size: 15px; font-weight: 600; color: var(--sx-muted); margin-left: 2px; }
+.sx-pub-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.sx-pub-bar { position: relative; display: block; height: 6px; border-radius: 3px; background: rgba(243, 239, 232, 0.12); overflow: hidden; }
+.sx-pub-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: linear-gradient(90deg, #C8932E, #E8B04B); animation: barIn 0.9s 0.2s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes barIn { from { width: 0 !important; } }
+.sx-pub-votes { font-family: var(--sans); font-size: 12px; color: var(--sx-muted); }
+.sx-pub-none { margin-top: 6px; font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--sx-muted); }
+.sx-li-pub { flex: none; margin-left: 4px; padding: 1px 6px; border-radius: 3px; background: rgba(232, 176, 75, 0.14); color: var(--sx-gold); font-size: 11px; font-weight: 800; }

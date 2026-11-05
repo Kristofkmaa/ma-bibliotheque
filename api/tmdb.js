@@ -24,6 +24,7 @@ const pickShow = s => ({
   poster_path: s.poster_path || null,
   backdrop_path: s.backdrop_path || null,
   vote: typeof s.vote_average === 'number' ? Math.round(s.vote_average * 10) / 10 : null,
+  votes: s.vote_count || 0,
 })
 
 export default async function handler(req, res) {
