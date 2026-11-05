@@ -31,6 +31,16 @@ async function get(params) {
 export const searchSeries = q => get({ q }).then(d => d.results || [])
 export const seriesDetails = id => get({ id: String(id) })
 
+const videoCache = new Map()
+/** Les vidéos d'une série (générique d'abord, sinon bandes-annonces), gardées en mémoire. */
+export function seriesVideos(tmdbId) {
+  if (!videoCache.has(tmdbId)) {
+    const p = get({ videos: String(tmdbId) }).then(d => d.videos || [], () => { videoCache.delete(tmdbId); return [] })
+    videoCache.set(tmdbId, p)
+  }
+  return videoCache.get(tmdbId)
+}
+
 export const year = s => (s?.first_air_date || '').slice(0, 4)
 
 const imgCache = new Map()

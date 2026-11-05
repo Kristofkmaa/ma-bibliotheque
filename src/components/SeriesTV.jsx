@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { tmdbImg, searchSeries, seriesDetails, year } from '../lib/tmdb'
+import { tmdbImg, searchSeries, seriesDetails, seriesVideos, year } from '../lib/tmdb'
 
 const SLIDE_MS = 8000
 
@@ -105,6 +105,55 @@ function SeriesSearch({ have, onAdd }) {
   )
 }
 
+const isOpening = v => v?.type === 'Opening Credits'
+
+/**
+ * Le générique (ou la bande-annonce) : le lecteur YouTube remplit l'écran de la télé.
+ * Si une vidéo refuse d'être lue ici (bloquée, ou interdite hors de YouTube), on passe à la
+ * suivante ; à la fin, on revient à la série.
+ */
+function Player({ show, videos, onDone }) {
+  const [i, setI] = useState(0)
+  const frame = useRef(null)
+  const v = videos[i]
+  useEffect(() => {
+    const onMsg = e => {
+      let host = ''
+      try { host = new URL(e.origin).hostname } catch { return }
+      if (!/(^|\.)youtube(-nocookie)?\.com$/.test(host)) return
+      let d
+      try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data } catch { return }
+      if (d?.event === 'onError') { if (i + 1 < videos.length) setI(i + 1); else onDone() }
+      else if ((d?.event === 'onStateChange' && d.info === 0) || (d?.event === 'infoDelivery' && d.info?.playerState === 0)) onDone()
+    }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  }, [i, videos, onDone])
+  // on demande au lecteur de nous prévenir (fin de la vidéo, erreur)
+  const listen = () => {
+    const w = frame.current?.contentWindow
+    if (!w) return
+    const send = o => w.postMessage(JSON.stringify({ id: 'stv', channel: 'widget', ...o }), '*')
+    send({ event: 'listening' })
+    send({ event: 'command', func: 'addEventListener', args: ['onStateChange'] })
+    send({ event: 'command', func: 'addEventListener', args: ['onError'] })
+  }
+  if (!v) return null
+  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.key)}?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1&hl=fr&origin=${encodeURIComponent(location.origin)}`
+  return (
+    <div className="stv-player">
+      <div className="stv-player-top">
+        <p className="stv-kicker">{isOpening(v) ? 'Le générique' : 'La bande-annonce'} · <span>{show.name}</span></p>
+        <button type="button" className="stv-x light" onClick={onDone} aria-label="Arrêter la vidéo">×</button>
+      </div>
+      <div className="stv-player-frame">
+        <iframe ref={frame} key={v.key} src={src} title={`${isOpening(v) ? 'Générique' : 'Bande-annonce'} de ${show.name}`} onLoad={listen}
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
+      </div>
+    </div>
+  )
+}
+
 /**
  * Nos séries, à l'intérieur de la télé : on a zoomé à bloc, il ne reste que le contour de
  * l'écran. Une série à l'honneur (grand titre, image, note), les affiches qui montent depuis
@@ -116,6 +165,8 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onClose })
   const [searching, setSearching] = useState(() => !series.length)
   const [closing, setClosing] = useState(false)
   const [paused, setPaused] = useState(false)
+  const [playing, setPlaying] = useState(false)
+  const [videos, setVideos] = useState({})     // tmdb_id → vidéos (générique d'abord)
   const idx = Math.max(0, list.findIndex(s => s.id === id))
   const cur = list[idx] || null
   const have = useMemo(() => new Set(series.map(s => s.tmdb_id)), [series])
@@ -124,14 +175,28 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onClose })
 
   useEffect(() => { if (!cur && list.length) setId(list[0].id) }, [cur, list])
 
+  // les vidéos de la série à l'honneur (et de la suivante, pour que le bouton soit prêt)
+  useEffect(() => {
+    if (!cur) return
+    let live = true
+    const want = [cur, list[(idx + 1) % list.length]].filter(Boolean)
+    for (const s of want) {
+      if (!s.tmdb_id || videos[s.tmdb_id]) continue
+      seriesVideos(s.tmdb_id).then(v => { if (live) setVideos(m => ({ ...m, [s.tmdb_id]: v })) })
+    }
+    return () => { live = false }
+  }, [cur?.tmdb_id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const curVideos = (cur && videos[cur.tmdb_id]) || []
+  const stopVideo = useCallback(() => setPlaying(false), [])
+
   const go = useCallback(d => { if (list.length) setId(list[(idx + d + list.length) % list.length].id) }, [list, idx])
 
   // défilement automatique, tant qu'on ne touche à rien
   useEffect(() => {
-    if (searching || paused || list.length < 2) return
+    if (searching || paused || playing || list.length < 2) return
     const t = setTimeout(() => go(1), SLIDE_MS)
     return () => clearTimeout(t)
-  }, [go, searching, paused, list.length, id])
+  }, [go, searching, paused, playing, list.length, id])
 
   // l'affiche à l'honneur reste visible dans la rangée
   useEffect(() => {
@@ -147,13 +212,14 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onClose })
 
   useEffect(() => {
     const k = e => {
-      if (e.key === 'Escape') { if (searching && list.length) setSearching(false); else close() }
+      if (e.key === 'Escape') { if (playing) setPlaying(false); else if (searching && list.length) setSearching(false); else close() }
+      else if (playing) return
       else if (!searching && e.key === 'ArrowRight') go(1)
       else if (!searching && e.key === 'ArrowLeft') go(-1)
     }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
-  }, [searching, list.length, close, go])
+  }, [searching, playing, list.length, close, go])
 
   const added = s => { const row = onAdd(s); if (row) setId(row.id); setSearching(false) }
 
@@ -191,6 +257,12 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onClose })
                   <Rise as="h2" className="stv-title" text={cur.name} delay={0.1} />
                   {meta(cur) && <p className="stv-meta">{meta(cur)}</p>}
                   <Stars value={cur.rating} onChange={r => onUpdate(cur.id, { rating: r })} />
+                  {curVideos.length > 0 && (
+                    <button type="button" className="stv-play" onClick={() => setPlaying(true)}>
+                      <span className="stv-play-ic" aria-hidden="true" />
+                      {isOpening(curVideos[0]) ? 'Le générique' : 'La bande-annonce'}
+                    </button>
+                  )}
                   {cur.overview && <p className="stv-over">{cur.overview}</p>}
                   <button type="button" className="stv-remove" onClick={() => { onRemove(cur.id); go(1) }}>Retirer de nos séries</button>
                 </div>
@@ -205,6 +277,7 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onClose })
               </nav>
             </>
           ) : null}
+          {playing && cur && curVideos.length > 0 && <Player show={cur} videos={curVideos} onDone={stopVideo} />}
         </div>
       </div>
     </div>,
