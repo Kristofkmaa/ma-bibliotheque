@@ -26,13 +26,14 @@ const TARGET0 = new THREE.Vector3(0, 0.95, 0)
 
 // emplacements (repère de la pièce)
 const BOOKCASE = { x: -1.05, z: -R + 0.2, w: 1.62, h: 2.18, d: 0.38 }   // mur du fond, à gauche (face à la caméra)
-const FIRE = { z: -0.5, w: 1.3, d: 0.3 }                               // mur de gauche
-const TV = { x: 1.22 }
-const SOFA = { x: 1.34, z: 0.5 }
-const TABLE = { x: -0.02, z: 0.48 }
-const LAMP = { x: 1.76, z: -1.12 }
-const PLANT = { x: -1.58, z: 1.5 }
-const WINDOW = { z: 1.05, y: 1.5, w: 0.86, h: 1.08 }
+const FIRE = { x: 1.2, w: 1.3, d: 0.3 }                                // mur du fond, à droite (loin des livres)
+const TV = { z: 0.0 }                       // mur de gauche, en face du canapé
+const SOFA = { x: 1.34, z: 0.0 }            // face à la télé
+const TABLE = { x: -0.15, z: 0.0 }          // entre le canapé et la télé
+const LAMP = { x: 1.8, z: 1.38 }            // au bout du canapé
+const PLANT = { x: -1.6, z: 1.62 }          // coin, sous la fenêtre
+const WINDOW = { z: 1.3, y: 1.55, w: 0.66, h: 1.0 }
+const TV_FOV = 46                           // zoom sur la télé : comme assis dans le canapé
 
 const COL = {
   wallBack: '#ECE3D5', wallLeft: '#E4D9C8', base: '#F4EFE6', slab: '#CDBB9F',
@@ -429,17 +430,19 @@ export class LivingRoomScene {
     // tapis
     const rug = new THREE.Mesh(this._geo(new RoundedPlane(2.5, 2.1, 0.12)), this._mat('#ffffff', { map: this._track(rugTexture()), roughness: 1 }))
     rug.rotation.x = -Math.PI / 2
-    rug.position.set(0.18, 0.008, 0.42)
+    rug.position.set(-0.05, 0.008, 0.0)
     rug.receiveShadow = true
     g.add(rug)
 
-    // cadres au-dessus de la télé
+    // cadres au-dessus de la télé (mur de gauche)
     const frameMat = this._woodMat(COL.walnut)
-    ;[[TV.x - 0.3, 1.78, 0.44, 0.58, 0], [TV.x + 0.24, 1.7, 0.34, 0.44, 1]].forEach(([x, y, w, h, k]) => {
+    ;[[TV.z + 0.3, 1.86, 0.44, 0.58, 0], [TV.z - 0.24, 1.78, 0.34, 0.44, 1]].forEach(([z, y, w, h, k]) => {
       const f = this._rbox(w, h, 0.035, 0.008, frameMat)
-      f.position.set(x, y, -R + 0.02)
+      f.rotation.y = Math.PI / 2
+      f.position.set(-R + 0.02, y, z)
       const art = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(w - 0.06, h - 0.06)), this._mat('#ffffff', { map: this._track(artTexture(k)), roughness: 0.9 }))
-      art.position.set(x, y, -R + 0.039)
+      art.rotation.y = Math.PI / 2
+      art.position.set(-R + 0.039, y, z)
       g.add(f, art)
     })
   }
@@ -592,8 +595,7 @@ export class LivingRoomScene {
   // ---- Cheminée ---------------------------------------------------------------------------
   _buildFireplace() {
     const grp = new THREE.Group()
-    grp.position.set(-R, 0, FIRE.z)
-    grp.rotation.y = Math.PI / 2       // contre le mur de gauche, face à la pièce (+x)
+    grp.position.set(FIRE.x, 0, -R)   // contre le mur du fond, face à la pièce (+z)
     this.room.add(grp)
     const W = FIRE.w, D = FIRE.d
     const aw = 0.74, ah = 0.5, ay = 0.1, ar = aw / 2
@@ -650,7 +652,7 @@ export class LivingRoomScene {
     })
     // lueur du feu
     this.fireLight = new THREE.PointLight(0xff8a3c, 2, 5.5, 1.6)
-    this.fireLight.position.set(-R + D + 0.45, 0.55, FIRE.z)
+    this.fireLight.position.set(FIRE.x, 0.55, -R + D + 0.45)
     this.scene.add(this.fireLight)
     // déco de la tablette : miroir rond, bougies, petit vase
     const mirror = new THREE.Mesh(this._geo(new THREE.CircleGeometry(0.3, 48)), this._mat('#C9D3D8', { roughness: 0.15, metalness: 0.3 }))
@@ -688,7 +690,8 @@ export class LivingRoomScene {
   // ---- Coin télé -------------------------------------------------------------------------
   _buildTvCorner() {
     const grp = new THREE.Group()
-    grp.position.set(TV.x, 0, -R + 0.22)
+    grp.position.set(-R + 0.22, 0, TV.z)
+    grp.rotation.y = Math.PI / 2      // contre le mur de gauche, face au canapé (+x)
     this.room.add(grp)
     const W = 1.3, Hh = 0.44, D = 0.4, leg = 0.14
     const wood = this._woodMat(COL.walnut)
@@ -791,12 +794,12 @@ export class LivingRoomScene {
 
   // ---- Zoom sur la télé (le tuto en grand) -------------------------------------------------
   _tvView() {
-    const target = new THREE.Vector3(TV.x, 1.0, -R + 0.2)
-    const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
+    // face à l'écran, comme assis dans le canapé (rien entre la caméra et la télé)
+    const target = this.tvScreen.getWorldPosition(new THREE.Vector3())
+    const t = Math.tan(THREE.MathUtils.degToRad(TV_FOV / 2))
     const dist = Math.max((1.01 * 1.1) / 2 / (t * this.camera.aspect), (0.57 * 1.9) / 2 / t)
-    // écran en hauteur (téléphone) : la télé monte dans le haut, le texte du tuto se lit dessous
-    if (this.camera.aspect < 1) target.y -= 0.42 * dist * t
-    return { target, az: 0, el: 0.03, dist }
+    // la télé reste au milieu (le texte du tuto se lit dessous), le regard passe au-dessus de la table basse
+    return { target, az: Math.PI / 2, el: 0.06, dist }
   }
 
   zoomTv() {
@@ -824,12 +827,16 @@ export class LivingRoomScene {
     const e = ease(z.k), a = z.from, b = this._tvView()
     const tgt = a.target.clone().lerp(b.target, e)
     const dist = Math.exp(Math.log(a.dist) + (Math.log(b.dist) - Math.log(a.dist)) * e)
+    this.camera.fov = FOV + (TV_FOV - FOV) * e
+    // téléphone : l'image glisse vers le haut (la télé au-dessus du texte du tuto), sans baisser la caméra
+    if (this.camera.aspect < 1) this.camera.setViewOffset(this.w, this.h, 0, Math.round(this.h * 0.2 * e), this.w, this.h)
+    else this.camera.clearViewOffset()
+    this.camera.updateProjectionMatrix()
     this._placeCamera(a.az + (b.az - a.az) * e, a.el + (b.el - a.el) * e, dist, tgt)
-    this._fadeLamp(e)
     if (z.dir < 0 && z.k <= 0) {
       this.tvZoom = null
       this.az.snap(a.az); this.el.snap(a.el); this.target.copy(a.target)
-      this._fadeLamp(0)
+      this.camera.fov = FOV; this.camera.clearViewOffset(); this.camera.updateProjectionMatrix()
       this.idleAt = this.time
       if (this.pendingEnter !== undefined) { const f = this.pendingEnter; this.pendingEnter = undefined; this.enter(f) }
     }
@@ -862,7 +869,7 @@ export class LivingRoomScene {
   _placeBubbles() {
     const S = this.renderer.domElement.getBoundingClientRect()
     const show = !this.fly && !this.tvZoom
-    for (const [kind, pos] of [['tv', new THREE.Vector3(TV.x, 1.47, -R + 0.2)], ['basket', new THREE.Vector3(TABLE.x + 0.17, 0.86, TABLE.z + 0.04)]]) {
+    for (const [kind, pos] of [['tv', new THREE.Vector3(-R + 0.2, 1.47, TV.z)], ['basket', new THREE.Vector3(TABLE.x + 0.17, 0.86, TABLE.z + 0.04)]]) {
       const el = this.cb.bubble?.(kind)
       if (!el) continue
       const v = pos.project(this.camera)
@@ -1179,7 +1186,7 @@ export class LivingRoomScene {
       geo.computeVertexNormals()
       const c = new THREE.Mesh(geo, cm)
       c.rotation.y = Math.PI / 2
-      c.position.set(0.06, -0.12, s * (WINDOW.w / 2 + 0.16))
+      c.position.set(0.06, -0.12, s * (WINDOW.w / 2 + 0.14))
       c.castShadow = true
       grp.add(c)
       this.curtains.push(c)
@@ -1194,7 +1201,7 @@ export class LivingRoomScene {
   // ---- Pouf --------------------------------------------------------------------------------
   _buildPouf() {
     const grp = new THREE.Group()
-    grp.position.set(0.55, 0, -0.95)
+    grp.position.set(0.12, 0, -1.0)
     this.room.add(grp)
     const pr = [new THREE.Vector2(0, 0)]
     for (let k = 0; k <= 12; k++) {
@@ -1266,7 +1273,7 @@ export class LivingRoomScene {
     const hw = (CW / 2 + ST + 0.04) * sc     // demi-largeur (sur x)
     const g = new THREE.Group()
     // contre le mur du fond, entre le coin gauche et le meuble télé
-    g.position.set(clamp(-0.8, -1.92 + hw, 0.45 - hw), 0, -R + 0.012 + (SD / 2 + 0.02) * sc)
+    g.position.set(clamp(-0.85, -1.92 + hw, 0.2 - hw), 0, -R + 0.012 + (SD / 2 + 0.02) * sc)
     g.scale.setScalar(sc)
     g.add(copy)
     this.room.add(g)
