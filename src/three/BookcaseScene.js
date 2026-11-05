@@ -448,7 +448,7 @@ export class BookcaseScene {
       this.caseGroup.add(plank, back, sideL, sideR)
       // joint fin entre deux modules (devant et sur les côtés) : chaque étagère est un bloc à part
       if (r > 0) {
-        const seam = new THREE.Mesh(this.seamGeo ||= new THREE.BoxGeometry(1, 1, 1), this.seamMat ||= new THREE.MeshBasicMaterial({ color: 0x1c140c, transparent: true, opacity: 0.55, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }))
+        const seam = new THREE.Mesh(this.seamGeo ||= new THREE.BoxGeometry(1, 1, 1), this.seamMat ||= new THREE.MeshBasicMaterial({ color: 0x1c140c, transparent: true, opacity: 0.55, polygonOffset: true, polygonOffsetFactor: -0.5, polygonOffsetUnits: -2 }))
         seam.scale.set(CW + 2 * ST + 0.012, 0.012, SD + 0.052)
         seam.position.set(0, y0 + RH + PT / 2, 0.02)      // limite entre ce module et celui du dessus
         this.caseGroup.add(seam)
@@ -495,10 +495,11 @@ export class BookcaseScene {
       const w = Math.min(CW * 0.62, h * aspect)
       this.brassMat ||= new THREE.MeshStandardMaterial({ color: '#B8914A', metalness: 0.55, roughness: 0.4 })
       part.plaqueMat?.dispose()
-      part.plaqueMat = new THREE.MeshStandardMaterial({ map: tex, metalness: 0.35, roughness: 0.45, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+      part.plaqueMat = new THREE.MeshStandardMaterial({ map: tex, metalness: 0.35, roughness: 0.45 })
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.014), [this.brassMat, this.brassMat, this.brassMat, this.brassMat, part.plaqueMat, this.brassMat])
       // vissée sur le chant de la planche, entre les portes du dessus et du dessous
-      m.position.set(-CW / 2 + 0.1 + w / 2, this.rowBase(r) - PT / 2, SD / 2 + 0.04 + 0.009)
+      // nettement devant le joint entre deux blocs : la plaque reste d'une seule pièce
+      m.position.set(-CW / 2 + 0.1 + w / 2, this.rowBase(r) - PT / 2, SD / 2 + 0.04 + 0.022)
       m.userData.plaque = r
       m.castShadow = true
       this.caseGroup.add(m)
