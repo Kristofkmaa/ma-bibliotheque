@@ -33,6 +33,7 @@ const TABLE = { x: -0.15, z: 0.0 }          // entre le canapé et la télé
 const LAMP = { x: 1.8, z: 1.38 }            // au bout du canapé
 const PLANT = { x: -1.6, z: 1.62 }          // coin, sous la fenêtre
 const WINDOW = { z: 1.3, y: 1.55, w: 0.66, h: 1.0 }
+const SALON_ROWS = 4                        // la bibliothèque du salon montre au plus 4 étagères
 const TV_FOV = 46                           // zoom sur la télé : comme assis dans le canapé
 
 const COL = {
@@ -1269,11 +1270,13 @@ export class LivingRoomScene {
     walk(src, copy)
     const { CW } = lib.layout
     const totalH = lib.rowCount * (RH + PT) + PT
-    const sc = Math.min(2.45 / (totalH + 0.1), 2.1 / (CW + 2 * ST + 0.06))
+    // au plus 4 étagères dans le salon (celles du haut, là où l'on entre) : le reste est coupé sous le plancher
+    const cutY = lib.rowCount > SALON_ROWS ? lib.rowBase(SALON_ROWS - 1) - PT : 0
+    const sc = Math.min(2.45 / (totalH - cutY + 0.1), 2.1 / (CW + 2 * ST + 0.06))
     const hw = (CW / 2 + ST + 0.04) * sc     // demi-largeur (sur x)
     const g = new THREE.Group()
     // contre le mur du fond, entre le coin gauche et le meuble télé
-    g.position.set(clamp(-0.85, -1.92 + hw, 0.2 - hw), 0, -R + 0.012 + (SD / 2 + 0.02) * sc)
+    g.position.set(clamp(-0.85, -1.92 + hw, 0.2 - hw), -cutY * sc, -R + 0.012 + (SD / 2 + 0.02) * sc)
     g.scale.setScalar(sc)
     g.add(copy)
     this.room.add(g)
@@ -1293,10 +1296,17 @@ export class LivingRoomScene {
     copy.traverse(o => { if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map(fix) : fix(o.material) })
     const doors = [...clones.entries()]
     const hits = []
+    const tops = new Set(copy.children.flatMap(grp => grp.children))   // un objet par rayon / livre / porte
+    const shown = c => !tops.has(c) || c.position.y >= cutY - 1e-3
     copy.traverse(o => {
       o.layers.enable(1)
-      if (o.isMesh) { o.userData = { ...o.userData, kind: 'bookcase' }; hits.push(o) }
+      if (tops.has(o)) o.visible = o.visible && shown(o)
     })
+    copy.children.forEach(grp => grp.children.forEach(c => {
+      if (!shown(c)) return
+      c.traverse(o => { if (o.isMesh) { o.userData = { ...o.userData, kind: 'bookcase' }; hits.push(o) } })
+    }))
+    copy.children.forEach(grp => { if (grp.isMesh) hits.push(grp) })
     // lumières de la bibliothèque, attachées au meuble (même direction par rapport aux livres)
     const lk = this.libKey
     g.add(lk, lk.target, this.libFill, this.libFill.target)
@@ -1307,7 +1317,7 @@ export class LivingRoomScene {
     lk.shadow.bias = sh.bias
     lk.shadow.normalBias = sh.normalBias * sc
     this.libFill.position.set(5, 2, 3); this.libFill.target.position.set(0, 0, 0)
-    this.mirror = { lib, g, copy, pairs, doors, hits, sc, sig: this._wallSig(lib) }
+    this.mirror = { lib, g, copy, pairs, doors, hits, sc, tops, cutY, sig: this._wallSig(lib) }
     this.bookcase.visible = false
     this.shadowDirty = 2
     return true
@@ -1344,7 +1354,8 @@ export class LivingRoomScene {
     if (this._wallSig(lib) !== m.sig) { this.setWall(lib); return }
     for (const [o, c] of m.pairs) {
       if (o === lib.root) continue
-      c.position.copy(o.position); c.quaternion.copy(o.quaternion); c.scale.copy(o.scale); c.visible = o.visible
+      c.position.copy(o.position); c.quaternion.copy(o.quaternion); c.scale.copy(o.scale)
+      c.visible = o.visible && (!m.tops.has(c) || o.position.y >= m.cutY - 1e-3)
     }
     for (const [om, cm] of m.doors) {
       cm.color.copy(om.color)
