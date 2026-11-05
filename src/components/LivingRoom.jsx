@@ -87,7 +87,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
         return {
           top: ((topRef.current?.offsetHeight || 90) + 6) / h,
           bottom: ((bottomRef.current?.offsetHeight || 110) + 6) / h,
-          side: 0.035,
+          side: 0.012,
         }
       },
     })
@@ -170,21 +170,40 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
         </div>
         <p className="salon-hello"><span>{greeting(hour)}.</span></p>
         <p className="lbl salon-sub">{sub}</p>
+        {mobile && onSignOut && <button type="button" className="lbl salon-out salon-out-top" onClick={onSignOut}>Déconnexion</button>}
       </div>
 
       {hover && hover.x != null && (
         <div className="salon-chip lbl" style={{ transform: `translate(${hover.x + 14}px, ${hover.y + 16}px)` }}>{hover.label}</div>
       )}
 
-      <div className="salon-bottom" ref={bottomRef}>
-        <button type="button" className="lbl box cobalt salon-go" onClick={go} disabled={going}>
-          Entrer dans ma bibliothèque <span aria-hidden="true">→</span>
-        </button>
-        <p className="salon-hint">
-          {mobile ? 'Glisse le doigt pour regarder autour, touche les objets' : 'Fais glisser pour regarder autour, clique sur les objets'}
-        </p>
-        {onSignOut && <button type="button" className="lbl salon-out" onClick={onSignOut}>Déconnexion</button>}
-      </div>
+      {mobile ? (
+        /* téléphone : le menu du bas propose les deux « pièces » du salon */
+        <nav className={'tabbar salon-tabs' + (going || tv ? ' away' : '')} ref={bottomRef} aria-label="Où aller">
+          <button type="button" className="tab" onClick={go} disabled={going}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16M20 4v16M4 9h16M4 14.5h16M4 20h16M7 9V6M9 9V5.5M12 14.5v-3.5M14.5 14.5v-3" /></svg>
+            <span>Ma bibliothèque</span>
+          </button>
+          <p className="salon-tabs-hint">Glisse pour tourner la pièce</p>
+          <button type="button" className="tab" onClick={() => sceneRef.current?.zoomTv()} disabled={going}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="1.5" /><path d="M8.5 20h7M10.5 9l4 2-4 2z" /></svg>
+            <span>Nos séries</span>
+          </button>
+        </nav>
+      ) : (
+        <div className="salon-bottom" ref={bottomRef}>
+          <div className="salon-go-row">
+            <button type="button" className="lbl box cobalt salon-go" onClick={go} disabled={going}>
+              Entrer dans ma bibliothèque <span aria-hidden="true">→</span>
+            </button>
+            <button type="button" className="lbl box salon-go" onClick={() => sceneRef.current?.zoomTv()} disabled={going}>
+              Nos séries <span aria-hidden="true">▶</span>
+            </button>
+          </div>
+          <p className="salon-hint">Fais glisser pour regarder autour, clique sur les objets</p>
+          {onSignOut && <button type="button" className="lbl salon-out" onClick={onSignOut}>Déconnexion</button>}
+        </div>
+      )}
     </div>
   )
 }

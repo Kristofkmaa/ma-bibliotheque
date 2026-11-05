@@ -15,7 +15,7 @@ import { noTouchSelect } from './webgl'
  */
 
 const R = 2            // demi-côté de la pièce
-const H = 2.7          // hauteur des murs
+const H = 3.0          // hauteur des murs (la pièce occupe la hauteur d'un téléphone)
 const T = 0.12         // épaisseur des murs
 const FT = 0.2         // épaisseur du plancher
 const FOV = 30
@@ -27,13 +27,15 @@ const TARGET0 = new THREE.Vector3(0, 0.95, 0)
 const BOOKCASE = { x: -1.05, z: -R + 0.2, w: 1.62, h: 2.18, d: 0.38 }   // mur du fond, à gauche (face à la caméra)
 const FIRE = { x: 0, w: 1.3, d: 0.3, h: 1.38 }                         // centrée sur le mur de devant (loin des livres et du canapé)
 const TV = { z: -0.5 }                      // mur de gauche, en face du canapé : la toile de projection
-const SCR = { w: 2.1, h: 1.18, y: 1.42 }    // l'image projetée (16:9), presque tout le mur
-const PROJ = { x: 0.95, y: 2.3 }            // le vidéoprojecteur, suspendu au-dessus du canapé
+const SCR = { w: 2.2, h: 1.24, y: 1.56 }    // l'image projetée (16:9), presque tout le mur
+const PROJ = { x: 0.95, y: 2.55 }           // le vidéoprojecteur, suspendu au-dessus du canapé
+// les meubles en plus grand (la pièce garde sa taille : elle est plus remplie, tout se voit mieux)
+const BIG = { sofa: 1.2, fire: 1.2, table: 1.12, basket: 1.12, lamp: 1.15, plant: 1.25, pouf: 1.15, cabinet: 1.15, projector: 1.35 }
 const SOFA = { x: 1.34, z: 0.0 }            // face à la télé
 const TABLE = { x: -0.15, z: 0.0 }          // entre le canapé et la télé
 const LAMP = { x: 1.8, z: 1.38 }            // au bout du canapé
 const PLANT = { x: 1.62, z: -1.62 }         // coin du fond, à droite
-const WINDOW = { z: 1.3, y: 1.55, w: 0.66, h: 1.0 }
+const WINDOW = { z: 1.42, y: 1.62, w: 0.66, h: 1.06 }
 const SALON_ROWS = 4                        // la bibliothèque du salon montre au plus 4 étagères
 
 const COL = {
@@ -298,6 +300,12 @@ export class LivingRoomScene {
     this._buildPlant()
     this._buildWindow()
     this._buildPouf()
+    for (const [kind, k] of Object.entries(BIG)) {
+      const it = this.items.get(kind)
+      if (!it) continue
+      it.group.scale.setScalar(k)
+      it.group.userData.k = k
+    }
     this._applyMood()
 
     this._bindEvents()
@@ -675,12 +683,12 @@ export class LivingRoomScene {
     })
     // lueur du feu
     this.fireLight = new THREE.PointLight(0xff8a3c, 2, 5.5, 1.6)
-    this.fireLight.position.set(FIRE.x, 0.55, R - D - 0.45)
+    this.fireLight.position.set(FIRE.x, 0.55 * BIG.fire, R - (D + 0.45) * BIG.fire)
     this.scene.add(this.fireLight)
     // déco de la tablette : miroir rond, bougies, petit vase
     const mirror = new THREE.Mesh(this._geo(new THREE.CircleGeometry(0.3, 48)), this._mat('#C9D3D8', { roughness: 0.15, metalness: 0.3 }))
     // le miroir est accroché au mur (il s'abaisse avec lui)
-    mirror.position.set(FIRE.x, 1.86, R - 0.014)
+    mirror.position.set(FIRE.x, 2.2, R - 0.014)
     mirror.rotation.y = Math.PI
     const rim = new THREE.Mesh(this._geo(new THREE.TorusGeometry(0.3, 0.022, 10, 64)), this._mat(COL.brass, { roughness: 0.35, metalness: 0.6 }))
     rim.position.copy(mirror.position); rim.rotation.y = Math.PI
@@ -802,7 +810,7 @@ export class LivingRoomScene {
     const led = new THREE.Mesh(this._geo(new THREE.SphereGeometry(0.008, 8, 6)), new THREE.MeshBasicMaterial({ color: 0x5ad18a, toneMapped: false }))
     led.position.set(0.12, 0.062, -0.09)
     // suspension : platine et tige jusqu'en haut
-    const rodLen = H + 0.02 - PROJ.y - 0.06
+    const rodLen = (H + 0.02 - PROJ.y) / BIG.projector - 0.06
     const rod = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.014, 0.014, rodLen, 10)), dark)
     rod.position.set(0.04, 0.06 + rodLen / 2, 0)
     const plate = this._rbox(0.14, 0.02, 0.12, 0.006, dark)
@@ -814,7 +822,7 @@ export class LivingRoomScene {
     this._register('projector', grp, 'Nos séries')
 
     // le faisceau : une pyramide de lumière très légère, de l'objectif aux coins de la toile
-    const o = new THREE.Vector3(PROJ.x - 0.22, PROJ.y, TV.z + 0.06)
+    const o = new THREE.Vector3(PROJ.x - 0.22 * BIG.projector, PROJ.y, TV.z + 0.06 * BIG.projector)
     const x = -R + 0.03, y0 = SCR.y - SCR.h / 2, y1 = SCR.y + SCR.h / 2, z0 = TV.z - SCR.w / 2, z1 = TV.z + SCR.w / 2
     const c = [[x, y0, z0], [x, y0, z1], [x, y1, z1], [x, y1, z0]]
     const pos = []
@@ -1061,7 +1069,7 @@ export class LivingRoomScene {
     const px = 40     // hauteur à l'écran (px) de la pastille
     for (const [kind, pos, on] of [
       ['tv', new THREE.Vector3(-R + 0.15, SCR.y + SCR.h / 2 + 0.12, TV.z), free && this.tvBubbleOn !== false && (this.wallOf('left').f ?? 1) > 0.5],
-      ['basket', new THREE.Vector3(TABLE.x + 0.17, 0.9, TABLE.z + 0.04), free && !!this.bubbles?.basket?.text],
+      ['basket', new THREE.Vector3(TABLE.x + 0.17 * BIG.table, 0.98, TABLE.z + 0.04 * BIG.table), free && !!this.bubbles?.basket?.text],
     ]) {
       const b = this.bubbles?.[kind]
       if (!b) continue
@@ -1183,7 +1191,7 @@ export class LivingRoomScene {
 
     // le panier, posé dessus
     const bk = new THREE.Group()
-    bk.position.set(TABLE.x + 0.17, 0.43, TABLE.z + 0.04)
+    bk.position.set(TABLE.x + 0.17 * BIG.table, 0.43 * BIG.table, TABLE.z + 0.04 * BIG.table)
     this.room.add(bk)
     const pr = []
     for (let k = 0; k <= 10; k++) { const t = k / 10; pr.push(new THREE.Vector2(0.13 + 0.05 * Math.pow(t, 0.85) + Math.sin(t * Math.PI) * 0.008, t * 0.15)) }
@@ -1251,10 +1259,10 @@ export class LivingRoomScene {
     bulb.position.y = 1.44
     grp.add(base, pole, shade, bulb)
     this.lampLight = new THREE.PointLight(0xffc98a, 0, 5, 1.4)
-    this.lampLight.position.set(LAMP.x, 1.38, LAMP.z)
+    this.lampLight.position.set(LAMP.x, 1.38 * BIG.lamp, LAMP.z)
     this.scene.add(this.lampLight)
     this.lampGlow = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(1.4, 1.4)), new THREE.MeshBasicMaterial({ map: this.glow, color: 0xffc070, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }))
-    this.lampGlow.position.set(LAMP.x, 1.5, LAMP.z)
+    this.lampGlow.position.set(LAMP.x, 1.5 * BIG.lamp, LAMP.z)
     this.scene.add(this.lampGlow)
     this.lampOn = new Spring(0, 60, 0.9)
     this._register('lamp', grp, 'La lampe')
@@ -1463,11 +1471,11 @@ export class LivingRoomScene {
     const totalH = lib.rowCount * (RH + PT) + PT
     // au plus 4 étagères dans le salon (celles du haut, là où l'on entre) : le reste est coupé sous le plancher
     const cutY = lib.rowCount > SALON_ROWS ? lib.rowBase(SALON_ROWS - 1) - PT : 0
-    const sc = Math.min(2.45 / (totalH - cutY + 0.1), 2.1 / (CW + 2 * ST + 0.06))
+    const sc = Math.min(2.8 / (totalH - cutY + 0.1), 2.5 / (CW + 2 * ST + 0.06))
     const hw = (CW / 2 + ST + 0.04) * sc     // demi-largeur (sur x)
     const g = new THREE.Group()
     // contre le mur du fond, entre le coin gauche et le meuble télé
-    g.position.set(clamp(-0.85, -1.92 + hw, 0.2 - hw), -cutY * sc, -R + 0.012 + (SD / 2 + 0.02) * sc)
+    g.position.set(clamp(-0.75, -1.92 + hw, 0.75 - hw), -cutY * sc, -R + 0.012 + (SD / 2 + 0.02) * sc)
     g.scale.setScalar(sc)
     g.add(copy)
     this.room.add(g)
@@ -1888,7 +1896,8 @@ export class LivingRoomScene {
       it.hov = (it.hov || 0) + (hov - (it.hov || 0)) * Math.min(1, dt * 10)
       const sy = 1 + b * 0.06 + it.hov * 0.012
       const sxz = 1 - b * 0.03
-      it.group.scale.set(sxz, Math.max(0.001, sy * (it.group.userData.cutF ?? 1)), sxz)
+      const k = it.group.userData.k ?? 1
+      it.group.scale.set(sxz * k, Math.max(0.001, k * sy * (it.group.userData.cutF ?? 1)), sxz * k)
       if (Math.abs(b) > 1e-3 || Math.abs(it.bounce.vel) > 1e-3) moving = true
     }
     // coussins

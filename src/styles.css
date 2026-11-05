@@ -1834,3 +1834,31 @@ body.immersive .scene { padding: 0 !important; }
   .stv-screen.vx-v-detail .vx-navbtn + .vx-navbtn { display: none; }
   .stv-screen.vx-v-shelf .vx-zoom { display: none; }
 }
+
+/* Le menu du bas selon l'endroit : salon (bibliothèque ou séries), télé (nos séries) */
+.salon-go-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; pointer-events: auto; }
+.salon-out-top { display: none; }
+@media (max-width: 767px) {
+  .salon-tabs { grid-template-columns: 1fr auto 1fr; transition: transform 0.6s cubic-bezier(.6, 0, .4, 1); }
+  .salon-tabs.away { transform: translateY(110%); }
+  .salon-tabs .tab { color: var(--cobalt); }
+  .salon-tabs .tab:disabled { opacity: 0.5; }
+  .salon-tabs-hint { align-self: center; max-width: 110px; text-align: center; font-family: var(--serif); font-style: italic; font-size: 12px; line-height: 1.25; color: var(--muted); }
+  .salon-out-top { display: inline-block; position: absolute; left: 16px; top: calc(20px + env(safe-area-inset-top)); font-size: 9px; }
+  /* dans la télé : le menu au pied de l'écran, à l'intérieur du cadre */
+  .stv .stv-tabs {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; height: 62px; padding: 0 4px;
+    background: rgba(245, 239, 227, 0.96); border-top: 1px solid var(--vx-rule); box-shadow: 0 -10px 24px -20px rgba(20, 16, 10, 0.5);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  }
+  .stv .stv-tabs .tab { height: 62px; color: var(--stv-muted); }
+  .stv .stv-tabs .tab.on { color: var(--stv-accent); }
+  .stv .stv-tabs .tab:disabled { opacity: 0.35; }
+  .stv .stv-tabs .tab-shop { color: var(--stv-accent); }
+  .stv .stv-tabs .tab-shop-bubble { background: var(--stv-accent); border-color: rgba(245, 239, 227, 1); }
+  .stv.vhs .stv-screen { padding-bottom: 62px; }
+  .stv.vhs .vx-nav { display: none; }
+  .stv-player { bottom: 62px; }
+  .vx-zoom { bottom: 74px; }
+}
+@media (min-width: 768px) { .stv-tabs { display: none !important; } }

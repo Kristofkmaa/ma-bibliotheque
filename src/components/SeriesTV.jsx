@@ -588,6 +588,29 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
             </section>
           )}
 
+          {/* téléphone : le menu du bas de la télé (comme celui de la bibliothèque, mais pour nos séries) */}
+          <nav className="tabbar stv-tabs" aria-label="Menu de la télé">
+            <button type="button" className="tab" onClick={close}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2L12 4l8.5 7.2M6 9.8V20h12V9.8M10 20v-5.5h4V20" /></svg>
+              <span>Salon</span>
+            </button>
+            <button type="button" className={'tab' + (view === 'catalog' ? ' on' : '')} onClick={() => series.length && setView('catalog')}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1" /></svg>
+              <span>Catalogue</span>
+            </button>
+            <button type="button" className="tab tab-shop" onClick={() => setView('search')} aria-label="Ajouter une série">
+              <span className="tab-shop-bubble"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></span>
+              <span>Ajouter</span>
+            </button>
+            <button type="button" className={'tab' + (view === 'shelf' ? ' on' : '')} onClick={() => series.length && openShelf(cat)}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19h18M5 19V7.5M8 19V6M11 19V8M14.5 19l2.5-11.5M18 19V9" /></svg>
+              <span>Étagère</span>
+            </button>
+            <button type="button" className={'tab' + (playing ? ' on' : '')} onClick={() => { if (cur && curVideos.length) setPlaying(p => !p) }} disabled={!cur || !curVideos.length}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M10.2 8.8l5 3.2-5 3.2z" /></svg>
+              <span>Générique</span>
+            </button>
+          </nav>
           {playing && cur && curVideos.length > 0 && <Player show={cur} videos={curVideos} onDone={stopVideo} />}
         </div>
       </div>
