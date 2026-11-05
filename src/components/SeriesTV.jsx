@@ -160,219 +160,130 @@ function Player({ show, videos, onDone }) {
   )
 }
 
-// Les tranches : des couleurs de boîtiers, choisies d'après le nom de la série
-const SPINES = [
-  ['#1C1A17', '#EDE3CC'], ['#ECE2CB', '#1C1A17'], ['#6E1F1A', '#F1E4C8'], ['#1F3A2E', '#E9DFC9'],
-  ['#1E2B4A', '#EBDDB6'], ['#B5832E', '#1C1A17'], ['#5A3B26', '#EADCC0'], ['#3B3A37', '#E4D9C2'],
-  ['#C9BFAA', '#2A2620'], ['#8C2F22', '#F3E7CF'],
-]
-const spineOf = s => {
-  let h = 0
-  for (const c of s.name || '') h = (h * 31 + c.charCodeAt(0)) >>> 0
-  return SPINES[h % SPINES.length]
-}
 const pad = n => String(n).padStart(2, '0')
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
-const CASE = 0.7                       // largeur / hauteur d'un boîtier, vu de face
 const ZOOM_KEY = 'levana.series.zoom'
 const readZoom = () => { try { const z = parseFloat(localStorage.getItem(ZOOM_KEY)); return z > 0 ? clamp(z, 0.55, 1.6) : 1 } catch { return 1 } }
+const HERO_MS = 14000
 
-/** La catégorie d'une série : celle qu'on lui a donnée, sinon son genre. */
+/** La catégorie d'une œuvre : celle qu'on lui a donnée, sinon son genre. */
 export const categoryOf = s => s.category || s.genres?.[0] || 'Autres'
-
-/** Un boîtier vu de face, fin comme un Blu-ray : le bandeau bleu en haut, l'affiche, le reflet. */
-function CaseFront({ show, size = 'w500' }) {
-  return (
-    <span className="bx-front">
-      <span className="bx-band"><b>{isMovie(show) ? 'Film' : 'Série'}</b><i>{year(show) || ''}</i></span>
-      <span className="bx-art">
-        {show.poster_path ? <img src={tmdbImg(show.poster_path, size)} alt="" draggable="false" loading="lazy" /> : <span className="bx-name">{show.name}</span>}
-      </span>
-      <span className="bx-sheen" aria-hidden="true" />
-    </span>
-  )
-}
-
-/** Un boîtier vu de côté : une tranche fine, le titre écrit de haut en bas. */
-function CaseSpine({ show }) {
-  const [bg, fg] = spineOf(show)
-  return (
-    <span className="bx-spine" style={{ background: bg, color: fg }}>
-      <span className="bx-spine-cap" />
-      <span className="bx-spine-name">{show.name}</span>
-      <span className="bx-spine-year">{year(show) || ''}</span>
-    </span>
-  )
-}
-
-/** La frise du bas : un trait par série, les années en dessous. */
-function Timeline({ list, idx, onPick }) {
-  const n = list.length
-  const every = Math.max(1, Math.ceil(n / 7))
-  return (
-    <div className="vx-time">
-      <div className="vx-time-line" />
-      {list.map((s, i) => {
-        const x = n > 1 ? (i / (n - 1)) * 100 : 50
-        const y = year(s)
-        const label = i === idx || (i % every === 0 && Math.abs(i - idx) >= every / 2)
-        return (
-          <button key={s.id} type="button" className={'vx-tick' + (i === idx ? ' on' : '')} style={{ left: `${x}%` }} onClick={() => onPick(i)} aria-label={s.name}>
-            <span className="vx-tick-bar" />
-            {label && y && <span className="vx-tick-year">{y}</span>}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/** Taille des boîtiers de l'étagère courbe, selon la place et le zoom. */
-const shelfMetrics = (W, H, zoom) => {
-  const frontH = clamp(Math.min(H * 0.84, W * 0.46 / CASE) * zoom, 90, 600)
-  return { frontH, frontW: frontH * CASE, spineH: frontH * 0.97, spineW: frontH * 0.072, gap: frontH * 0.012 }
-}
+const kindLabel = s => (isMovie(s) ? 'Film' : 'Série')
 
 /**
- * L'étagère courbe : les boîtiers sur un arc, celui du milieu de face, les autres de tranche,
- * de plus en plus loin. On la fait tourner au doigt, à la molette, aux flèches.
+ * La bande-annonce (ou le générique) qui démarre sans le son derrière la grande affiche,
+ * comme sur les plateformes ; elle n'apparaît que quand elle tourne vraiment.
  */
-function Shelf({ list, pos, dragging, onPick, onOpen, onPlay, canPlay, stageRef, size, zoom }) {
-  const { H, W } = size
-  const { frontH, frontW, spineH, spineW, gap } = shelfMetrics(W, H, zoom)
-  const R = Math.max(W * 0.4, frontH * 1.45)          // rayon de l'arc : plus il est petit, plus l'étagère se courbe
-  const near = frontW / 2 + spineW / 2 + gap, step = spineW + gap
-  const active = Math.round(pos)
-  const span = Math.ceil((W / 2) / step) + 4
-  const out = []
-  for (let i = Math.max(0, active - span); i <= Math.min(list.length - 1, active + span); i++) {
-    const d = i - pos, ad = Math.abs(d)
-    const w = clamp(1 - ad, 0, 1)                       // 1 : de face, 0 : de tranche
-    const arc = ad < 1 ? d * near : Math.sign(d) * (near + (ad - 1) * step)
-    const a = arc / R
-    if (Math.abs(a) > 1.45) continue
-    const x = R * Math.sin(a), z = R * (Math.cos(a) - 1)
-    const width = spineW + (frontW - spineW) * w, height = spineH + (frontH - spineH) * w
-    const s = list[i]
-    out.push(
-      <div key={s.id} className={'vx-tape' + (i === active ? ' on' : '')}
-        style={{ width, height, zIndex: 1000 - Math.round(ad * 2), transform: `translate3d(${x - width / 2}px, ${-height / 2}px, ${z}px) rotateY(${a}rad)`, transition: dragging ? 'none' : undefined }}>
-        <button type="button" className="vx-tape-btn" onClick={() => (i === active ? onOpen() : onPick(i))} aria-label={i === active ? `Voir la fiche de ${s.name}` : s.name} tabIndex={ad > 6 ? -1 : 0}>
-          <span className="vx-face" style={{ opacity: w }}><CaseFront show={s} /></span>
-          <span className="vx-face" style={{ opacity: 1 - w }}><CaseSpine show={s} /></span>
-        </button>
-        {i === active && canPlay && !dragging && (
-          <button type="button" className="vx-play" onClick={onPlay} aria-label={`Lancer le générique de ${s.name}`}><span /></button>
-        )}
-      </div>,
-    )
+function HeroVideo({ videoKey }) {
+  const [on, setOn] = useState(false)
+  const frame = useRef(null)
+  useEffect(() => {
+    setOn(false)
+    const onMsg = e => {
+      if (e.source !== frame.current?.contentWindow) return
+      let d
+      try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data } catch { return }
+      const st = d?.event === 'onStateChange' ? d.info : d?.event === 'infoDelivery' ? d.info?.playerState : undefined
+      if (st === 1) setOn(true)
+      else if (st === 0 || d?.event === 'onError') setOn(false)
+    }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  }, [videoKey])
+  const listen = () => {
+    const w = frame.current?.contentWindow
+    if (!w) return
+    const send = o => w.postMessage(JSON.stringify({ id: 'hero', channel: 'widget', ...o }), '*')
+    send({ event: 'listening' })
+    send({ event: 'command', func: 'addEventListener', args: ['onStateChange'] })
+    send({ event: 'command', func: 'addEventListener', args: ['onError'] })
+    send({ event: 'command', func: 'mute' })
   }
+  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoKey)}?autoplay=1&mute=1&playsinline=1&controls=0&disablekb=1&fs=0&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`
   return (
-    <div className="vx-stage" ref={stageRef}>
-      <div className="vx-glyph l" aria-hidden="true">物語</div>
-      <div className="vx-glyph r" aria-hidden="true">連続劇</div>
-      <div className="vx-floor" style={{ width: Math.min(W * 0.9, frontH * 3.2), top: `calc(50% + ${frontH / 2 - 4}px)` }} />
-      <div className="vx-ring">{out}</div>
+    <div className={'sx-hero-video' + (on ? ' on' : '')} aria-hidden="true">
+      <iframe ref={frame} src={src} title="" tabIndex={-1} onLoad={listen} allow="autoplay; encrypted-media" referrerPolicy="strict-origin-when-cross-origin" />
     </div>
   )
 }
 
-/**
- * Une rangée du catalogue : les boîtiers debout sur une planche ; ils pivotent un peu selon
- * leur place dans la rangée (comme une étagère qu'on regarde en passant devant).
- */
-function Row({ items, onOpen }) {
-  const track = useRef(null)
-  useEffect(() => {
-    const el = track.current
-    if (!el) return
-    let raf = 0
-    const update = () => {
-      raf = 0
-      const r = el.getBoundingClientRect(), mid = r.left + r.width / 2
-      for (const c of el.children) {
-        const b = c.getBoundingClientRect()
-        const o = clamp((b.left + b.width / 2 - mid) / (r.width / 2), -1.2, 1.2)
-        c.style.setProperty('--o', o.toFixed(3))
-      }
-    }
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update) }
-    update()
-    el.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', onScroll)
-    const ro = new ResizeObserver(onScroll); ro.observe(el)
-    return () => { el.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); ro.disconnect(); cancelAnimationFrame(raf) }
-  }, [items.length])
+/** La grande affiche du haut : l'image de l'œuvre, son titre, deux boutons. */
+function Hero({ item, videos, onPlay, onInfo, n, i, onDot }) {
+  const [late, setLate] = useState(false)
+  useEffect(() => { setLate(false); const t = setTimeout(() => setLate(true), 2600); return () => clearTimeout(t) }, [item.id])
+  const v = videos?.[0]
   return (
-    <div className="ct-shelf">
-      <div className="ct-track" ref={track}>
-        {items.map((s, i) => (
-          <button key={s.id} type="button" className="ct-case" style={{ '--d': `${Math.min(i, 12) * 0.04}s` }} onClick={() => onOpen(s)} aria-label={s.name}>
-            <CaseFront show={s} size="w342" />
-            {s.rating >= 4 && <span className="ct-heart" aria-hidden="true">★</span>}
-          </button>
-        ))}
+    <section className="sx-hero" key={item.id}>
+      <div className="sx-hero-img">
+        {(item.backdrop_path || item.poster_path) && <img src={tmdbImg(item.backdrop_path || item.poster_path, 'w1280')} alt="" />}
+        {late && v && <HeroVideo videoKey={v.key} />}
       </div>
-      <div className="ct-plank" aria-hidden="true" />
-    </div>
-  )
-}
-
-/** Le titre d'une rangée, qu'on peut renommer. */
-function RowHead({ name, count, onShelf, onRename }) {
-  const [edit, setEdit] = useState(false)
-  const [v, setV] = useState(name)
-  const done = () => { setEdit(false); const t = v.trim(); if (t && t !== name) onRename(t); else setV(name) }
-  return (
-    <header className="ct-head">
-      {edit ? (
-        <input className="ct-rename" value={v} autoFocus onChange={e => setV(e.target.value)} onBlur={done}
-          onKeyDown={e => { if (e.key === 'Enter') done(); if (e.key === 'Escape') { setV(name); setEdit(false) } }} aria-label="Nom de la catégorie" />
-      ) : (
-        <h3 className="ct-name">{name}<button type="button" className="ct-edit" onClick={() => { setV(name); setEdit(true) }} aria-label={`Renommer ${name}`}>✎</button></h3>
+      <div className="sx-hero-shade" />
+      <div className="sx-hero-text">
+        <p className="sx-kicker">{kindLabel(item)} <i /> {categoryOf(item)}</p>
+        <h2 className="sx-hero-title">{item.name}</h2>
+        <p className="sx-meta">
+          {item.rating ? <span className="sx-stars">{'★'.repeat(item.rating)}</span> : null}
+          {[year(item), lengthLabel(item), byLabel(item)].filter(Boolean).join('  ·  ')}
+        </p>
+        {item.overview && <p className="sx-hero-over">{item.overview}</p>}
+        <div className="sx-actions">
+          {v && <button type="button" className="sx-btn play" onClick={onPlay}><span className="sx-tri" aria-hidden="true" />{isOpening(v) ? 'Générique' : 'Bande-annonce'}</button>}
+          <button type="button" className="sx-btn" onClick={onInfo}><span className="sx-i" aria-hidden="true">i</span>Infos</button>
+        </div>
+      </div>
+      {n > 1 && (
+        <div className="sx-dots" role="tablist" aria-label="À l'affiche">
+          {Array.from({ length: n }, (_, k) => <button key={k} type="button" className={k === i ? 'on' : ''} onClick={() => onDot(k)} aria-label={`Affiche ${k + 1}`} />)}
+        </div>
       )}
-      <span className="ct-count">{pad(count)}</span>
-      <span className="ct-rule" />
-      <button type="button" className="ct-more" onClick={onShelf}>L’étagère →</button>
-    </header>
+    </section>
   )
 }
 
-/** Le catalogue : une étagère par catégorie, les unes sous les autres. On zoome pour en voir plus. */
-function Catalog({ groups, zoom, onOpen, onShelf, onRename, onZoom }) {
-  const box = useRef(null)
-  const pinch = useRef(null)
-  // pincer pour zoomer (deux doigts), ou ctrl + molette (pavé tactile)
-  useEffect(() => {
-    const el = box.current
-    if (!el) return
-    const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
-    const ts = e => { if (e.touches.length === 2) pinch.current = { d: dist(e.touches), z: zoomRef.current } }
-    const tm = e => {
-      if (e.touches.length !== 2 || !pinch.current) return
-      e.preventDefault()
-      onZoomRef.current(clamp(pinch.current.z * dist(e.touches) / pinch.current.d, 0.55, 1.6))
-    }
-    const te = e => { if (e.touches.length < 2) pinch.current = null }
-    const wh = e => { if (!e.ctrlKey) return; e.preventDefault(); onZoomRef.current(clamp(zoomRef.current * Math.exp(-e.deltaY * 0.01), 0.55, 1.6)) }
-    el.addEventListener('touchstart', ts, { passive: true })
-    el.addEventListener('touchmove', tm, { passive: false })
-    el.addEventListener('touchend', te)
-    el.addEventListener('wheel', wh, { passive: false })
-    return () => { el.removeEventListener('touchstart', ts); el.removeEventListener('touchmove', tm); el.removeEventListener('touchend', te); el.removeEventListener('wheel', wh) }
-  }, [])
-  const zoomRef = useRef(zoom); zoomRef.current = zoom
-  const onZoomRef = useRef(onZoom); onZoomRef.current = onZoom
+/** Une carte : l'image en large, le titre dessus. */
+function Card({ s, onOpen, rank }) {
+  const img = s.backdrop_path || s.poster_path
   return (
-    <div className="ct" ref={box} style={{ '--z': zoom }}>
-      {groups.map(g => (
-        <section className="ct-row" key={g.name}>
-          <RowHead name={g.name} count={g.items.length} onShelf={() => onShelf(g.name)} onRename={to => onRename(g, to)} />
-          <Row items={g.items} onOpen={onOpen} />
-        </section>
-      ))}
-      <p className="ct-hint">Pince pour zoomer · touche un boîtier pour sa fiche</p>
-    </div>
+    <button type="button" className="sx-card" onClick={() => onOpen(s)} aria-label={s.name}>
+      <span className="sx-card-img">
+        {img ? <img src={tmdbImg(img, 'w780')} alt="" loading="lazy" draggable="false" /> : null}
+        <span className="sx-card-shade" />
+        <span className="sx-card-name">{s.name}</span>
+        <span className={'sx-card-kind ' + (isMovie(s) ? 'm' : 't')}>{kindLabel(s)}</span>
+        {rank != null && <span className="sx-rank">{rank}</span>}
+      </span>
+      <span className="sx-card-meta">{[year(s), lengthLabel(s)].filter(Boolean).join(' · ')}{s.rating ? <b> {'★'.repeat(s.rating)}</b> : null}</span>
+    </button>
+  )
+}
+
+/** Une rangée qui défile de côté, avec ses flèches sur ordinateur. */
+function CardRow({ title, items, onOpen, onRename, ranked }) {
+  const track = useRef(null)
+  const [edit, setEdit] = useState(false)
+  const [v, setV] = useState(title)
+  const scrollBy = d => { const el = track.current; if (el) el.scrollBy({ left: d * el.clientWidth * 0.85, behavior: 'smooth' }) }
+  const done = () => { setEdit(false); const t = v.trim(); if (t && t !== title) onRename?.(t); else setV(title) }
+  return (
+    <section className="sx-row">
+      <header className="sx-row-head">
+        {edit ? (
+          <input className="sx-rename" value={v} autoFocus onChange={e => setV(e.target.value)} onBlur={done}
+            onKeyDown={e => { if (e.key === 'Enter') done(); if (e.key === 'Escape') { setV(title); setEdit(false) } }} aria-label="Nom de la catégorie" />
+        ) : (
+          <h3>{title}{onRename && <button type="button" className="sx-edit" onClick={() => { setV(title); setEdit(true) }} aria-label={`Renommer ${title}`}>✎</button>}</h3>
+        )}
+        <span className="sx-count">{items.length}</span>
+      </header>
+      <div className="sx-row-wrap">
+        <button type="button" className="sx-arrow l" onClick={() => scrollBy(-1)} aria-label="Précédents">‹</button>
+        <div className="sx-track" ref={track}>
+          {items.map((s, i) => <Card key={s.id} s={s} onOpen={onOpen} rank={ranked ? i + 1 : null} />)}
+        </div>
+        <button type="button" className="sx-arrow r" onClick={() => scrollBy(1)} aria-label="Suivants">›</button>
+      </div>
+    </section>
   )
 }
 
@@ -411,72 +322,80 @@ function ZoomBar({ zoom, onZoom }) {
 }
 
 /**
- * Nos séries, à l'intérieur de la télé : on a zoomé à bloc, il ne reste que le contour de
- * l'écran. Le catalogue (une étagère par catégorie), l'étagère courbe d'une catégorie, la fiche
- * d'une série (et son générique), la recherche pour en ajouter.
+ * Nos films et séries, à l'intérieur de l'image projetée : un menu de plateforme de streaming,
+ * à notre façon (fond sombre, la grande affiche, des rangées par catégorie, la fiche) ; et la
+ * recherche pour en ajouter.
  */
 export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCategory, onClose }) {
-  const byYear = (a, b) => (a.first_air_date || '9999').localeCompare(b.first_air_date || '9999') || a.name.localeCompare(b.name)
-  const [kind, setKind] = useState('all')     // tout, séries ou films
-  const hasBoth = series.some(isMovie) && series.some(s => !isMovie(s))
-  const shown = useMemo(() => (kind === 'all' || !hasBoth ? series : series.filter(s => (kind === 'movie') === isMovie(s))), [series, kind, hasBoth])
+  const [kind, setKind] = useState('all')     // accueil (tout), séries ou films
+  const shown = useMemo(() => (kind === 'all' ? series : series.filter(s => (kind === 'movie') === isMovie(s))), [series, kind])
+  const byAdded = (a, b) => (b.added_at || '').localeCompare(a.added_at || '')
   const groups = useMemo(() => {
     const m = new Map()
     for (const s of shown) { const c = categoryOf(s); if (!m.has(c)) m.set(c, []); m.get(c).push(s) }
-    return [...m].map(([name, items]) => ({ name, items: items.sort(byYear) }))
+    return [...m].map(([name, items]) => ({ name, items: items.sort(byAdded) }))
       .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name))
   }, [shown])
-  const allCats = useMemo(() => groups.map(g => g.name).sort((a, b) => a.localeCompare(b)), [groups])
-  const [cat, setCat] = useState(null)          // l'étagère courbe : une catégorie (null : toutes)
-  const list = useMemo(() => (cat ? shown.filter(s => categoryOf(s) === cat) : [...shown]).sort(byYear), [shown, cat])
-  const [id, setId] = useState(() => null)
-  const [view, setView] = useState(() => (series.length ? 'catalog' : 'search'))   // catalog | shelf | detail | search
-  const [back, setBack] = useState('catalog')   // d'où vient-on, pour la fiche
+  const allCats = useMemo(() => [...new Set(series.map(categoryOf))].sort((a, b) => a.localeCompare(b)), [series])
+  const loved = useMemo(() => shown.filter(s => (s.rating || 0) >= 4).sort((a, b) => b.rating - a.rating || byAdded(a, b)), [shown])
+  const recent = useMemo(() => [...shown].sort(byAdded).slice(0, 15), [shown])
+  // à l'affiche : nos coups de cœur d'abord, sinon les derniers ajoutés
+  const featured = useMemo(() => (loved.length ? loved : recent).slice(0, 6), [loved, recent])
+  const [hi, setHi] = useState(0)
+  const hero = featured[hi % Math.max(1, featured.length)] || null
+  const [id, setId] = useState(null)          // la fiche ouverte
+  const [view, setView] = useState(() => (series.length ? 'home' : 'search'))   // home | search
   const [closing, setClosing] = useState(false)
-  const [playing, setPlaying] = useState(false)
-  const [videos, setVideos] = useState({})     // tmdb_id → vidéos (générique d'abord)
-  const [drag, setDrag] = useState(null)       // { x0, p0, p }
-  const [size, setSize] = useState({ W: 800, H: 400 })
+  const [playing, setPlaying] = useState(null)   // l'œuvre dont on regarde la vidéo
+  const [videos, setVideos] = useState({})     // œuvre → vidéos (générique d'abord)
   const [zoom, setZoomState] = useState(readZoom)
   const setZoom = useCallback(z => { setZoomState(z); try { localStorage.setItem(ZOOM_KEY, String(z)) } catch { /* ignore */ } }, [])
-  const stageRef = useRef(null)
-  const wheel = useRef(0)
+  const homeRef = useRef(null)
+  const [scrolled, setScrolled] = useState(false)   // l'en-tête prend un fond dès qu'on descend
   const cur = series.find(s => s.id === id) || null
-  const idx = Math.max(0, list.findIndex(s => s.id === id))
   const have = useMemo(() => new Set(series.map(workKey)), [series])
-  const pos = drag ? drag.p : idx
 
-  useEffect(() => { if (view === 'shelf' && !list.some(s => s.id === id) && list.length) setId(list[Math.floor((list.length - 1) / 2)].id) }, [view, list, id])
   useEffect(() => { if (!series.length && view !== 'search') setView('search') }, [series.length, view])
-  useEffect(() => { if (view === 'shelf' && cat && !list.length) setCat(null) }, [view, cat, list.length])
+  useEffect(() => { setHi(0) }, [kind])
 
-  // taille de la scène (l'étagère s'adapte à l'écran)
+  // la grande affiche change toute seule (pas pendant une fiche ou une vidéo)
   useEffect(() => {
-    const el = stageRef.current
-    if (!el) return
-    const ro = new ResizeObserver(() => setSize({ W: el.clientWidth, H: el.clientHeight }))
-    ro.observe(el)
-    setSize({ W: el.clientWidth, H: el.clientHeight })
-    return () => ro.disconnect()
-  }, [view])
+    if (view !== 'home' || cur || playing || featured.length < 2) return
+    const t = setTimeout(() => setHi(k => (k + 1) % featured.length), HERO_MS)
+    return () => clearTimeout(t)
+  }, [hi, view, cur, playing, featured.length])
 
-  // les vidéos de la série choisie (et de ses voisines sur l'étagère)
+  // les vidéos de ce qu'on regarde (l'affiche, la fiche)
+  const want = [hero, cur].filter(Boolean)
+  const wantKey = want.map(workKey).join(',')
   useEffect(() => {
-    if (!cur) return
     let live = true
-    for (const s of [cur, list[idx + 1], list[idx - 1]].filter(Boolean)) {
-      if (!s.tmdb_id || videos[workKey(s)]) continue
+    for (const s of want) {
+      if (videos[workKey(s)]) continue
       seriesVideos(s.tmdb_id, s.media).then(v => { if (live) setVideos(m => ({ ...m, [workKey(s)]: v })) })
     }
     return () => { live = false }
-  }, [cur && workKey(cur)]) // eslint-disable-line react-hooks/exhaustive-deps
-  const curVideos = (cur && videos[workKey(cur)]) || []
-  const stopVideo = useCallback(() => setPlaying(false), [])
+  }, [wantKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const vidsOf = s => (s && videos[workKey(s)]) || []
+  const stopVideo = useCallback(() => setPlaying(null), [])
 
-  const pick = useCallback(i => { const s = list[clamp(i, 0, list.length - 1)]; if (s) setId(s.id) }, [list])
-  const go = useCallback(d => pick(idx + d), [pick, idx])
-  const openDetail = (s, from) => { setId(s.id); setBack(from); setView('detail') }
-  const openShelf = name => { setCat(name); setId(null); setView('shelf') }
+  // pincer pour zoomer sur l'accueil (deux doigts), ou ctrl + molette
+  const zoomRef = useRef(zoom); zoomRef.current = zoom
+  useEffect(() => {
+    const el = homeRef.current
+    if (!el) return
+    let p0 = null
+    const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    const ts = e => { if (e.touches.length === 2) p0 = { d: dist(e.touches), z: zoomRef.current } }
+    const tm = e => { if (e.touches.length !== 2 || !p0) return; e.preventDefault(); setZoom(clamp(p0.z * dist(e.touches) / p0.d, 0.55, 1.6)) }
+    const te = e => { if (e.touches.length < 2) p0 = null }
+    const wh = e => { if (!e.ctrlKey) return; e.preventDefault(); setZoom(clamp(zoomRef.current * Math.exp(-e.deltaY * 0.01), 0.55, 1.6)) }
+    el.addEventListener('touchstart', ts, { passive: true })
+    el.addEventListener('touchmove', tm, { passive: false })
+    el.addEventListener('touchend', te)
+    el.addEventListener('wheel', wh, { passive: false })
+    return () => { el.removeEventListener('touchstart', ts); el.removeEventListener('touchmove', tm); el.removeEventListener('touchend', te); el.removeEventListener('wheel', wh) }
+  }, [view, setZoom])
 
   const close = useCallback(() => {
     if (closing) return
@@ -486,150 +405,106 @@ export default function SeriesTV({ series, onAdd, onUpdate, onRemove, onRenameCa
 
   useEffect(() => {
     const k = e => {
-      if (e.target?.tagName === 'INPUT') return
-      if (e.key === 'Escape') {
-        if (playing) setPlaying(false)
-        else if (view === 'detail') setView(back)
-        else if (view === 'shelf' || (view === 'search' && series.length)) setView('catalog')
-        else close()
-      } else if (playing || view !== 'shelf') return
-      else if (e.key === 'ArrowRight') go(1)
-      else if (e.key === 'ArrowLeft') go(-1)
-      else if (e.key === 'Enter' && cur) openDetail(cur, 'shelf')
+      if (e.target?.tagName === 'INPUT' || e.key !== 'Escape') return
+      if (playing) setPlaying(null)
+      else if (cur) setId(null)
+      else if (view === 'search' && series.length) setView('home')
+      else close()
     }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
-  }) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [playing, cur, view, series.length, close])
 
-  // on fait tourner l'étagère au doigt (ou à la souris)
-  const step = () => { const m = shelfMetrics(size.W, size.H, zoom); return m.spineW + m.gap }
-  const onDown = e => {
-    if (e.button > 0) return
-    setDrag({ x0: e.clientX, p0: idx, p: idx, moved: false, id: e.pointerId })
-  }
-  const onMove = e => {
-    if (!drag || drag.id !== e.pointerId) return
-    const dx = e.clientX - drag.x0
-    if (!drag.moved && Math.abs(dx) < 6) return
-    if (!drag.moved) e.currentTarget.setPointerCapture?.(e.pointerId)
-    setDrag({ ...drag, moved: true, p: clamp(drag.p0 - dx / (step() * 1.6), -0.4, list.length - 0.6) })
-  }
-  const onUp = e => {
-    if (!drag || drag.id !== e.pointerId) return
-    const d = drag
-    setDrag(null)
-    if (d.moved) pick(Math.round(d.p))
-  }
-  const onClickCapture = e => { if (drag?.moved) { e.stopPropagation(); e.preventDefault() } }
-  const onWheel = e => {
-    if (e.ctrlKey) { setZoom(clamp(zoom * Math.exp(-e.deltaY * 0.01), 0.55, 1.6)); return }
-    const v = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
-    wheel.current += v
-    if (Math.abs(wheel.current) > 40) { go(wheel.current > 0 ? 1 : -1); wheel.current = 0 }
-  }
-
-  const added = s => { const row = onAdd(s); if (row) openDetail(row, 'catalog'); else setView('catalog') }
+  const goKind = k => { setKind(k); setId(null); setView('home'); homeRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' }) }
+  const added = s => { const row = onAdd(s); setView('home'); if (row) setId(row.id) }
   const renameGroup = (g, to) => onRenameCategory?.(g.name, to, g.items.map(s => s.id))
-  const playLabel = curVideos.length ? (isOpening(curVideos[0]) ? 'Le générique' : 'La bande-annonce') : ''
+  const curVideos = vidsOf(cur)
+  const tabs = [['all', 'Accueil'], ['tv', 'Séries'], ['movie', 'Films']]
 
   return createPortal(
-    <div className={'stv vhs' + (closing ? ' closing' : '')} role="dialog" aria-label="Nos films et séries">
+    <div className={'stv sx' + (closing ? ' closing' : '')} role="dialog" aria-label="Nos films et séries">
       <div className="stv-bezel">
-        <div className={'stv-screen vx-v-' + view} onScroll={e => { e.currentTarget.scrollTop = 0 }}>
-          <header className="vx-top">
-            <p className="vx-brand">Films & séries <i /> Vidéothèque</p>
-            <nav className="vx-nav">
-              {view !== 'catalog' && series.length > 0 && <button type="button" className="vx-navbtn" onClick={() => setView('catalog')}>Catalogue</button>}
-              {view !== 'search' && <button type="button" className="vx-navbtn" onClick={() => setView('search')}>+ Ajouter</button>}
-              <button type="button" className="vx-close" onClick={close} aria-label="Revenir au salon">×</button>
+        <div className={'stv-screen sx-screen sx-v-' + view} onScroll={e => { e.currentTarget.scrollTop = 0 }}>
+          <header className={'sx-top' + (scrolled || view !== 'home' ? ' solid' : '')}>
+            <p className="sx-logo">Levana<span>films & séries</span></p>
+            <nav className="sx-tabs" aria-label="Rayons">
+              {tabs.map(([k, l]) => <button key={k} type="button" className={view === 'home' && kind === k ? 'on' : ''} onClick={() => goKind(k)}>{l}</button>)}
             </nav>
+            <div className="sx-right">
+              <button type="button" className={'sx-add' + (view === 'search' ? ' on' : '')} onClick={() => setView('search')}><span aria-hidden="true">+</span> Ajouter</button>
+              <button type="button" className="sx-close" onClick={close} aria-label="Revenir au salon">×</button>
+            </div>
           </header>
 
           {view === 'search' && <SeriesSearch have={have} onAdd={added} />}
 
-          {view === 'catalog' && (
-            <>
-              {hasBoth && (
-                <div className="vx-seg vx-seg-top" role="tablist" aria-label="Afficher">
-                  {[['all', 'Tout'], ['tv', 'Séries'], ['movie', 'Films']].map(([k, l]) => (
-                    <button key={k} type="button" role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>
-                  ))}
-                </div>
+          {view === 'home' && (
+            <div className="sx-home" ref={homeRef} style={{ '--z': zoom }} onScroll={e => setScrolled(e.currentTarget.scrollTop > 40)}>
+              {hero ? (
+                <Hero item={hero} videos={vidsOf(hero)} onPlay={() => setPlaying(hero)} onInfo={() => setId(hero.id)}
+                  n={featured.length} i={hi % Math.max(1, featured.length)} onDot={setHi} />
+              ) : (
+                <p className="sx-empty">Rien ici pour l’instant : ajoute {kind === 'movie' ? 'un film' : kind === 'tv' ? 'une série' : 'un film ou une série'}.</p>
               )}
-              <Catalog groups={groups} zoom={zoom} onZoom={setZoom} onOpen={s => openDetail(s, 'catalog')} onShelf={openShelf} onRename={renameGroup} />
+              <div className="sx-rows">
+                {loved.length > 0 && <CardRow title="Nos coups de cœur" items={loved} onOpen={s => setId(s.id)} ranked />}
+                {recent.length > 0 && <CardRow title="Ajoutés récemment" items={recent} onOpen={s => setId(s.id)} />}
+                {groups.map(g => <CardRow key={g.name} title={g.name} items={g.items} onOpen={s => setId(s.id)} onRename={to => renameGroup(g, to)} />)}
+              </div>
               <ZoomBar zoom={zoom} onZoom={setZoom} />
-            </>
+            </div>
           )}
 
-          {view === 'shelf' && list.length > 0 && (
-            <>
-              <div className="vx-chipsbar">
-                <button type="button" className={'vx-chip' + (!cat ? ' on' : '')} onClick={() => setCat(null)}>Toutes</button>
-                {allCats.map(c => <button key={c} type="button" className={'vx-chip' + (c === cat ? ' on' : '')} onClick={() => { setCat(c); setId(null) }}>{c}</button>)}
-              </div>
-              <div className="vx-shelfwrap" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onClickCapture={onClickCapture} onWheel={onWheel}>
-                <Shelf list={list} pos={pos} dragging={!!drag?.moved} onPick={pick} onOpen={() => cur && openDetail(cur, 'shelf')}
-                  onPlay={() => setPlaying(true)} canPlay={curVideos.length > 0} stageRef={stageRef} size={size} zoom={zoom} />
-              </div>
-              {cur && (
-                <div className="vx-caption">
-                  <button type="button" className="vx-arrow" onClick={() => go(-1)} disabled={idx === 0} aria-label="Série précédente">←</button>
-                  <div className="vx-cap-mid" key={cur.id}>
-                    <h2 className="vx-title">{cur.name}</h2>
-                    <p className="vx-meta">{[year(cur), lengthLabel(cur), categoryOf(cur)].filter(Boolean).join('  ·  ')}</p>
+          {cur && (
+            <div className="sx-modal" role="dialog" aria-label={cur.name} onClick={e => { if (e.target === e.currentTarget) setId(null) }}>
+              <section className="sx-sheet" key={cur.id}>
+                <div className="sx-sheet-img">
+                  {(cur.backdrop_path || cur.poster_path) && <img src={tmdbImg(cur.backdrop_path || cur.poster_path, 'w1280')} alt="" />}
+                  <div className="sx-hero-shade" />
+                  <button type="button" className="sx-close sx-sheet-x" onClick={() => setId(null)} aria-label="Fermer la fiche">×</button>
+                  <div className="sx-sheet-head">
+                    <p className="sx-kicker">{kindLabel(cur)} <i /> {categoryOf(cur)}</p>
+                    <h2 className="sx-sheet-title">{cur.name}</h2>
+                    <div className="sx-actions">
+                      {curVideos.length > 0 && <button type="button" className="sx-btn play" onClick={() => setPlaying(cur)}><span className="sx-tri" aria-hidden="true" />{isOpening(curVideos[0]) ? 'Générique' : 'Bande-annonce'}</button>}
+                    </div>
                   </div>
-                  <button type="button" className="vx-arrow" onClick={() => go(1)} disabled={idx >= list.length - 1} aria-label="Série suivante">→</button>
                 </div>
-              )}
-              <Timeline list={list} idx={idx} onPick={pick} />
-              <footer className="vx-foot"><span>{cat || 'Toutes nos séries'} · touche le boîtier du milieu</span><span>N° {pad(idx + 1)} / {pad(list.length)}</span></footer>
-              <ZoomBar zoom={zoom} onZoom={setZoom} />
-            </>
+                <div className="sx-sheet-body">
+                  <p className="sx-meta">{[year(cur), lengthLabel(cur), cur.genres?.slice(0, 2).join(', '), byLabel(cur)].filter(Boolean).join('  ·  ')}</p>
+                  {cur.overview && <p className="sx-sheet-over">{cur.overview}</p>}
+                  <Stars value={cur.rating} onChange={r => onUpdate(cur.id, { rating: r })} />
+                  <CategoryPicker value={categoryOf(cur)} all={allCats} onChange={c => onUpdate(cur.id, { category: c })} />
+                  <button type="button" className="sx-remove" onClick={() => { onRemove(cur.id); setId(null) }}>Retirer {isMovie(cur) ? 'ce film' : 'cette série'}</button>
+                </div>
+              </section>
+            </div>
           )}
 
-          {view === 'detail' && cur && (
-            <section className="vx-detail" key={cur.id}>
-              <div className="vx-d-text">
-                <p className="vx-kicker">{categoryOf(cur)} <i /> {year(cur) || '—'}</p>
-                <h2 className="vx-d-title">{cur.name}</h2>
-                <p className="vx-d-meta">{[isMovie(cur) ? 'Film' : 'Série', lengthLabel(cur), cur.genres?.slice(0, 2).join(', '), byLabel(cur)].filter(Boolean).join('  ·  ')}</p>
-                {cur.overview && <p className="vx-d-over">{cur.overview}</p>}
-                <Stars value={cur.rating} onChange={r => onUpdate(cur.id, { rating: r })} />
-                <CategoryPicker value={categoryOf(cur)} all={allCats} onChange={c => onUpdate(cur.id, { category: c })} />
-                <div className="vx-d-actions">
-                  {playLabel && <button type="button" className="vx-btn" onClick={() => setPlaying(true)}><span className="vx-btn-ic" aria-hidden="true" />{playLabel}</button>}
-                  <button type="button" className="vx-btn ghost" onClick={() => setView(back)}>← {back === 'shelf' ? 'L’étagère' : 'Le catalogue'}</button>
-                </div>
-                <button type="button" className="vx-remove" onClick={() => { onRemove(cur.id); setView(back) }}>Retirer {isMovie(cur) ? 'ce film' : 'cette série'}</button>
-              </div>
-              <div className="vx-d-tape"><CaseFront show={cur} size="w780" /></div>
-            </section>
-          )}
-
-          {/* téléphone : le menu du bas de la télé (comme celui de la bibliothèque, mais pour nos séries) */}
-          <nav className="tabbar stv-tabs" aria-label="Menu de la télé">
+          {/* téléphone : le menu du bas de la projection */}
+          <nav className="tabbar stv-tabs" aria-label="Menu">
             <button type="button" className="tab" onClick={close}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2L12 4l8.5 7.2M6 9.8V20h12V9.8M10 20v-5.5h4V20" /></svg>
               <span>Salon</span>
             </button>
-            <button type="button" className={'tab' + (view === 'catalog' ? ' on' : '')} onClick={() => series.length && setView('catalog')}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1" /></svg>
-              <span>Catalogue</span>
+            <button type="button" className={'tab' + (view === 'home' && kind === 'all' ? ' on' : '')} onClick={() => goKind('all')}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="11" rx="1.5" /><path d="M7 19h10" /></svg>
+              <span>Accueil</span>
             </button>
             <button type="button" className="tab tab-shop" onClick={() => setView('search')} aria-label="Ajouter un film ou une série">
               <span className="tab-shop-bubble"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></span>
               <span>Ajouter</span>
             </button>
-            <button type="button" className={'tab' + (view === 'shelf' ? ' on' : '')} onClick={() => series.length && openShelf(cat)}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19h18M5 19V7.5M8 19V6M11 19V8M14.5 19l2.5-11.5M18 19V9" /></svg>
-              <span>Étagère</span>
+            <button type="button" className={'tab' + (view === 'home' && kind === 'tv' ? ' on' : '')} onClick={() => goKind('tv')}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="11" rx="1.5" /><path d="M9 3.5l3 2.5 3-2.5M8 20h8" /></svg>
+              <span>Séries</span>
             </button>
-            <button type="button" className={'tab' + (playing ? ' on' : '')} onClick={() => { if (cur && curVideos.length) setPlaying(p => !p) }} disabled={!cur || !curVideos.length}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M10.2 8.8l5 3.2-5 3.2z" /></svg>
-              <span>Générique</span>
+            <button type="button" className={'tab' + (view === 'home' && kind === 'movie' ? ' on' : '')} onClick={() => goKind('movie')}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1.5" /><path d="M8 4v16M16 4v16M4 8h4M4 12h4M4 16h4M16 8h4M16 12h4M16 16h4" /></svg>
+              <span>Films</span>
             </button>
           </nav>
-          {playing && cur && curVideos.length > 0 && <Player show={cur} videos={curVideos} onDone={stopVideo} />}
+          {playing && vidsOf(playing).length > 0 && <Player show={playing} videos={vidsOf(playing)} onDone={stopVideo} />}
         </div>
       </div>
     </div>,
