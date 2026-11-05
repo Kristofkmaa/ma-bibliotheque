@@ -121,7 +121,9 @@ export class BookcaseScene {
     this.liveRows = null
     this.inView = null
     this.scroll = new Spring(0, 90, 1)      // centre de la vue (hauteur dans le mur)
-    this.zoom = new Spring(1, 60, 1)        // 1 : de près ; 0 : vue d'ensemble
+    this.zoom = new Spring(1, 60, 1)        // 1 : de près ; 0 : vue d'ensemble ; > 1 : plein écran, tout près
+    this.free = false                       // plein écran : on se promène et on zoome librement
+    this.panX = new Spring(0, 90, 1)        // plein écran : décalage sur le côté
     this.edgeVel = 0
     this.lightOffset = new THREE.Vector3(-3.2, 6.5, 6)
     this.doorsOpen = false
@@ -231,8 +233,23 @@ export class BookcaseScene {
   }
 
   /** Limites du défilement (centre de la vue) ; « rubber » laisse dépasser un peu en tirant. */
+  /** Grossissement au-delà de la vue rapprochée (plein écran). */
+  _zf() { return 1 + Math.max(0, this.zoom.v - 1) * 1.25 }
+  _clampPanX(v) {
+    const lim = this.layout ? (this.layout.CW / 2 + ST) * (1 - 1 / this._zf()) : 0
+    return clamp(v, -lim, lim)
+  }
+  /** Plein écran : plus d'interface, on glisse dans tous les sens et on pince pour zoomer. */
+  setFree(on) {
+    this.free = on
+    if (!on) { this.zoom.t = 1; this.panX.t = 0; this.cb.onZoom?.(1) }
+    this.camDirty = true
+    this.kick()
+  }
+
   _clampScroll(v, rubber = false) {
-    const lo = this.viewH / 2, hi = this.totalH - this.viewH / 2
+    const vh = this.viewH / this._zf()
+    const lo = vh / 2, hi = this.totalH - vh / 2
     if (hi <= lo) return this.totalH / 2
     if (!rubber) return clamp(v, lo, hi)
     if (v > hi) return hi + (v - hi) * 0.35
@@ -247,7 +264,9 @@ export class BookcaseScene {
     const yc = this.scroll.v
     const tNear = new THREE.Vector3(0, yc, 0).add(this.camNear.offset)
     const target = new THREE.Vector3(0, this.totalH / 2, 0).add(this.camFar.offset).lerp(tNear, z)
-    const dist = this.camFar.dist + (this.camNear.dist - this.camFar.dist) * z
+    const f = this._zf()
+    target.x += this.panX.v
+    const dist = (this.camFar.dist + (this.camNear.dist - this.camFar.dist) * z) / f
     this.camera.position.copy(target).addScaledVector(this.camDir, dist)
     this.camera.lookAt(target)
     this.camera.updateMatrixWorld()
@@ -268,7 +287,7 @@ export class BookcaseScene {
     this.cb.onView?.({ top: clamp(1 - (yNow + h / 2) / T, 0, 1), bottom: clamp(1 - (yNow - h / 2) / T, 0, 1), zoom: z })
   }
 
-  _upp() { return (this.viewNow?.h || this.viewH || 3) / Math.max(1, this.h) }
+  _upp() { return (this.viewNow?.h || this.viewH || 3) / Math.max(1, this.h) / this._zf() }
 
   rowBase(r) { return (this.rowCount - 1 - r) * (RH + PT) + PT }
 
@@ -705,7 +724,7 @@ export class BookcaseScene {
       if (this.pinch && this.pts.size >= 2) {
         const [a, b] = [...this.pts.values()]
         const d = Math.hypot(a.x - b.x, a.y - b.y)
-        this.zoom.t = clamp(this.pinch.z + (d / this.pinch.d - 1) * 1.4, 0, 1)
+        this.zoom.t = clamp(this.pinch.z + (d / this.pinch.d - 1) * (this.free ? 2 : 1.4), 0, this.free ? 3 : 1)
         this.cb.onZoom?.(this.zoom.t)
         this.kick()
         return
@@ -718,11 +737,11 @@ export class BookcaseScene {
         p.moved = true
         clearTimeout(p.timer)
 
-        if (!p.panX && p.id && p.type === 'mouse' && this.cb.canDrag?.() && this.zoom.t > 0.5) { this.onHoverMove(e); this._startDrag(); return }
+        if (!this.free && !p.panX && p.id && p.type === 'mouse' && this.cb.canDrag?.() && this.zoom.t > 0.5) { this.onHoverMove(e); this._startDrag(); return }
         if (p.panX) return
         // sinon on fait défiler le mur (on le « tire » du doigt ou de la souris)
         p.pan = true
-        this.panning = { y: e.clientY, scroll: this.scroll.v, lastY: e.clientY, lastT: performance.now(), vel: 0 }
+        this.panning = { y: e.clientY, scroll: this.scroll.v, lastY: e.clientY, lastT: performance.now(), vel: 0, x: e.clientX, px: this.panX.v }
         el.style.cursor = 'grabbing'
         this._setHover(null)
       }
@@ -743,7 +762,8 @@ export class BookcaseScene {
         const v = (e.clientY - pn.lastY) / Math.max(1, now - pn.lastT)
         pn.vel = pn.vel * 0.6 + v * 0.4
         pn.lastY = e.clientY; pn.lastT = now
-        this.scroll.snap(this._clampScroll(pn.scroll + (e.clientY - pn.y) * this._upp() / Math.max(0.35, this.zoom.v), true))
+        this.scroll.snap(this._clampScroll(pn.scroll + (e.clientY - pn.y) * this._upp() / Math.max(0.35, Math.min(1, this.zoom.v)), true))
+        if (this.free) this.panX.snap(this._clampPanX(pn.px - (e.clientX - pn.x) * this._upp()))
         this.camDirty = true
         this.kick()
       }
@@ -762,7 +782,7 @@ export class BookcaseScene {
       const overview = this.zoom.t <= 0.5
       const hit = overview ? null : this._pick(e)
       this.press = { id: hit, x: e.clientX, y: e.clientY, type: e.pointerType, overview, row: overview ? null : this._rowAt(e.clientX, e.clientY) }
-      if (hit && e.pointerType !== 'mouse' && this.cb.canDrag?.()) {
+      if (hit && !this.free && e.pointerType !== 'mouse' && this.cb.canDrag?.()) {
         this.press.timer = setTimeout(() => { if (this.press && !this.press.moved && !this.drag) this._startDrag() }, 320)
       }
     }
@@ -1028,8 +1048,10 @@ export class BookcaseScene {
       moving = true
     }
     // caméra : défilement et zoom
-    if (!this.scroll.done || !this.zoom.done || this.camDirty) {
-      for (let i = 0; i < sub; i++) { this.scroll.step(h); this.zoom.step(h) }
+    if (!this.scroll.done || !this.zoom.done || !this.panX.done || this.camDirty) {
+      for (let i = 0; i < sub; i++) { this.scroll.step(h); this.zoom.step(h); this.panX.step(h) }
+      // en dézoomant, on reste dans les limites du mur
+      if (!this.zoom.done && !this.panning) { this.panX.t = this._clampPanX(this.panX.t); this.scroll.t = this._clampScroll(this.scroll.t) }
       this.camDirty = false
       this._placeCamera()
       this._updateVisible()

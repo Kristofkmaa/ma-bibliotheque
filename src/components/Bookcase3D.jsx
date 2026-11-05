@@ -358,6 +358,18 @@ export default function Bookcase3D({
     return () => window.removeEventListener('pointerdown', onDown)
   }, [tocOpen])
 
+  // ---- Plein écran (téléphone) : plus d'interface, on se promène et on zoome dans les étagères ----
+  const [free, setFree] = useState(false)
+  useEffect(() => {
+    document.body.classList.toggle('immersive', free)
+    sceneRef.current?.setFree(free)
+    if (!free) return
+    const onKey = e => { if (e.key === 'Escape') setFree(false) }
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey); document.body.classList.remove('immersive') }
+  }, [free])
+  useEffect(() => { if (!size.mobile) setFree(false) }, [size.mobile])
+
   // ---- Rendu --------------------------------------------------------------------------------
   const shown = spot || hovered
   const hd = shown ? toDisplay(shown) : null
@@ -429,6 +441,15 @@ export default function Bookcase3D({
       {aside}
       </div>
 
+      {free && (
+        <>
+          <button type="button" className="free-exit" onClick={() => setFree(false)} aria-label="Quitter le plein écran">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" /></svg>
+          </button>
+          <p className="free-hint">Glisse pour te promener · pince pour zoomer</p>
+        </>
+      )}
+
       <div className="scene-bottom">
         <div className="toc">
           <button type="button" className={'lbl box toc-btn' + (tocOpen ? ' on' : '')} onClick={() => setTocOpen(o => !o)} aria-expanded={tocOpen} aria-label="Sommaire">
@@ -456,7 +477,7 @@ export default function Bookcase3D({
           )}
         </div>
         <Caption className="scene-caption" title={caption.title} subtitle={caption.subtitle} year={caption.year} dir={1} />
-        <button type="button" className={'lbl box zoom-btn' + (zoomedOut ? ' on' : '')} onClick={() => sceneRef.current?.setZoom(zoomedOut)} aria-label={zoomedOut ? 'Se rapprocher' : 'Tout voir'}>
+        <button type="button" className={'lbl box zoom-btn' + (zoomedOut ? ' on' : '')} onClick={() => (size.mobile ? setFree(true) : sceneRef.current?.setZoom(zoomedOut))} aria-label={size.mobile ? 'Plein écran' : zoomedOut ? 'Se rapprocher' : 'Tout voir'}>
           {zoomedOut ? (
             <><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><path d="M1 4V1h3M10 4V1H7M1 7v3h3M10 7v3H7" stroke="currentColor" fill="none" /></svg> <span className="zl">Se rapprocher</span></>
           ) : (

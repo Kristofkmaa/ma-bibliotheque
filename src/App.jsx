@@ -197,7 +197,7 @@ function Library({ user, onSignOut }) {
   const goSalon = useCallback(() => {
     const sc = bookcaseApi.current?.scene?.()
     if (!sc?.scroll) { setSalon('back'); return }
-    const atTop = () => Math.abs(sc.scroll.v - sc._clampScroll(Infinity)) < 0.01 && sc.zoom.v > 0.99 && sc.scroll.done && sc.zoom.done
+    const atTop = () => Math.abs(sc.scroll.v - sc._clampScroll(Infinity)) < 0.01 && Math.abs(sc.zoom.v - 1) < 0.01 && sc.scroll.done && sc.zoom.done
     if (atTop()) { setSalon('back'); return }
     sc.setZoom(true); sc.scrollToTop()
     const t0 = performance.now()

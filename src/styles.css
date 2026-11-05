@@ -1405,3 +1405,21 @@ canvas { -webkit-user-select: none; user-select: none; -webkit-touch-callout: no
   .scene { grid-template-rows: minmax(0, 1fr); }
   .scene > .case-row, .scene > .scene-loading { grid-row: 1; }
 }
+
+/* Plein écran (téléphone) : plus aucune interface, le mur prend tout l'écran ---------------- */
+body.immersive .tabbar, body.immersive .scene-bottom, body.immersive .wall-rail, body.immersive .find-sheet { display: none !important; }
+body.immersive .scene { padding: 0 !important; }
+.free-exit {
+  position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; z-index: 30;
+  width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(244, 242, 237, 0.82); border: 1px solid var(--rule-soft); box-shadow: 0 6px 14px -8px rgba(20, 16, 10, 0.5);
+  animation: countPop 0.5s cubic-bezier(.3, 1.6, .5, 1) both;
+}
+.free-exit svg { width: 16px; height: 16px; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; fill: none; }
+.free-hint {
+  position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 30;
+  padding: 8px 14px; border-radius: 18px; background: rgba(20, 20, 20, 0.78); color: var(--paper); white-space: nowrap;
+  font-family: var(--serif); font-style: italic; font-size: 14px; pointer-events: none;
+  animation: freeHint 3.2s ease both;
+}
+@keyframes freeHint { 0% { opacity: 0; transform: translate(-50%, 10px); } 12%, 75% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
