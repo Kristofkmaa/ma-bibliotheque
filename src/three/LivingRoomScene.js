@@ -829,6 +829,9 @@ export class LivingRoomScene {
     const hide = () => { if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden' }
     if (this.fly || this.tvZoom || (this.wallOf('left').f ?? 1) < 0.97) return hide()
     const scr = this.tvScreen
+    // la caméra vient de bouger : ses matrices ne sont recalculées qu'au rendu, on le fait ici
+    // tout de suite, sinon le lecteur aurait une image de retard et glisserait à côté de l'écran
+    this.camera.updateMatrixWorld()
     scr.updateWorldMatrix(true, false)
     const sp = scr.getWorldPosition(new THREE.Vector3())
     const nrm = new THREE.Vector3(0, 0, 1).transformDirection(scr.matrixWorld)
