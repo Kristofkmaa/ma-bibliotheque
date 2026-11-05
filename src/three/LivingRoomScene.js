@@ -946,6 +946,7 @@ export class LivingRoomScene {
     for (const o of objs) {
       o.userData.baseSy ??= o.scale.y
       o.userData.baseY ??= o.position.y
+      o.userData.cutF = f                  // repris par le petit rebond des objets (sinon il remettrait la hauteur)
       o.scale.y = Math.max(0.001, o.userData.baseSy * f)
       o.position.y = o.userData.baseY * f
       o.visible = f > 0.02 && !(o === this.bookcase && this.mirror)
@@ -1876,7 +1877,7 @@ export class LivingRoomScene {
       it.hov = (it.hov || 0) + (hov - (it.hov || 0)) * Math.min(1, dt * 10)
       const sy = 1 + b * 0.06 + it.hov * 0.012
       const sxz = 1 - b * 0.03
-      it.group.scale.set(sxz, sy, sxz)
+      it.group.scale.set(sxz, Math.max(0.001, sy * (it.group.userData.cutF ?? 1)), sxz)
       if (Math.abs(b) > 1e-3 || Math.abs(it.bounce.vel) > 1e-3) moving = true
     }
     // coussins
