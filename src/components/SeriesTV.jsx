@@ -336,8 +336,6 @@ function Shelf({ list, pos, dragging, onPick, onOpen, onPlay, canPlay, stageRef,
   }
   return (
     <div className="vx-stage" ref={stageRef}>
-      <div className="vx-glyph l" aria-hidden="true">物語</div>
-      <div className="vx-glyph r" aria-hidden="true">連続劇</div>
       <div className="vx-floor" style={{ width: Math.min(W * 0.9, frontH * 3.2), top: `calc(50% + ${frontH / 2 - 4}px)` }} />
       <div className="vx-ring">{out}</div>
     </div>
