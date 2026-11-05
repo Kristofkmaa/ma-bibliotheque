@@ -1025,7 +1025,7 @@ export class LivingRoomScene {
 
   _stepTvZoom(dt) {
     const z = this.tvZoom
-    z.k = clamp(z.k + (z.dir * dt) / (z.fromSeat ? 1.2 : z.kind === 'tv' ? 1.9 : 1.1), 0, 1)
+    z.k = clamp(z.k + (z.dir * dt) / (z.fromSeat ? 1.2 : z.kind === 'tv' ? 1.6 : 1.1), 0, 1)
     const e = ease(z.k), a = z.from, b = this._tvView()
     // la caméra garde son objectif (rien ne se déforme) ; elle tourne vers la télé, puis descend
     // à sa hauteur seulement à la fin (elle passe au-dessus de la lampe et du canapé)
@@ -1040,7 +1040,8 @@ export class LivingRoomScene {
       const L = z.kind === 'tv' ? Math.sin(Math.PI * clamp(z.k / 0.75, 0, 1)) : 0
       this.lensHalo.material.opacity = 0.6 * L
       this.lensGlass.material.color.setRGB(0.87 + 0.13 * L, 0.92 + 0.06 * L, 1 - 0.12 * L)
-      if (this.beam) this.beam.material.opacity = 0.07 + (z.kind === 'tv' ? 0.16 * Math.sin(Math.PI * clamp((z.k - 0.3) / 0.7, 0, 1)) : 0)
+      // on traverse le faisceau en allant vers l'image : il s'efface pour ne pas éblouir
+      if (this.beam) this.beam.material.opacity = 0.07 * (z.kind === 'tv' ? 1 - clamp(z.k * 1.6, 0, 1) : 1)
     }
     if (z.kind === 'tv') this._beamPath(z, a)
     else this._placeCamera(a.az + shortAngle(a.az, b.az) * e, a.el + (b.el - a.el) * eEl, dist, tgt)
@@ -1068,38 +1069,28 @@ export class LivingRoomScene {
    */
   _beamPath(z, a) {
     if (z.fromSeat) { this._seatToScreen(z); return }
+    const cam = this.camera
     if (!z.path) {
-      const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
       const start = new THREE.Vector3(
         a.target.x + Math.sin(a.az) * Math.cos(a.el) * a.dist, a.target.y + Math.sin(a.el) * a.dist, a.target.z + Math.cos(a.az) * Math.cos(a.el) * a.dist)
-      this.lensGlass.updateWorldMatrix(true, false)
-      const lens = this.lensGlass.getWorldPosition(new THREE.Vector3())
       const screen = this.tvScreen.getWorldPosition(new THREE.Vector3())
-      // on s'arrête là où toute l'image tient à l'écran (avec une marge) : sur téléphone, elle
-      // est en bandeau au milieu ; le menu s'ouvrira depuis ce rectangle, comme une vidéo en plein écran
-      const d = Math.max(SCR.w / 2 / (t * this.camera.aspect), SCR.h / 2 / t) / 0.9
-      const behind = new THREE.Vector3(lens.x + 1.3, lens.y + 0.5, lens.z + 0.42)  // derrière le projecteur, au-dessus : on le voit en bas, le faisceau part devant
-      const through = new THREE.Vector3(lens.x - 0.35, lens.y + 0.02, lens.z)        // juste devant l'objectif, dans le faisceau
-      const wall = new THREE.Vector3(screen.x + d, screen.y, screen.z)            // face à l'image
-      z.path = {
-        approach: new THREE.CatmullRomCurve3([start, start.clone().lerp(behind, 0.55).setY(Math.max(start.y, behind.y) + 0.4), behind]),
-        ride: new THREE.CatmullRomCurve3([behind, through, wall]),
-        look0: a.target.clone(), screen,
-      }
+      // on s'arrête face à l'image, toujours devant le canapé (jamais derrière, jamais hors de la pièce)
+      const D = Math.min(SOFA.x - 0.95 - screen.x, 3.4)
+      // l'objectif qu'il faut pour voir toute l'image d'ici (en hauteur sur téléphone, il s'élargit)
+      const hw = SCR.w / 2 / 0.9, hh = SCR.h / 2 / 0.9
+      const tv = Math.max(hh / D, hw / D / cam.aspect, Math.tan(THREE.MathUtils.degToRad(FOV / 2)))
+      const endFov = Math.min(110, THREE.MathUtils.radToDeg(2 * Math.atan(tv)))
+      const end = new THREE.Vector3(screen.x + D, screen.y, screen.z)
+      // en passant au-dessus du centre de la pièce
+      const over = new THREE.Vector3((start.x + end.x) / 2, Math.max(start.y, 2.6) * 0.5 + 1.6, (start.z + end.z) / 2)
+      z.path = { curve: new THREE.CatmullRomCurve3([start, over, end]), look0: a.target.clone(), screen, endFov }
     }
     const P = z.path, k = z.k
-    const cam = this.camera
-    if (k < 0.42) {
-      // on rejoint l'arrière du projecteur, le regard glisse vers le mur
-      const u = ease(k / 0.42)
-      cam.position.copy(P.approach.getPoint(u))
-      cam.lookAt(P.look0.clone().lerp(P.screen, ease(clamp(u * 1.3, 0, 1))))
-    } else {
-      // on traverse le projecteur et on suit le faisceau jusqu'à l'image
-      const u = ease((k - 0.42) / 0.58)
-      cam.position.copy(P.ride.getPoint(u))
-      cam.lookAt(P.screen)
-    }
+    cam.position.copy(P.curve.getPoint(ease(k)))
+    cam.lookAt(P.look0.clone().lerp(P.screen, ease(clamp(k * 1.25, 0, 1))))
+    // l'objectif s'élargit sur la fin, face au mur (rien ne se déforme sur une image plate)
+    const fov = FOV + (P.endFov - FOV) * ease(clamp((k - 0.45) / 0.55, 0, 1))
+    if (Math.abs(cam.fov - fov) > 1e-3) { cam.fov = fov; cam.updateProjectionMatrix() }
   }
 
   /**

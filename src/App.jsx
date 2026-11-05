@@ -19,7 +19,6 @@ import { webglAvailable } from './three/webgl'
 import DetailSheet from './components/DetailSheet'
 import SearchPanel from './components/SearchPanel'
 import LoginPage from './components/LoginPage'
-import Cursor from './components/Cursor'
 
 const Scanner = lazy(() => import('./components/Scanner'))
 // La bibliothèque en vraie 3D (Three.js) est chargée à part ; sans WebGL, étagère dessinée à plat
@@ -399,7 +398,6 @@ export default function App() {
       {loading
         ? <div className="loading-screen"><Logo /><span className="lbl">Ouverture de la bibliothèque…</span></div>
         : (user ? <Library user={user} onSignOut={signOut} /> : <LoginPage onSignIn={signInWithGoogle} />)}
-      <Cursor />
     </>
   )
 }
