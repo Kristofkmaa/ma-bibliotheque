@@ -7,7 +7,7 @@ const norm = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase
  * « Retrouver un livre » dans sa propre bibliothèque : on tape un titre ou un auteur,
  * on choisit, et la bibliothèque va jusqu'au livre (qui sort un instant de l'étagère).
  */
-export default function LibrarySearch({ books, shelves, onPick }) {
+export default function LibrarySearch({ books, shelves, onPick, autoFocus = false, up = false }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
@@ -36,6 +36,7 @@ export default function LibrarySearch({ books, shelves, onPick }) {
   }, [q, books])
 
   useEffect(() => { setActive(0) }, [q])
+  useEffect(() => { if (autoFocus) setTimeout(() => input.current?.focus(), 60) }, [autoFocus])
   useEffect(() => {
     const onDown = e => { if (box.current && !box.current.contains(e.target)) setOpen(false) }
     window.addEventListener('pointerdown', onDown)
@@ -49,7 +50,7 @@ export default function LibrarySearch({ books, shelves, onPick }) {
   }
 
   return (
-    <div className="lib-search" ref={box}>
+    <div className={'lib-search' + (up ? ' up' : '')} ref={box}>
       <svg className="ls-icon" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle cx="5" cy="5" r="4" stroke="currentColor" fill="none" /><path d="M8 8l3.5 3.5" stroke="currentColor" /></svg>
       <input
         ref={input} type="search" value={q} placeholder="Retrouver un livre…" spellCheck="false"

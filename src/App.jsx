@@ -73,6 +73,7 @@ function Library({ user, onSignOut }) {
   const [search, setSearch] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [scanner, setScanner] = useState(false)
+  const [findOpen, setFindOpen] = useState(false)   // téléphone : « Chercher » (retrouver un livre, ranger par)
   const [guide, setGuide] = useState(false)     // livres du panier sortis en bas de l'écran, prêts à ranger
   // salon d'accueil : 'first' à l'arrivée, 'back' quand on y retourne, null dans la bibliothèque
   const [salon, setSalon] = useState(() => (HAS_WEBGL && !salonSeen() ? 'first' : null))
@@ -263,7 +264,7 @@ function Library({ user, onSignOut }) {
           shelves={shelves} commitShelves={commitShelves} newShelfSignal={newShelfSignal}
           onOpen={openBook} onAdd={openSearch} locked={overlay} apiRef={bookcaseApi}
           onShelfClick={id => setShelvesOpen({ id })}
-          aside={basket.items.length > 0 ? (
+          aside={basket.items.length > 0 && !mobile ? (
             <BasketTray
               items={basket.items} shelves={effShelves} books={books} api={bookcaseApi} mobile={mobile}
               canDrop={HAS_WEBGL && manual} open={guide} onOpen={() => setGuide(true)} onClose={() => setGuide(false)}
@@ -272,6 +273,62 @@ function Library({ user, onSignOut }) {
           ) : null}
           highlightId={highlightId} focusId={focusId} onFocused={onFocused} emptyText={emptyText}
         />
+      )}
+
+      {/* Téléphone : le panier s'ouvre depuis l'onglet « Panier » (pas de panier sous le mur) */}
+      {mobile && basket.items.length > 0 && (
+        <BasketTray
+          bare items={basket.items} shelves={effShelves} books={books} api={bookcaseApi} mobile
+          canDrop={HAS_WEBGL && manual} open={guide} onOpen={() => setGuide(true)} onClose={() => setGuide(false)}
+          onDropBook={dropFromBasket} onPlace={placeGuided} onOpenBook={b => onPick(b, null)}
+        />
+      )}
+
+      {/* Téléphone : menu en bas, comme une appli (pas dans le salon, qui a le sien) */}
+      {mobile && !salon && (
+        <>
+          {findOpen && (
+            <div className="find-sheet grain" onPointerDown={e => e.stopPropagation()}>
+              <LibrarySearch books={books} shelves={effShelves} autoFocus up onPick={id => { setFindOpen(false); setFocusId(id) }} />
+              <label className="lbl find-sort">
+                <span>Ranger par</span>
+                <select value={sort} onChange={e => setSort(e.target.value)}>
+                  {SORTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </label>
+            </div>
+          )}
+          {findOpen && <div className="find-backdrop" onPointerDown={() => setFindOpen(false)} />}
+          <nav className="tabbar" aria-label="Menu">
+            {HAS_WEBGL && (
+              <button type="button" className="tab" onClick={() => { setFindOpen(false); setGuide(false); setSalon('back') }}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2L12 4l8.5 7.2M6 9.8V20h12V9.8M10 20v-5.5h4V20" /></svg>
+                <span>Salon</span>
+              </button>
+            )}
+            <button type="button" className={'tab' + (findOpen ? ' on' : '')} onClick={() => setFindOpen(o => !o)}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" /><path d="M15 15l5 5" /></svg>
+              <span>Chercher</span>
+            </button>
+            <button type="button" className="tab tab-shop" onClick={() => { setFindOpen(false); openSearch() }} aria-label="Boutique : ajouter des livres">
+              <span className="tab-shop-bubble">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2L5 8zM9 8V6.5a3 3 0 016 0V8" /><path d="M12 11.5v5M9.5 14h5" /></svg>
+              </span>
+              <span>Boutique</span>
+            </button>
+            <button type="button" className={'tab' + (shelvesOpen ? ' on' : '')} onClick={() => { setFindOpen(false); setShelvesOpen({ id: null }) }}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16M20 4v16M4 9h16M4 14.5h16M4 20h16M7 9V6M9 9V5.5M12 14.5v-3.5M14.5 14.5v-3" /></svg>
+              <span>Étagères</span>
+            </button>
+            <button type="button" className={'tab' + (guide ? ' on' : '')} onClick={() => { setFindOpen(false); if (basket.items.length) setGuide(g => !g); else openSearch() }}>
+              <span className="tab-ico">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10h17l-1.8 9.5H5.3L3.5 10zM8 10l3-5.5M16 10l-3-5.5M8.5 13.5v3M12 13.5v3M15.5 13.5v3" /></svg>
+                {basket.items.length > 0 && <span className="tab-badge" key={basket.items.length}>{basket.items.length}</span>}
+              </span>
+              <span>Panier</span>
+            </button>
+          </nav>
+        </>
       )}
 
       <footer className="footer-bar">

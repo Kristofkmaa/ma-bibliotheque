@@ -341,7 +341,6 @@ export class BookcaseScene {
     const base = this.bases.get(id)
     if (!base) return false
     this.scrollToRow(base.row)
-    this._revealInRow(id)
     clearTimeout(this.spotTimer)
     this.spotTimer = setTimeout(() => {
       const e = this.books.get(id)
@@ -583,19 +582,29 @@ export class BookcaseScene {
     this.rowEnds = []
     this.rowsData.forEach((row, r) => {
       const y0 = this.rowBase(r)
-      const items = row.books.map(b => (b.placeholder ? { ph: true, t: AVG_T * 1.2, d: 0.6 } : { b, ...bookDims(b) }))
-      let need = 0
-      items.forEach((it, i) => { need += i ? (items[i - 1].t + it.t) / (2 * cb) : 0 })
-      const first = items[0] ? (items[0].t * cb + items[0].d * sb) / 2 : 0
-      const lastExt = items.length ? (items[items.length - 1].t * cb + items[items.length - 1].d * sb) / 2 : 0
-      const avail = CW - PADX - 0.12 - first - lastExt - need
-      const gap = this.layout.mobile ? GAP : items.length > 1 ? Math.max(0.012, Math.min(GAP, avail / (items.length - 1))) : GAP
+      const raw = row.books.map(b => (b.placeholder ? { ph: true, t: AVG_T * 1.2, d: 0.6, h: 0 } : { b, ...bookDims(b) }))
+      const span = list => {
+        let need = 0
+        list.forEach((it, i) => { need += i ? (list[i - 1].t + it.t) / (2 * cb) : 0 })
+        const first = list[0] ? (list[0].t * cb + list[0].d * sb) / 2 : 0
+        const lastExt = list.length ? (list[list.length - 1].t * cb + list[list.length - 1].d * sb) / 2 : 0
+        return { need, first, lastExt }
+      }
+      // toute l'étagère tient dans la largeur : les livres se serrent, puis rapetissent s'il le faut
+      const MIN_GAP = 0.012, room = CW - PADX - 0.12
+      const s0 = span(raw)
+      const full = s0.need + s0.first + s0.lastExt
+      const k = raw.length > 1 && full + MIN_GAP * (raw.length - 1) > room ? clamp((room - MIN_GAP * (raw.length - 1)) / full, 0.4, 1) : 1
+      const items = k < 1 ? raw.map(it => ({ ...it, t: it.t * k, d: it.d * k, h: it.h * k })) : raw
+      const { need, first, lastExt } = k < 1 ? span(items) : s0
+      const avail = room - first - lastExt - need
+      const gap = items.length > 1 ? Math.max(MIN_GAP, Math.min(GAP, avail / (items.length - 1))) : GAP
       let x = -CW / 2 + PADX + first
       items.forEach((it, i) => {
         if (i) x += (items[i - 1].t + it.t) / (2 * cb) + gap
         if (it.ph) return
         const zSpine = SD / 2 - 0.045
-        this.bases.set(it.b.id, { x, y: y0 + it.h / 2, z: zSpine - (it.d / 2) * cb, row: r })
+        this.bases.set(it.b.id, { x, y: y0 + it.h / 2, z: zSpine - (it.d / 2) * cb, row: r, k })
       })
       this.rowEnds[r] = items.length ? x + lastExt : -CW / 2 + PADX
     })
@@ -642,6 +651,7 @@ export class BookcaseScene {
       if (!base) continue
       e.base = { x: base.x, y: base.y, z: base.z }
       e.row = base.row
+      e.wrap.scale.setScalar(base.k || 1)     // étagère très remplie : livres un peu plus petits
       if (created) {
         const drop = this.intro || this.freshIds.has(id) ? Math.min(0.2, RH - e.h - 0.02) : 0
         e.x.snap(base.x); e.z.snap(base.z); e.yaw.snap(-BETA)
@@ -705,12 +715,7 @@ export class BookcaseScene {
       if (!p.moved && dist > (p.type === 'mouse' ? 6 : 10)) {
         p.moved = true
         clearTimeout(p.timer)
-        // téléphone : un geste plutôt horizontal sur une rangée trop longue la fait défiler
-        if (this.layout?.mobile && p.row != null && this._overflows(p.row) && Math.abs(e.clientX - p.x) > Math.abs(e.clientY - p.y)) {
-          const sp = this._offSpring(p.row)
-          p.panX = { r: p.row, x: e.clientX, off: sp.v, lastX: e.clientX, lastT: performance.now(), vel: 0 }
-          this._setHover(null)
-        }
+
         if (!p.panX && p.id && p.type === 'mouse' && this.cb.canDrag?.() && this.zoom.t > 0.5) { this.onHoverMove(e); this._startDrag(); return }
         if (p.panX) return
         // sinon on fait défiler le mur (on le « tire » du doigt ou de la souris)

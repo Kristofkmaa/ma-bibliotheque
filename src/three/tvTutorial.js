@@ -18,14 +18,14 @@ const SHOT_W = 450, SHOT_H = 974
 const SLIDES = [
   { title: 'Bienvenue dans ton salon', text: 'Glisse le doigt pour regarder autour de toi. Touche les objets : ils réagissent.', frames: ['salon-a', 'salon-b'] },
   { title: 'Entre dans ta bibliothèque', text: 'Touche la bibliothèque du salon : la caméra plonge et tu arrives devant tes étagères.', frames: ['enter-a', 'enter-b', 'enter-c'] },
-  { title: 'Ajoute un livre', text: '« + Ajouter un livre » : tape un titre, un auteur… ou scanne le code-barres au dos.', frames: ['add-a', 'add-b'] },
+  { title: 'Ajoute un livre', text: 'La Boutique, le gros bouton bleu en bas : tape un titre, un auteur… ou scanne le code-barres.', frames: ['add-a', 'add-b'] },
   { title: 'Remplis ton panier', text: 'Touche « + », ou reste appuyé sur un livre et glisse-le : le panier monte pour l’attraper.', frames: ['basket-a', 'basket-b', 'basket-c'] },
-  { title: 'Range tes livres', text: 'Touche le panier : tes livres sortent en bas de l’écran. Glisse-les sur une étagère, ou touche + pour la choisir.', frames: ['range-a', 'range-b', 'range-c'] },
-  { title: 'Tes étagères, à ton goût', text: '« Mes étagères » : crée, renomme, change le bois, la couleur du fond et les portes.', frames: ['shelves-a', 'shelves-b', 'shelves-c'] },
+  { title: 'Range tes livres', text: 'L’onglet « Panier » : tes livres sortent en bas de l’écran. Glisse-les sur une étagère, ou touche + pour la choisir.', frames: ['range-a', 'range-b', 'range-c'] },
+  { title: 'Tes étagères, à ton goût', text: 'L’onglet « Étagères » : crée, renomme, change le bois, la couleur du fond et les portes.', frames: ['shelves-a', 'shelves-b', 'shelves-c'] },
   { title: 'Déplace tes livres', text: 'Reste appuyé sur un livre, puis glisse-le à sa nouvelle place.', frames: ['move-a', 'move-b'] },
   { title: 'En cours, lu', text: 'Touche un livre : « En cours » glisse un marque-page entre ses pages, « Lu » le tamponne.', frames: ['read-a', 'read-b', 'read-c'] },
-  { title: 'Retrouve un livre', text: 'Tape quelques lettres dans « Retrouver un livre… » : la bibliothèque t’emmène jusqu’à lui.', frames: ['find-a', 'find-b'] },
-  { title: 'Reviens au salon', text: 'Le bouton « Salon », en haut à droite, te ramène ici. Bonne lecture !', frames: ['home-a', 'home-b', 'home-c'] },
+  { title: 'Retrouve un livre', text: 'L’onglet « Chercher » : tape quelques lettres, la bibliothèque t’emmène jusqu’au livre.', frames: ['find-a', 'find-b'] },
+  { title: 'Reviens au salon', text: 'L’onglet « Salon », en bas à gauche, te ramène ici. Bonne lecture !', frames: ['home-a', 'home-b', 'home-c'] },
 ]
 
 export const TUTO_STEPS = () => SLIDES.map(({ title, text }) => ({ title, text }))

@@ -258,7 +258,7 @@ export function ShelfBasket({ items, shelves, defaultShelf, canDrop, api, mobile
  * en bas de l'écran. On glisse un livre sur une étagère (une place s'ouvre), ou on touche son
  * « + » pour choisir l'étagère (la plus probable en premier).
  */
-export function BasketTray({ items, shelves, books, api, mobile, canDrop, open, onOpen, onClose, onDropBook, onPlace, onOpenBook }) {
+export function BasketTray({ items, shelves, books, api, mobile, canDrop, open, onOpen, onClose, onDropBook, onPlace, onOpenBook, bare = false }) {
   const real = useMemo(() => shelves.filter(s => !s.pseudo), [shelves])
   const byId = useMemo(() => new Map(books.map(b => [b.id, b])), [books])
   const [picker, setPicker] = useState(null)        // livre dont on choisit l'étagère
@@ -350,18 +350,7 @@ export function BasketTray({ items, shelves, books, api, mobile, canDrop, open, 
   const sugg = picker ? suggestShelf(picker, real, byId, last) : null
   const ordered = sugg ? [real.find(s => s.id === sugg.shelfId), ...real.filter(s => s.id !== sugg.shelfId)].filter(Boolean) : real
 
-  return (
-    <aside className={'tray-bar' + (open ? ' is-open' : '')} aria-label="Mon panier">
-      <div className="tray-basket" onClick={() => !open && onOpen()} role="button" tabIndex={0} aria-label="Sortir les livres du panier">
-        <AnyBasket items={items} width={mobile ? 104 : 190} onBookClick={() => !open && onOpen()} />
-      </div>
-      <div className="tray-side">
-        <p className="tray-count">{n > 1 ? `${n} livres à ranger` : '1 livre à ranger'}</p>
-        {/* toujours là (invisible une fois ouvert) : la place du panier ne change pas, le mur ne bouge pas */}
-        <button type="button" className="lbl box filled tray-out" style={open ? { visibility: 'hidden' } : undefined} onClick={onOpen}>Sortir les livres</button>
-      </div>
-
-      {open && (
+  const tray = (
         <div className="tray grain" role="dialog" aria-label="Livres à ranger">
           <div className="tray-head">
             <p className="tray-hint">{canDrop ? 'Glisse un livre sur une étagère, ou touche +' : 'Touche + pour choisir l’étagère'}</p>
@@ -398,7 +387,22 @@ export function BasketTray({ items, shelves, books, api, mobile, canDrop, open, 
             </div>
           )}
         </div>
-      )}
+  )
+  // téléphone : pas de panier sous le mur (l'onglet « Panier » ouvre directement la rangée)
+  if (bare) return open ? tray : null
+
+  return (
+    <aside className={'tray-bar' + (open ? ' is-open' : '')} aria-label="Mon panier">
+      <div className="tray-basket" onClick={() => !open && onOpen()} role="button" tabIndex={0} aria-label="Sortir les livres du panier">
+        <AnyBasket items={items} width={mobile ? 104 : 190} onBookClick={() => !open && onOpen()} />
+      </div>
+      <div className="tray-side">
+        <p className="tray-count">{n > 1 ? `${n} livres à ranger` : '1 livre à ranger'}</p>
+        {/* toujours là (invisible une fois ouvert) : la place du panier ne change pas, le mur ne bouge pas */}
+        <button type="button" className="lbl box filled tray-out" style={open ? { visibility: 'hidden' } : undefined} onClick={onOpen}>Sortir les livres</button>
+      </div>
+
+      {open && tray}
     </aside>
   )
 }
