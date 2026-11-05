@@ -146,7 +146,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       <div className="salon-stage" ref={hostRef} />
       {/* les génériques, en fond sur la télé (posés sur l'écran 3D par la scène) */}
       <div className="tv-video" ref={tvVideo} aria-hidden="true">
-        {!tv && !going && tvSeries.length > 0 && <TvBackdrop series={tvSeries} sound={sound} skip={skip} onPlaying={setOnAir} onNow={id => sceneRef.current?.showWork(id)} />}
+        {!tv && !going && tvSeries.length > 0 && <TvBackdrop series={tvSeries} sound={sound} skip={skip} onPlaying={on => { setOnAir(on); sceneRef.current?.setVideoOn(on) }} onNow={id => sceneRef.current?.showWork(id)} />}
       </div>
       {/* assis dans le canapé : un bouton pour se lever */}
       {seated && !tv && !going && (

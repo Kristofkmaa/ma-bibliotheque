@@ -1688,7 +1688,7 @@ body.immersive .scene { padding: 0 !important; }
 /* Les génériques en fond, sur l'écran de la télé du salon */
 .tv-video { position: fixed; left: 0; top: 0; width: 640px; height: 360px; transform-origin: 0 0; z-index: 1; pointer-events: none; visibility: hidden; overflow: hidden; background: transparent; }
 .tv-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; opacity: 0; transition: opacity 0.8s ease; pointer-events: none; }
-.tv-video iframe.on { opacity: 0.94; }
+.tv-video iframe.on { opacity: 1; }
 /* projeté sur le mur : les bords se fondent dans la peinture */
 .tv-video {
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 4%, #000 96%, transparent 100%), linear-gradient(180deg, transparent 0, #000 6%, #000 94%, transparent 100%);

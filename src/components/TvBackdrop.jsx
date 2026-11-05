@@ -30,6 +30,7 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying,
   }
   useEffect(applySound, [sound])
   useEffect(() => { onPlaying?.(shown) }, [shown]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onPlaying?.(false), []) // eslint-disable-line react-hooks/exhaustive-deps
   // ce qui passe : le salon le sait (l'affiche projetée suit), et un bandeau le dit sur l'image
   const [caption, setCaption] = useState(false)
   useEffect(() => {

@@ -72,6 +72,8 @@ export class TvSeries {
   draw(g, w = TV_W, h = TV_H) {
     g.save()
     g.setTransform(w / LW, 0, 0, h / LH, 0, 0)
+    // une vidéo passe par-dessus : rien d'autre ne doit se voir derrière elle
+    if (this.blank) { g.fillStyle = '#000'; g.fillRect(0, 0, LW, LH); g.restore(); return }
     g.imageSmoothingQuality = 'high'
     g.fillStyle = BG; g.fillRect(0, 0, LW, LH)
     g.textBaseline = 'alphabetic'; g.textAlign = 'left'

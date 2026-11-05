@@ -876,6 +876,8 @@ export class LivingRoomScene {
     this._emitSlide()
   }
   setTvBubble(on) { this.tvBubbleOn = on }
+  /** Une vidéo passe sur l'image projetée : on éteint ce qui est dessiné dessous. */
+  setVideoOn(on) { if (this.series.blank === on) return; this.series.blank = on; this._drawTv() }
   /** L'affiche projetée montre l'œuvre dont le générique passe. */
   showWork(id) { this.series.showId(id); this._drawTv() }
 
