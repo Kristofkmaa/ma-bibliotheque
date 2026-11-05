@@ -192,6 +192,19 @@ function Library({ user, onSignOut }) {
   // panier vidé : on referme la rangée
   useEffect(() => { if (!basket.items.length) setGuide(false) }, [basket.items.length])
 
+  // Retour au salon : la bibliothèque remonte d'abord en haut (dans la bibliothèque), puis la
+  // caméra sort par là — rien ne passe devant pendant le trajet
+  const goSalon = useCallback(() => {
+    const sc = bookcaseApi.current?.scene?.()
+    if (!sc?.scroll) { setSalon('back'); return }
+    const atTop = () => Math.abs(sc.scroll.v - sc._clampScroll(Infinity)) < 0.01 && sc.zoom.v > 0.99 && sc.scroll.done && sc.zoom.done
+    if (atTop()) { setSalon('back'); return }
+    sc.setZoom(true); sc.scrollToTop()
+    const t0 = performance.now()
+    const wait = () => (atTop() || performance.now() - t0 > 1400 ? setTimeout(() => setSalon('back'), 120) : requestAnimationFrame(wait))
+    requestAnimationFrame(wait)
+  }, [])
+
   const openGuide = useCallback(() => {
     if (salon) { markSalonSeen(); setSalon(null) }
     setGuide(true)
@@ -233,7 +246,7 @@ function Library({ user, onSignOut }) {
         <Logo />
         <div className="top-right">
           {HAS_WEBGL && (
-            <button type="button" className="lbl box salon-btn" onClick={e => { e.currentTarget.blur(); setSalon('back') }} aria-label="Retour au salon">
+            <button type="button" className="lbl box salon-btn" onClick={e => { e.currentTarget.blur(); goSalon() }} aria-label="Retour au salon">
               <svg width="13" height="12" viewBox="0 0 13 12" aria-hidden="true"><path d="M1 6L6.5 1.2 12 6M2.6 4.8V11h7.8V4.8" stroke="currentColor" fill="none" strokeWidth="1.1" /></svg>
               <span className="salon-btn-l">Salon</span>
             </button>
@@ -301,7 +314,7 @@ function Library({ user, onSignOut }) {
           {findOpen && <div className="find-backdrop" onPointerDown={() => setFindOpen(false)} />}
           <nav className="tabbar" aria-label="Menu">
             {HAS_WEBGL && (
-              <button type="button" className="tab" onClick={() => { setFindOpen(false); setGuide(false); setSalon('back') }}>
+              <button type="button" className="tab" onClick={() => { setFindOpen(false); setGuide(false); goSalon() }}>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2L12 4l8.5 7.2M6 9.8V20h12V9.8M10 20v-5.5h4V20" /></svg>
                 <span>Salon</span>
               </button>

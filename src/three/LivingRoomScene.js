@@ -25,8 +25,8 @@ const EL_MIN = 0.3, EL_MAX = 0.78, EL0 = 0.5
 const TARGET0 = new THREE.Vector3(0, 0.95, 0)
 
 // emplacements (repère de la pièce)
-const BOOKCASE = { x: -R + 0.2, z: -0.55, w: 1.62, h: 2.18, d: 0.38 }
-const FIRE = { x: -0.5, w: 1.3, d: 0.3 }
+const BOOKCASE = { x: -1.05, z: -R + 0.2, w: 1.62, h: 2.18, d: 0.38 }   // mur du fond, à gauche (face à la caméra)
+const FIRE = { z: -0.5, w: 1.3, d: 0.3 }                               // mur de gauche
 const TV = { x: 1.22 }
 const SOFA = { x: 1.34, z: 0.5 }
 const TABLE = { x: -0.02, z: 0.48 }
@@ -449,8 +449,7 @@ export class LivingRoomScene {
   // ---- Bibliothèque ----------------------------------------------------------------------
   _buildBookcase() {
     const grp = new THREE.Group()
-    grp.position.set(BOOKCASE.x, 0, BOOKCASE.z)
-    grp.rotation.y = Math.PI / 2      // face à la pièce (+x)
+    grp.position.set(BOOKCASE.x, 0, BOOKCASE.z)   // face à la pièce (+z)
     this.room.add(grp)
     this.bookcase = grp
     this.bookcaseInner = new THREE.Group()
@@ -593,7 +592,8 @@ export class LivingRoomScene {
   // ---- Cheminée ---------------------------------------------------------------------------
   _buildFireplace() {
     const grp = new THREE.Group()
-    grp.position.set(FIRE.x, 0, -R)
+    grp.position.set(-R, 0, FIRE.z)
+    grp.rotation.y = Math.PI / 2       // contre le mur de gauche, face à la pièce (+x)
     this.room.add(grp)
     const W = FIRE.w, D = FIRE.d
     const aw = 0.74, ah = 0.5, ay = 0.1, ar = aw / 2
@@ -650,7 +650,7 @@ export class LivingRoomScene {
     })
     // lueur du feu
     this.fireLight = new THREE.PointLight(0xff8a3c, 2, 5.5, 1.6)
-    this.fireLight.position.set(FIRE.x, 0.55, -R + D + 0.45)
+    this.fireLight.position.set(-R + D + 0.45, 0.55, FIRE.z)
     this.scene.add(this.fireLight)
     // déco de la tablette : miroir rond, bougies, petit vase
     const mirror = new THREE.Mesh(this._geo(new THREE.CircleGeometry(0.3, 48)), this._mat('#C9D3D8', { roughness: 0.15, metalness: 0.3 }))
@@ -1263,10 +1263,10 @@ export class LivingRoomScene {
     const { CW } = lib.layout
     const totalH = lib.rowCount * (RH + PT) + PT
     const sc = Math.min(2.45 / (totalH + 0.1), 2.1 / (CW + 2 * ST + 0.06))
-    const hw = (CW / 2 + ST + 0.04) * sc
+    const hw = (CW / 2 + ST + 0.04) * sc     // demi-largeur (sur x)
     const g = new THREE.Group()
-    g.position.set(-R + 0.012 + (SD / 2 + 0.02) * sc, 0, clamp(-0.6, -1.92 + hw, 0.32 - hw))
-    g.rotation.y = Math.PI / 2
+    // contre le mur du fond, entre le coin gauche et le meuble télé
+    g.position.set(clamp(-0.8, -1.92 + hw, 0.45 - hw), 0, -R + 0.012 + (SD / 2 + 0.02) * sc)
     g.scale.setScalar(sc)
     g.add(copy)
     this.room.add(g)
@@ -1453,10 +1453,6 @@ export class LivingRoomScene {
     // on part de la vue exacte où l'on était dans la bibliothèque…
     this.fly = { dir: 'out', start: { az: AZ0, el: EL0, dist: this.dist, target: TARGET0.clone() }, t: 0, dur: 1.6, libPose: this._libraryPose() }
     this._stepFly(0)
-    // …puis la bibliothèque remonte en haut : dans le salon, les étagères du haut s'ouvrent,
-    // celles du bas se ferment (c'est par le haut qu'on entrera la prochaine fois)
-    lib.setZoom(true)
-    lib.scrollToTop()
   }
 
   /** La bibliothèque se présente toujours par le haut, vue de près. */
@@ -1487,9 +1483,6 @@ export class LivingRoomScene {
     const a = this._salonPose(f.start.az, f.start.el, f.start.dist, f.start.target)
     const b = f.libPose || this._libraryPose()
     this._applyPose(a, b, ease(p))
-    this._setFade(sstep(0.06, 0.55, p))
-    this.mix = sstep(0.2, 0.8, p)
-    this._setClip(sstep(0.62, 1, p), b.R, b.S)
     this.shadowDirty = Math.max(this.shadowDirty, 1)
     if (k >= 1) {
       if (f.dir === 'in') { if (!f.called) { f.called = true; f.onDone?.() } return }
@@ -1497,15 +1490,18 @@ export class LivingRoomScene {
       this.fly = null
       this.az.snap(AZ0); this.el.snap(EL0); this.target.copy(TARGET0)
       this.camera.updateProjectionMatrix()
-      this._setFade(0); this.mix = 0; this._setClip(0)
       this.idleAt = this.time
+      // la caméra est arrêtée : la bibliothèque remonte en haut (les étagères du haut s'ouvrent,
+      // celles du bas se ferment : c'est par le haut qu'on entrera la prochaine fois)
+      const lib = this.mirror?.lib
+      if (lib && !lib.disposed) { lib.setZoom(true); lib.scrollToTop() }
     }
   }
 
   /** Vue rapprochée (secours, quand la bibliothèque n'est pas encore là). */
   _bookcaseView() {
-    const center = new THREE.Vector3(BOOKCASE.x + BOOKCASE.d / 2, 1.12, BOOKCASE.z)
-    return { target: center, az: Math.PI / 2, el: 0.05, dist: 2.3 }
+    const center = new THREE.Vector3(BOOKCASE.x, 1.12, BOOKCASE.z + BOOKCASE.d / 2)
+    return { target: center, az: 0.2, el: 0.05, dist: 2.3 }
   }
 
   _applyFly(k) {

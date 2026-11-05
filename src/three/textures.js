@@ -11,11 +11,13 @@ const cache = new Map()
 let anisotropy = 4
 export function setAnisotropy(n) { anisotropy = n }
 
-function canvasTexture(key, w, h, draw, { repeat = false } = {}) {
+function canvasTexture(key, w, h, draw, { repeat = false, scale = 1 } = {}) {
   if (cache.has(key)) return cache.get(key)
   const c = document.createElement('canvas')
-  c.width = w; c.height = h
-  draw(c.getContext('2d'), w, h)
+  c.width = Math.round(w * scale); c.height = Math.round(h * scale)
+  const ctx = c.getContext('2d')
+  ctx.scale(scale, scale)     // même dessin, plus de pixels (texte des tranches plus net)
+  draw(ctx, w, h)
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.anisotropy = anisotropy
@@ -67,7 +69,7 @@ export function spineTexture(book) {
     ctx.strokeRect(w / 2 - 34, h - 160, 68, 56)
     ctx.fillStyle = ink; ctx.font = `italic 500 36px ${SERIF}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.fillText(authorInitials(book), w / 2, h - 131)
-  })
+  }, { scale: 1.5 })   // 1,5 × plus de pixels : titre de la tranche net
 }
 
 /** Couverture générée quand l'image réelle n'est pas disponible. */

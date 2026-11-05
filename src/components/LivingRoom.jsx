@@ -52,7 +52,7 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
       const done = () => cb.current.onEntered?.(typeof next === 'string' ? next : null)
       if (!el?.animate) { done(); return }
       // les deux vues sont identiques : on retire simplement le salon (les menus apparaissent)
-      el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: 'ease-out', fill: 'forwards' }).finished.then(done, done)
+      el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 380, easing: 'ease-in-out', fill: 'forwards' }).finished.then(done, done)
     })
   }
   cb.current.go = go
@@ -88,7 +88,7 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
     let t
     if (from === 'back') {
       s.arriveFromLibrary()
-      rootRef.current?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: 'ease-out' })
+      rootRef.current?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease-in-out' })
       t = setTimeout(() => setGoing(false), 1100)
     }
     return () => { clearTimeout(t); s.dispose(); sceneRef.current = null }

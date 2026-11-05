@@ -30,7 +30,8 @@ function buildRows({ manual, shelves, autoBooks, byId, visible, canEdit, perRow,
       }
       if (!list.length && !canEdit) continue
       const n = Math.max(1, Math.ceil(list.length / perRow))
-      for (let j = 0; j < n; j++) rows.push({ key: `${s.id}:${j}`, shelf: s, start: j * perRow, books: list.slice(j * perRow, (j + 1) * perRow), cont: j > 0 })
+      // (j * Infinity vaut NaN pour j = 0 : une étagère d'une seule rangée commence à 0)
+      for (let j = 0; j < n; j++) rows.push({ key: `${s.id}:${j}`, shelf: s, start: j ? j * perRow : 0, books: n === 1 ? list : list.slice(j * perRow, (j + 1) * perRow), cont: j > 0 })
     }
   } else {
     const n = Math.ceil(autoBooks.length / perRow)

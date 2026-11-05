@@ -8,6 +8,16 @@ const rawCover = b => (b?.cover_url || b?.cover || '').replace('http://', 'https
 
 export const relayUrl = src => `/api/cover?url=${encodeURIComponent(src)}`
 
+/**
+ * Version grand format d'une couverture Google Books (les vignettes « zoom=1 » ne font que
+ * ~128 px de large : floues en 3D). Si Google l'ignore, on retombe sur la vignette.
+ */
+export function hiResCover(src) {
+  if (!src || !/books\.google(usercontent)?\.com/.test(src) || /[?&]fife=/.test(src)) return null
+  if (!/\/books\/content|\/books\/publisher/.test(src)) return null
+  return src + (src.includes('?') ? '&' : '?') + 'fife=w600-h900'
+}
+
 export function coverKey(b) {
   const raw = rawCover(b)
   if (raw) return raw
@@ -17,6 +27,8 @@ export function coverKey(b) {
 export function coverCandidates(b) {
   const raw = rawCover(b)
   const out = []
+  const hi = hiResCover(raw)
+  if (hi) out.push(relayUrl(hi))
   if (raw) out.push(relayUrl(raw), raw)
   if (b?.isbn) out.push(`https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg?default=false`)
   return out

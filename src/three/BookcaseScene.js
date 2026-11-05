@@ -71,12 +71,14 @@ export class BookcaseScene {
     this.cb = cb
     this.container = container
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    // écrans 3× (iPhone) : dessin en 3× ; la qualité ne baisse que si le téléphone peine vraiment
+    this.dpr = Math.min(window.devicePixelRatio || 1, 3)
+    this.renderer.setPixelRatio(this.dpr)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     this.renderer.localClippingEnabled = true
-    setAnisotropy(Math.min(8, this.renderer.capabilities.getMaxAnisotropy()))
+    setAnisotropy(Math.min(16, this.renderer.capabilities.getMaxAnisotropy()))   // livres vus de biais : nets
     container.appendChild(this.renderer.domElement)
     noTouchSelect(this.renderer.domElement)
     this.renderer.domElement.className = 'shelf-canvas'
@@ -1105,26 +1107,31 @@ export class BookcaseScene {
    * on réduit d'abord la résolution, puis on simplifie les ombres.
    */
   _adapt(dt) {
-    if (dt <= 0 || dt > 0.25) return
-    this.perf = this.perf || { sum: 0, n: 0, level: 0 }
+    if (dt <= 0 || dt > 0.25) return false
+    this.perf = this.perf || { sum: 0, n: 0, level: 0, seen: 0 }
     const pf = this.perf
+    // on laisse passer l'arrivée (les livres qui se posent) avant de juger
+    if (++pf.seen < 90) return false
     pf.sum += dt; pf.n++
-    if (pf.n < 24) return
+    if (pf.n < 40) return false
     const avg = pf.sum / pf.n
     pf.sum = 0; pf.n = 0
-    if (avg > 0.034 && pf.level === 0) {
+    if (avg <= 0.045) return false
+    if (pf.level === 0) {
+      // d'abord des ombres plus simples (le flou se voit plus que les ombres)
       pf.level = 1
-      this.renderer.setPixelRatio(1)
-      this.renderer.setSize(this.w, this.h, false)
-      return true      // le canevas vient d'être vidé : il faut le redessiner
-    } else if (avg > 0.034 && pf.level === 1) {
-      pf.level = 2
       this.renderer.shadowMap.type = THREE.PCFShadowMap
       this.key.shadow.mapSize.set(1024, 1024)
       this.key.shadow.map?.dispose(); this.key.shadow.map = null
       return true
     }
-    return false
+    // puis la définition, par paliers, sans descendre sous 1,5×
+    const next = this.dpr > 2 ? 2 : this.dpr > 1.5 ? 1.5 : null
+    if (!next) return false
+    this.dpr = next
+    this.renderer.setPixelRatio(next)
+    this.renderer.setSize(this.w, this.h, false)
+    return true      // le canevas vient d'être vidé : il faut le redessiner
   }
 
   /** Étiquettes des planches : positionnées directement (sans repasser par React). */
