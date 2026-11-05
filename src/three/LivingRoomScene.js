@@ -847,6 +847,10 @@ export class LivingRoomScene {
     grp.add(lens, glass, led, rod, plate, top)
     grp.traverse(o => { if (o.isMesh) o.castShadow = o !== glass && o !== led })
     this._register('projector', grp, 'Films & séries')
+    // pour l'effacer en fondu pendant le trajet vers la bibliothèque
+    this.projGroup = grp
+    this.projMats = []
+    grp.traverse(o => { if (o.isMesh || o.isSprite) [].concat(o.material).forEach(m => this.projMats.push({ m, tr: m.transparent, op: m.opacity, dw: m.depthWrite })) })
 
     // le faisceau : une pyramide de lumière très légère, de l'objectif aux coins de la toile
     const o = new THREE.Vector3(PROJ.x - 0.22 * BIG.projector, PROJ.y, TV.z + 0.06 * BIG.projector)
@@ -1116,6 +1120,23 @@ export class LivingRoomScene {
     const look = z.startLook.clone().lerp(z.path.screen, ease(clamp(z.k / 0.55, 0, 1)))
     cam.position.copy(z.startPos).lerp(z.path.end, ease(clamp((z.k - 0.2) / 0.8, 0, 1)))
     cam.lookAt(look)
+  }
+
+  /** Le vidéoprojecteur s'efface (0 : là, 1 : disparu), le temps d'aller dans la bibliothèque. */
+  _fadeProjector(d) {
+    if (!this.projMats || d === this.projFade) return
+    this.projFade = d
+    for (const f of this.projMats) {
+      if (d > 0) {
+        if (!f.m.transparent) { f.m.transparent = true; f.m.needsUpdate = true }
+        f.m.opacity = f.op * (1 - d)
+        f.m.depthWrite = d < 0.5 && f.dw
+      } else {
+        f.m.opacity = f.op; f.m.depthWrite = f.dw
+        if (f.m.transparent !== f.tr) { f.m.transparent = f.tr; f.m.needsUpdate = true }
+      }
+    }
+    this.projGroup.visible = d < 0.99
   }
 
   /** La lampe passe devant la télé : elle s'efface pendant le zoom. */
@@ -1817,6 +1838,7 @@ export class LivingRoomScene {
       f.t += dt / f.dur
       const k = Math.min(1, f.t)
       this._applyFly(k)
+      this._fadeProjector(clamp(k * 2.2, 0, 1))
       this._placeCamera(this.az.v, this.el.v, this.flyDist, this.target)
       if (k >= 1 && !f.called) { f.called = true; f.onDone?.() }
       return
@@ -1824,6 +1846,7 @@ export class LivingRoomScene {
     f.t += dt / f.dur
     const k = Math.min(1, f.t)
     const p = f.dir === 'in' ? k : 1 - k          // 0 : salon ; 1 : bibliothèque
+    this._fadeProjector(clamp(p * 2.2, 0, 1))    // le projecteur s'efface dès le début du trajet
     const a = f.start.fr ? f.start : this._salonPose(f.start.az, f.start.el, f.start.dist, f.start.target)
     const b = f.libPose || this._libraryPose()
     this._applyPose(a, b, ease(p))
@@ -1831,6 +1854,7 @@ export class LivingRoomScene {
     if (k >= 1) {
       if (f.dir === 'in') { if (!f.called) { f.called = true; f.onDone?.() } return }
       // arrivé dans le salon : on rend la main
+      this._fadeProjector(0)
       this.fly = null
       this.az.snap(AZ0); this.el.snap(EL0); this.target.copy(TARGET0)
       this.camera.updateProjectionMatrix()
