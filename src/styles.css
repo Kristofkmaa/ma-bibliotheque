@@ -1690,3 +1690,12 @@ body.immersive .scene { padding: 0 !important; }
 .tv-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; opacity: 0; transition: opacity 0.8s ease; pointer-events: none; }
 .tv-video iframe.on { opacity: 1; }
 .tv-video::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(125deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 40%); }
+/* le son de la télé (projecteur) */
+.tv-sound {
+  position: absolute; z-index: 5; right: 16px; top: calc(16px + env(safe-area-inset-top));
+  height: 36px; padding: 0 14px 0 11px; border-radius: 18px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink);
+  display: inline-flex; align-items: center; gap: 7px; font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+  box-shadow: 0 8px 18px -12px rgba(20, 16, 10, 0.5); animation: fadeUp 0.5s both; transition: transform 0.25s cubic-bezier(.3, 1.6, .5, 1), background-color 0.2s, color 0.2s;
+}
+.tv-sound.on { background: var(--cobalt); border-color: var(--cobalt); color: #fff; }
+.tv-sound:active { transform: scale(0.94); }

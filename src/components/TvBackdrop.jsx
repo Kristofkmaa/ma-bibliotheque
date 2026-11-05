@@ -7,13 +7,24 @@ import { seriesVideos } from '../lib/tmdb'
  * exactement sur l'écran de la télé 3D (la scène le place à chaque image) ; il n'apparaît que
  * quand la vidéo tourne vraiment, sinon on voit l'écran des cassettes en dessous.
  */
-export default function TvBackdrop({ series }) {
+export default function TvBackdrop({ series, sound = false, onPlaying }) {
   const [queue, setQueue] = useState([])        // [{ key, name }]
   const [i, setI] = useState(0)
   const [shown, setShown] = useState(false)
   const fails = useRef(0)
   const playing = useRef(false)
   const frame = useRef(null)
+  const soundRef = useRef(sound)
+  soundRef.current = sound
+  // le son : coupé par défaut ; le bouton du salon le rallume (le geste du doigt l'autorise)
+  const applySound = () => {
+    const w = frame.current?.contentWindow
+    if (!w) return
+    const cmd = (func, args = []) => w.postMessage(JSON.stringify({ id: 'tvbg', channel: 'widget', event: 'command', func, args }), '*')
+    if (soundRef.current) { cmd('unMute'); cmd('setVolume', [70]) } else cmd('mute')
+  }
+  useEffect(applySound, [sound])
+  useEffect(() => { onPlaying?.(shown) }, [shown]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // la liste des vidéos, dans l'ordre de nos séries préférées
   const sig = series.map(s => s.tmdb_id).join(',')
@@ -37,7 +48,7 @@ export default function TvBackdrop({ series }) {
       let d
       try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data } catch { return }
       const state = d?.event === 'onStateChange' ? d.info : d?.event === 'infoDelivery' ? d.info?.playerState : undefined
-      if (state === 1) { fails.current = 0; playing.current = true; setShown(true) }
+      if (state === 1) { fails.current = 0; if (!playing.current) applySound(); playing.current = true; setShown(true) }
       else if (state === 0 || d?.event === 'onError') next()
     }
     window.addEventListener('message', onMsg)
@@ -52,7 +63,7 @@ export default function TvBackdrop({ series }) {
     send({ event: 'listening' })
     send({ event: 'command', func: 'addEventListener', args: ['onStateChange'] })
     send({ event: 'command', func: 'addEventListener', args: ['onError'] })
-    send({ event: 'command', func: 'mute' })
+    applySound()
   }
 
   // trois vidéos de suite qui ne démarrent pas : la lecture automatique est bloquée, on laisse tomber

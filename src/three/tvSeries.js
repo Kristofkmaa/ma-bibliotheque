@@ -7,7 +7,7 @@ import { tmdbImgCors, loadImage, year } from '../lib/tmdb'
  * Repère logique 1600 × 900, mis à l'échelle de la cible.
  */
 
-export const TV_W = 960, TV_H = 540
+export const TV_W = 1280, TV_H = 720
 const SLIDE = 8
 const LW = 1600, LH = 900
 const SERIF = '"Newsreader", Georgia, serif'

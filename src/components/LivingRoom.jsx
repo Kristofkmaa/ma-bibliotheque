@@ -34,6 +34,8 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   const [inside, setInside] = useState(false)   // zoom fini : on est dans la télé
   const [bubbleOff, setBubbleOff] = useState(() => store.get(BUBBLE_KEY) === 'off')
   const tvVideo = useRef(null)
+  const [sound, setSound] = useState(false)      // le son de la télé (coupé à l'arrivée)
+  const [onAir, setOnAir] = useState(false)      // un générique passe
   const count = basketItems?.length || 0
   const mobile = useIsMobile()
   const cb = useRef({})
@@ -140,8 +142,20 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       <div className="salon-stage" ref={hostRef} />
       {/* les génériques, en fond sur la télé (posés sur l'écran 3D par la scène) */}
       <div className="tv-video" ref={tvVideo} aria-hidden="true">
-        {!tv && !going && tvSeries.length > 0 && <TvBackdrop series={tvSeries} />}
+        {!tv && !going && tvSeries.length > 0 && <TvBackdrop series={tvSeries} sound={sound} onPlaying={setOnAir} />}
       </div>
+      {onAir && !tv && !going && (
+        <button type="button" className={'tv-sound' + (sound ? ' on' : '')} onClick={() => setSound(v => !v)}
+          aria-pressed={sound} aria-label={sound ? 'Couper le son de la télé' : 'Mettre le son de la télé'}>
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />
+            {sound
+              ? <path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              : <path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />}
+          </svg>
+          <span>{sound ? 'Son' : 'Muet'}</span>
+        </button>
+      )}
 
       {/* on a zoomé à bloc sur la télé : nos séries, il ne reste que le contour de l'écran */}
       {inside && (

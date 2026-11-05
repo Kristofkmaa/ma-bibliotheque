@@ -26,7 +26,9 @@ const TARGET0 = new THREE.Vector3(0, 0.95, 0)
 // emplacements (repère de la pièce)
 const BOOKCASE = { x: -1.05, z: -R + 0.2, w: 1.62, h: 2.18, d: 0.38 }   // mur du fond, à gauche (face à la caméra)
 const FIRE = { x: 0, w: 1.3, d: 0.3, h: 1.38 }                         // centrée sur le mur de devant (loin des livres et du canapé)
-const TV = { z: 0.0 }                       // mur de gauche, en face du canapé
+const TV = { z: -0.5 }                      // mur de gauche, en face du canapé : la toile de projection
+const SCR = { w: 2.1, h: 1.18, y: 1.42 }    // l'image projetée (16:9), presque tout le mur
+const PROJ = { x: 0.95, y: 2.3 }            // le vidéoprojecteur, suspendu au-dessus du canapé
 const SOFA = { x: 1.34, z: 0.0 }            // face à la télé
 const TABLE = { x: -0.15, z: 0.0 }          // entre le canapé et la télé
 const LAMP = { x: 1.8, z: 1.38 }            // au bout du canapé
@@ -441,18 +443,6 @@ export class LivingRoomScene {
       const b = this._rbox(0.025, 0.09, 2 * R, 0.006, baseMat); b.position.set(-R + 0.0125, 0.045, 0); b.castShadow = false
       const c = this._rbox(T + 0.04, 0.05, 2 * R + 0.02, 0.015, capMat); c.position.set(-R - T / 2, H + 0.02, 0)
       grp.add(m, b, c)
-      // cadres au-dessus de la télé
-      const frameMat = this._woodMat(COL.walnut)
-      ;[[TV.z + 0.3, 1.86, 0.44, 0.58, 0], [TV.z - 0.24, 1.78, 0.34, 0.44, 1]].forEach(([z, y, fw, fh, k]) => {
-        const f = this._rbox(fw, fh, 0.035, 0.008, frameMat)
-        f.rotation.y = Math.PI / 2
-        f.position.set(-R + 0.02, y, z)
-        const art = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(fw - 0.06, fh - 0.06)), this._mat('#ffffff', { map: this._track(artTexture(k)), roughness: 0.9 }))
-        art.rotation.y = Math.PI / 2
-        art.position.set(-R + 0.039, y, z)
-        grp.add(f, art)
-        w.decor.push(f, art)
-      })
     })
     wall('right', new THREE.Vector3(1, 0, 0), grp => {
       const m = this._rbox(T, H, 2 * R, 0.02, this._mat(COL.wallLeft, { roughness: 0.95 })); m.position.set(R + T / 2, H / 2, 0); m.castShadow = false; m.receiveShadow = true
@@ -750,30 +740,88 @@ export class LivingRoomScene {
       knob.position.set(sx * 0.05, leg + Hh / 2, D / 2 + 0.015)
       grp.add(knob)
     }
-    // télévision
-    const tv = new THREE.Group()
-    tv.position.set(0, leg + Hh, -0.04)
-    grp.add(tv)
-    const stand = this._rbox(0.3, 0.02, 0.14, 0.008, this._mat('#2A2A2D', { roughness: 0.5 }))
-    stand.position.y = 0.01
-    const neck = this._rbox(0.06, 0.08, 0.03, 0.01, this._mat('#2A2A2D', { roughness: 0.5 }))
-    neck.position.set(0, 0.05, -0.02)
-    const frame = this._rbox(1.08, 0.64, 0.045, 0.018, this._mat('#1C1C1F', { roughness: 0.4 }))
-    frame.position.set(0, 0.42, 0)
-    tv.add(stand, neck, frame)
+    this._register('cabinet', grp, 'Nos séries')
+    this.wallOf('left').attached.push(grp)
+
+    // la toile de projection, sur le mur : un fin cadre noir et l'image projetée
+    const scr = new THREE.Group()
+    scr.position.set(-R + 0.012, 0, TV.z)
+    scr.rotation.y = Math.PI / 2
+    this.room.add(scr)
+    const border = this._rbox(SCR.w + 0.07, SCR.h + 0.07, 0.016, 0.006, this._mat('#151517', { roughness: 0.5 }))
+    border.position.set(0, SCR.y, 0)
+    scr.add(border)
     this.tvCanvas = document.createElement('canvas')
     this.tvCanvas.width = TV_W; this.tvCanvas.height = TV_H
     this.series = new TvSeries(() => { if (this.tvCanvas) this._drawTv() })
     this.tvBubbleOn = this.cb.tvBubble?.() ?? true
     this.tvTex = this._track(new THREE.CanvasTexture(this.tvCanvas))
     this.tvTex.colorSpace = THREE.SRGBColorSpace
-    const screen = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(1.01, 0.57)), new THREE.MeshBasicMaterial({ map: this.tvTex, toneMapped: false }))
-    screen.position.set(0, 0.42, 0.0235)
-    tv.add(screen)
+    this.tvTex.anisotropy = 4
+    const screen = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(SCR.w, SCR.h)), new THREE.MeshBasicMaterial({ map: this.tvTex, toneMapped: false, color: 0xf4f1ea }))
+    screen.position.set(0, SCR.y, 0.012)
+    scr.add(screen)
     this.tvScreen = screen
     this._drawTv()
-    this._register('tv', grp, 'Nos séries')
-    this.wallOf('left').attached.push(grp)
+    this._register('tv', scr, 'Nos séries')
+    this.wallOf('left').attached.push(scr)
+
+    this._buildProjector()
+  }
+
+  /** Le vidéoprojecteur, suspendu au-dessus du canapé, et son faisceau jusqu'à la toile. */
+  _buildProjector() {
+    const grp = new THREE.Group()
+    grp.position.set(PROJ.x, PROJ.y, TV.z)
+    this.room.add(grp)
+    const shell = this._mat('#EEEBE5', { roughness: 0.45 })
+    const dark = this._mat('#1C1C1F', { roughness: 0.35 })
+    const body = this._rbox(0.36, 0.12, 0.3, 0.035, shell)
+    grp.add(body)
+    // objectif, tourné vers la toile (-x)
+    const lens = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.05, 0.055, 0.05, 24)), dark)
+    lens.rotation.z = Math.PI / 2
+    lens.position.set(-0.19, 0, 0.06)
+    const glass = new THREE.Mesh(this._geo(new THREE.CircleGeometry(0.038, 24)), new THREE.MeshBasicMaterial({ color: 0xdfeaff, toneMapped: false }))
+    glass.rotation.y = -Math.PI / 2
+    glass.position.set(-0.216, 0, 0.06)
+    // grille d'aération et voyant
+    for (let i = 0; i < 5; i++) {
+      const v = this._rbox(0.012, 0.05, 0.004, 0.002, dark)
+      v.position.set(0.04 + i * 0.024, 0, -0.151)
+      grp.add(v)
+    }
+    const led = new THREE.Mesh(this._geo(new THREE.SphereGeometry(0.008, 8, 6)), new THREE.MeshBasicMaterial({ color: 0x5ad18a, toneMapped: false }))
+    led.position.set(0.12, 0.062, -0.09)
+    // suspension : platine et tige jusqu'en haut
+    const rodLen = H + 0.02 - PROJ.y - 0.06
+    const rod = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.014, 0.014, rodLen, 10)), dark)
+    rod.position.set(0.04, 0.06 + rodLen / 2, 0)
+    const plate = this._rbox(0.14, 0.02, 0.12, 0.006, dark)
+    plate.position.set(0.04, 0.07, 0)
+    const top = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.05, 0.05, 0.015, 16)), dark)
+    top.position.set(0.04, 0.06 + rodLen, 0)
+    grp.add(lens, glass, led, rod, plate, top)
+    grp.traverse(o => { if (o.isMesh) o.castShadow = o !== glass && o !== led })
+    this._register('projector', grp, 'Nos séries')
+
+    // le faisceau : une pyramide de lumière très légère, de l'objectif aux coins de la toile
+    const o = new THREE.Vector3(PROJ.x - 0.22, PROJ.y, TV.z + 0.06)
+    const x = -R + 0.03, y0 = SCR.y - SCR.h / 2, y1 = SCR.y + SCR.h / 2, z0 = TV.z - SCR.w / 2, z1 = TV.z + SCR.w / 2
+    const c = [[x, y0, z0], [x, y0, z1], [x, y1, z1], [x, y1, z0]]
+    const pos = []
+    for (let i = 0; i < 4; i++) { const a = c[i], b = c[(i + 1) % 4]; pos.push(o.x, o.y, o.z, ...a, ...b) }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    // plus clair près de l'objectif, presque rien sur le mur
+    const col = []
+    for (let i = 0; i < 4; i++) col.push(1, 1, 1, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15)
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
+    this.beam = new THREE.Mesh(this._geo(geo), new THREE.MeshBasicMaterial({
+      color: 0xfff3d6, vertexColors: true, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
+    }))
+    this.beam.renderOrder = 5
+    this.room.add(this.beam)
   }
 
   /** Nos séries, sur l'écran de la télé. */
@@ -798,7 +846,7 @@ export class LivingRoomScene {
     // face à l'écran, tout près : l'écran remplit la vue (on entre dans la télé)
     const target = this.tvScreen.getWorldPosition(new THREE.Vector3())
     const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
-    const dist = Math.min(1.01 / 2 / (t * this.camera.aspect), 0.57 / 2 / t) * 0.94
+    const dist = Math.min(SCR.w / 2 / (t * this.camera.aspect), SCR.h / 2 / t) * 0.94
     return { target, az: Math.PI / 2, el: 0, dist }
   }
 
@@ -838,7 +886,8 @@ export class LivingRoomScene {
     if (nrm.dot(this.camera.position.clone().sub(sp).normalize()) < 0.12) return hide()
     const S = this.renderer.domElement.getBoundingClientRect()
     const pts = []
-    for (const [x, y] of [[-0.505, 0.285], [0.505, 0.285], [0.505, -0.285], [-0.505, -0.285]]) {
+    const hw = SCR.w / 2, hh = SCR.h / 2
+    for (const [x, y] of [[-hw, hh], [hw, hh], [hw, -hh], [-hw, -hh]]) {
       const v = scr.localToWorld(new THREE.Vector3(x, y, 0.002)).project(this.camera)
       if (v.z > 1) return hide()
       pts.push(S.left + ((v.x + 1) / 2) * S.width, S.top + ((1 - v.y) / 2) * S.height)
@@ -1003,7 +1052,7 @@ export class LivingRoomScene {
     const f = 1 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))
     const px = 40     // hauteur à l'écran (px) de la pastille
     for (const [kind, pos, on] of [
-      ['tv', new THREE.Vector3(-R + 0.2, 1.5, TV.z), free && this.tvBubbleOn !== false && (this.wallOf('left').f ?? 1) > 0.5],
+      ['tv', new THREE.Vector3(-R + 0.15, SCR.y + SCR.h / 2 + 0.12, TV.z), free && this.tvBubbleOn !== false && (this.wallOf('left').f ?? 1) > 0.5],
       ['basket', new THREE.Vector3(TABLE.x + 0.17, 0.9, TABLE.z + 0.04), free && !!this.bubbles?.basket?.text],
     ]) {
       const b = this.bubbles?.[kind]
@@ -1712,7 +1761,7 @@ export class LivingRoomScene {
       case 'lamp': this.setLamp(!this.lampState); break
       case 'sofa': this.cushions.forEach((c, i) => { c.s.vel -= 1.1 + (i % 3) * 0.2 }); break
       case 'plant': this.leaves.forEach((l, i) => { l.sway.vel += (i % 2 ? 1 : -1) * 3 }); break
-      case 'tv': if (!this.tvZoom) this.zoomTv(); break
+      case 'tv': case 'projector': case 'cabinet': if (!this.tvZoom) this.zoomTv(); break
       case 'tvbubble': this.zoomTv(); break
       case 'tvbubble-close': this.tvBubbleOn = false; this.cb.onTvBubbleClose?.(); break
       case 'basketbubble': this.cb.onBasket?.(); break
@@ -1869,6 +1918,8 @@ export class LivingRoomScene {
       s.quaternion.copy(this.camera.quaternion)
     }
     // télé : nos séries défilent (plus fluide pendant qu'on s'en approche)
+    // le faisceau du projecteur : seulement quand la toile est bien visible (son mur relevé)
+    if (this.beam) this.beam.visible = (this.wallOf('left').f ?? 1) > 0.9 && !this.fly
     this._placeTvVideo()
     if (this.inTv) return           // on est dans la télé : le module des séries recouvre tout
     if (this.series.update(dt)) this._emitSlide()
