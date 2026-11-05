@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import { spineSize, spineColors } from '../lib/bookUtils'
 import { spineTexture, withCover, pagesTexture, grainTexture, doorTexture, setAnisotropy, bookmarkTexture, plaqueTexture } from './textures'
-import { getBookStatuses } from '../hooks/useLibrary'
 import { noTouchSelect } from './webgl'
 
 /*
@@ -499,7 +498,7 @@ export class BookcaseScene {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.014), [this.brassMat, this.brassMat, this.brassMat, this.brassMat, part.plaqueMat, this.brassMat])
       // vissée sur le chant de la planche, entre les portes du dessus et du dessous
       // nettement devant le joint entre deux blocs : la plaque reste d'une seule pièce
-      m.position.set(-CW / 2 + 0.1 + w / 2, this.rowBase(r) - PT / 2, SD / 2 + 0.04 + 0.022)
+      m.position.set(0, this.rowBase(r) - PT / 2, SD / 2 + 0.04 + 0.022)   // au milieu de la planche
       m.userData.plaque = r
       m.castShadow = true
       this.caseGroup.add(m)
@@ -591,7 +590,7 @@ export class BookcaseScene {
    * avec une queue d'aronde. Il sort des pages quand on passe le livre en cours.
    */
   _syncBookmark(e) {
-    const wants = getBookStatuses(e.book).includes('en_cours')
+    const wants = false   // plus de marque-page sur les livres en cours (on retire ceux qui restent)
     if (wants && !e.mark) {
       const w = 0.095, L = 0.32, notch = 0.04
       const shape = new THREE.Shape()

@@ -59,7 +59,6 @@ function fitTitle(title, ws, H, hasArt) {
 const Book3D = memo(function Book3D({ book, L, side, z, delay, highlight, onOpen, onHover }) {
   const d = toDisplay(book)
   const [bg, ink] = spineColors(book)
-  const reading = (book.statuses || [book.status]).includes('en_cours')
   const wish = false
   const hasArt = !!d.cover && L.ws >= 24
   const { fs, lines } = fitTitle(d.title, L.ws, L.H, hasArt)
@@ -99,7 +98,6 @@ const Book3D = memo(function Book3D({ book, L, side, z, delay, highlight, onOpen
         <span className={'sp-t' + (lines === 2 ? ' two' : '')}>{d.title}</span>
         <span className="sp-mark" aria-hidden="true">{authorInitials(book)}</span>
       </button>
-      {reading && <span className="ribbon" aria-hidden="true" />}
     </div>
   )
 })
