@@ -20,7 +20,7 @@ function Cover({ book }) {
 }
 
 /**
- * Ranger le panier, un livre à la fois : le livre sort du panier, on touche l'étagère
+ * Ranger les livres un à la fois : le livre sort de la pile « à ranger », on touche l'étagère
  * (une est suggérée), le mur va jusqu'à elle et le livre s'y envole. Puis le suivant.
  */
 export default function GuidedPlacement({ items, shelves, books, onPlace, onPlaceRest, onClose }) {

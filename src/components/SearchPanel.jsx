@@ -35,8 +35,8 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
   const basketUp = !mobile || peek || sheet
 
   /**
-   * Glisser une couverture des résultats jusqu'au panier (souris : on tire ; doigt : appui long).
-   * Lâchée sur le panier, elle continue d'un seul tenant jusque dans le panier 3D.
+   * Glisser une couverture des résultats jusqu'à la pile « à ranger » (souris : on tire ; doigt :
+   * appui long). Lâchée dessus, elle s'y pose.
    */
   const startDrag = (e, b) => {
     if (e.button > 0 || !onBasketDrop) return
@@ -48,7 +48,7 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
     const touch = e.pointerType !== 'mouse'
     let ghost = null, over = false, timer = null, last = start
     const zone = () => document.querySelector('.search-basket')
-    const target = () => document.querySelector('.search-basket .basket3d, .search-basket .big-basket')
+    const target = () => document.querySelector('.search-basket .bb-target')
 
     const place = (x, y) => {
       ghost.style.transform = `translate(${x - fx * rc.width}px, ${y - fy * rc.height}px) rotate(-3deg) scale(${over ? 0.92 : 1.05})`
@@ -230,8 +230,8 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
                   {!here && (
                     <button
                       type="button" className={'result-plus' + (picked ? ' picked' : '')}
-                      aria-label={picked ? `${b.title} est dans le panier` : basketFull ? 'Le panier est plein' : `Mettre ${b.title} dans le panier`}
-                      title={!picked && basketFull ? 'Le panier est plein (20 livres)' : undefined}
+                      aria-label={picked ? `${b.title} est à ranger` : basketFull ? 'Déjà trop de livres à ranger' : `Garder ${b.title} pour le ranger`}
+                      title={!picked && basketFull ? 'Range d’abord tes livres (20 au plus)' : undefined}
                       disabled={picked || basketFull}
                       onClick={e => { setPeek(true); onBasket(b, e.currentTarget.parentElement.querySelector('.result-cover')) }}
                     >{picked ? '✓' : '+'}</button>
@@ -247,8 +247,8 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
         <aside className={'search-basket' + (mobile ? (basketUp ? ' up' : ' down') : '')}>
           {mobile && (basketCount > 0 || basketUp) && (
             <button type="button" className="sb-tab lbl" onClick={() => { setSheet(v => !(v || peek)); setPeek(false) }} aria-expanded={basketUp}>
-              <svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true"><path d="M1 4.5h12l-1.4 6.5H2.4L1 4.5zM4 4.5L6 1M10 4.5L8 1" stroke="currentColor" fill="none" strokeWidth="1.2" strokeLinejoin="round" /></svg>
-              Panier
+              <svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true"><path d="M1 11.5h12M2 11.5V8.5h10v3M3 8.5V5.5h8v3M4.5 5.5V3h5v2.5" stroke="currentColor" fill="none" strokeWidth="1.2" strokeLinejoin="round" /></svg>
+              À ranger
               <span className="sb-count" key={basketCount}>{basketCount}</span>
               <span className="sb-chev" aria-hidden="true">{basketUp ? '▾' : '▴'}</span>
             </button>

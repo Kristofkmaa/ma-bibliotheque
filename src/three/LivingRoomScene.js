@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { grainTexture } from './textures'
-import { weaveTexture, ropeTexture } from './BasketScene'
 import { spineColors } from '../lib/bookUtils'
 import { TvSeries, TV_W, TV_H } from './tvSeries'
 import { resolveSkin } from '../lib/skins'
@@ -31,12 +30,11 @@ const TV = { z: 0 }                         // mur de gauche, en face du canapé
 const SCR = { w: 3.0, h: 1.69, y: 1.68 }    // l'image projetée (16:9), presque tout le mur
 const PROJ = { x: 1.0, y: 2.62 }            // le vidéoprojecteur, suspendu au-dessus du canapé
 // les meubles en plus grand
-const BIG = { sofa: 1.4, fire: 1.3, table: 1.25, basket: 1.25, lamp: 1.25, plant: 1.35, pouf: 1.25, cabinet: 1, projector: 1.4 }
+const BIG = { sofa: 1.4, fire: 1.3, table: 1.25, lamp: 1.25, plant: 1.35, cabinet: 1, projector: 1.4 }
 const SOFA = { x: R - 0.78, z: 0.0 }        // contre le mur de droite, face à l'image
 const TABLE = { x: 0.1, z: 0.0 }            // entre le canapé et l'image
 const LAMP = { x: R - 0.45, z: 1.82 }       // au bout du canapé
 const PLANT = { x: R - 0.45, z: -R + 0.45 } // coin du fond, à droite
-const POUF = { x: 0.55, z: -1.45 }
 const WINDOW = { z: 0, y: 1.82, w: 0.8, h: 1.1 }   // mur de droite, derrière le canapé
 const SALON_ROWS = 4                        // la bibliothèque du salon montre au plus 4 étagères
 
@@ -44,7 +42,7 @@ const COL = {
   wallBack: '#ECE3D5', wallLeft: '#E4D9C8', base: '#F4EFE6', slab: '#CDBB9F',
   floor: '#C9A47A', plaster: '#F1EBE0', stone: '#DDD5C7', soot: '#2A2420',
   sofa: '#8FA697', walnut: '#7A5639', oak: '#D2BC97', brass: '#C9A45C',
-  cushion1: '#D9A93A', cushion2: '#C9614F', plaid: '#3F57B5', pouf: '#C2774E',
+  cushion1: '#D9A93A', cushion2: '#C9614F', plaid: '#3F57B5',
   leaf1: '#4F7B57', leaf2: '#6A9566', pot: '#C2774E', curtain: '#E2B85A',
 }
 
@@ -301,7 +299,6 @@ export class LivingRoomScene {
     this._buildLamp()
     this._buildPlant()
     this._buildWindow()
-    this._buildPouf()
     for (const [kind, k] of Object.entries(BIG)) {
       const it = this.items.get(kind)
       if (!it) continue
@@ -1128,7 +1125,6 @@ export class LivingRoomScene {
     const px = 40     // hauteur à l'écran (px) de la pastille
     for (const [kind, pos, on] of [
       ['tv', new THREE.Vector3(-R + 0.15, SCR.y + SCR.h / 2 + 0.12, TV.z), free && this.tvBubbleOn !== false && (this.wallOf('left').f ?? 1) > 0.5],
-      ['basket', new THREE.Vector3(TABLE.x + 0.17 * BIG.table, 0.98, TABLE.z + 0.04 * BIG.table), free && !!this.bubbles?.basket?.text],
     ]) {
       const b = this.bubbles?.[kind]
       if (!b) continue
@@ -1248,54 +1244,6 @@ export class LivingRoomScene {
     grp.add(st)
     this._register('table', grp, 'La table basse')
 
-    // le panier, posé dessus
-    const bk = new THREE.Group()
-    bk.position.set(TABLE.x + 0.17 * BIG.table, 0.43 * BIG.table, TABLE.z + 0.04 * BIG.table)
-    this.room.add(bk)
-    const pr = []
-    for (let k = 0; k <= 10; k++) { const t = k / 10; pr.push(new THREE.Vector2(0.13 + 0.05 * Math.pow(t, 0.85) + Math.sin(t * Math.PI) * 0.008, t * 0.15)) }
-    const weave = weaveTexture().clone(); weave.needsUpdate = true; weave.repeat.set(5, 1.5); this._track(weave)
-    const rope = ropeTexture().clone(); rope.needsUpdate = true; rope.repeat.set(12, 1); this._track(rope)
-    const outer = new THREE.Mesh(this._geo(new THREE.LatheGeometry(pr, 40)), this._mat('#ffffff', { map: weave, bumpMap: weave, bumpScale: 1.2, roughness: 0.85 }))
-    outer.castShadow = true
-    const innerM = new THREE.Mesh(this._geo(new THREE.LatheGeometry(pr.map(p => new THREE.Vector2(p.x * 0.95, p.y)), 40)), this._mat('#6f4a26', { map: weave, roughness: 0.95, side: THREE.BackSide }))
-    const bottom = new THREE.Mesh(this._geo(new THREE.CircleGeometry(0.125, 32)), this._mat('#5a3a1c', { roughness: 1 }))
-    bottom.rotation.x = -Math.PI / 2; bottom.position.y = 0.01
-    const rim = new THREE.Mesh(this._geo(new THREE.TorusGeometry(0.182, 0.014, 8, 48)), this._mat('#ffffff', { map: rope, roughness: 0.8 }))
-    rim.rotation.x = Math.PI / 2; rim.position.y = 0.15; rim.castShadow = true
-    const handleCurve = new THREE.EllipseCurve(0, 0, 0.17, 0.13, 0, Math.PI)
-    const hp = handleCurve.getPoints(20).map(p => new THREE.Vector3(p.x, p.y + 0.15, 0))
-    const hdl = new THREE.Mesh(this._geo(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(hp), 24, 0.012, 6)), this._mat('#ffffff', { map: rope, roughness: 0.8 }))
-    hdl.castShadow = true
-    bk.add(outer, innerM, bottom, rim, hdl)
-    this.basketBooks = new THREE.Group()
-    bk.add(this.basketBooks)
-    this._register('basket', bk, 'Ajouter des livres')
-    this.setBasket([])
-  }
-
-  /** Les livres du panier dépassent de la corbeille. */
-  setBasket(items) {
-    const count = items.length
-    this._setBubble('basket', count ? (count > 1 ? `${count} livres à ranger` : '1 livre à ranger') : '')
-    const sig = items.map(b => b.googleId).join(',')
-    if (sig === this.basketSig) return
-    this.basketSig = sig
-    const G = this.basketBooks
-    G.children.slice().forEach(c => G.remove(c))
-    const n = Math.min(items.length, 5)
-    for (let k = 0; k < n; k++) {
-      const b = items[k]
-      const color = spineColors({ google_id: b.googleId, title: b.title })[0]
-      const m = this._rbox(0.13, 0.19, 0.022, 0.004, this._mat(color, { roughness: 0.7 }))
-      const x = (k - (n - 1) / 2) * 0.05
-      m.position.set(x, 0.14, (k % 2 ? 0.02 : -0.02))
-      m.rotation.set(-0.12, (k - (n - 1) / 2) * 0.18, (k - (n - 1) / 2) * -0.14)
-      m.userData.kind = 'basket'
-      this.hitMeshes.push(m)
-      G.add(m)
-    }
-    this.shadowDirty = 2
   }
 
   // ---- Lampe -------------------------------------------------------------------------------
@@ -1457,24 +1405,6 @@ export class LivingRoomScene {
     }
     if (this.sky) this.sky.material.color.setScalar(1 - 0.75 * k)
     this.dimK = k
-  }
-
-  // ---- Pouf --------------------------------------------------------------------------------
-  _buildPouf() {
-    const grp = new THREE.Group()
-    grp.position.set(POUF.x, 0, POUF.z)
-    this.room.add(grp)
-    const pr = [new THREE.Vector2(0, 0)]
-    for (let k = 0; k <= 12; k++) {
-      const a = -Math.PI / 2 + (k / 12) * Math.PI
-      pr.push(new THREE.Vector2(0.25 + Math.cos(a) * 0.06, 0.18 + Math.sin(a) * 0.17))
-    }
-    pr.push(new THREE.Vector2(0, 0.36))
-    const knit = ropeTexture().clone(); knit.needsUpdate = true; knit.repeat.set(16, 3); this._track(knit)
-    const m = new THREE.Mesh(this._geo(new THREE.LatheGeometry(pr, 36)), this._mat(COL.pouf, { map: knit, bumpMap: knit, bumpScale: 0.8, roughness: 0.95 }))
-    m.castShadow = true; m.receiveShadow = true
-    grp.add(m)
-    this._register('pouf', grp, 'Le pouf')
   }
 
   // ---- Caméra ------------------------------------------------------------------------------
@@ -1879,8 +1809,6 @@ export class LivingRoomScene {
       case 'tv': case 'projector': case 'cabinet': if (!this.tvZoom) this.zoomTv(); break
       case 'tvbubble': this.zoomTv(); break
       case 'tvbubble-close': this.tvBubbleOn = false; this.cb.onTvBubbleClose?.(); break
-      case 'basketbubble': this.cb.onBasket?.(); break
-      case 'basket': this.cb.onBasket?.(); break
       default: this.cb.onTap?.(kind)
     }
   }

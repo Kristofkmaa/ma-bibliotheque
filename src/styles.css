@@ -2058,3 +2058,23 @@ body.immersive .scene { padding: 0 !important; }
   .sx-dots { bottom: 44px; }
   .sx-rows { margin-top: 0; }
 }
+
+/* Les livres à ranger : une petite pile de couvertures (plus de panier) */
+.pend { display: flex; flex-direction: column; align-items: center; gap: 10px; width: var(--w); cursor: pointer; padding: 10px 0; }
+.pend-stack { position: relative; width: calc(var(--w) * 0.5); aspect-ratio: 0.68; }
+.pend-cover {
+  position: absolute; inset: 0; border-radius: 2px; overflow: hidden;
+  box-shadow: 0 10px 22px -12px rgba(20, 16, 10, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transform: translate(calc((var(--i) - (var(--n) - 1) / 2) * 12%), calc((var(--n) - 1 - var(--i)) * -3%)) rotate(calc((var(--i) - (var(--n) - 1) / 2) * 4deg));
+  transition: transform 0.4s cubic-bezier(.3, 1.4, .4, 1);
+  animation: pendIn 0.5s cubic-bezier(.3, 1.4, .4, 1) both;
+}
+.pend-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes pendIn { from { opacity: 0; translate: 0 -20px; } }
+.pend:hover .pend-cover { transform: translate(calc((var(--i) - (var(--n) - 1) / 2) * 18%), calc((var(--n) - 1 - var(--i)) * -5%)) rotate(calc((var(--i) - (var(--n) - 1) / 2) * 6deg)); }
+.pend-ghost { position: absolute; inset: 0; border: 1.5px dashed var(--rule); border-radius: 3px; }
+.pend-count { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); text-align: center; }
+.pend.empty { cursor: default; }
+/* téléphone : la pile « à ranger » ne se montre que quand la feuille du bas est ouverte */
+.search-basket.down .pend { display: none; }
+@media (max-width: 767px) { .search-basket .pend { --w: 150px !important; padding: 4px 0; } }

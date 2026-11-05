@@ -19,8 +19,7 @@ function greeting(hour) {
 
 /**
  * L'accueil : le salon. La bibliothèque du salon mène au mur de livres ;
- * la télé passe nos séries (on la touche : on entre dedans) ; le panier sur la table basse
- * ouvre la recherche, ou, s'il reste des livres dedans, le rangement guidé.
+ * l'image projetée passe nos films et séries (on la touche : on entre dedans).
  */
 export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
   const rootRef = useRef(null)
@@ -38,7 +37,6 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   const [onAir, setOnAir] = useState(false)      // un générique passe
   // rideaux fermés : tout le salon passe en sombre (mode cinéma)
   const [cinema, setCinema] = useState(() => { try { return localStorage.getItem('levana.salon.rideaux') === '1' } catch { return false } })
-  const count = basketItems?.length || 0
   const mobile = useIsMobile()
   const cb = useRef({})
   const hour = useMemo(() => {
@@ -68,7 +66,6 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   cb.current.onOpenBook = onOpenBook
   cb.current.onAddBooks = onAddBooks
   cb.current.getLibrary = getLibrary
-  cb.current.count = count
   cb.current.bubbleOn = !bubbleOff
 
   useEffect(() => {
@@ -77,7 +74,6 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       onHover: setHover,
       onEnter: () => cb.current.go(),
       // panier : s'il reste des livres, on entre et on les range ; sinon on en cherche
-      onBasket: () => (cb.current.count > 0 ? cb.current.go('guide') : cb.current.onAddBooks?.()),
       onTvZoom: on => { setTv(on); if (on) { store.set(BUBBLE_KEY, 'off'); setBubbleOff(true) } },
       onTvInside: setInside,
       onCinema: setCinema,
@@ -131,7 +127,6 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
     s.setShelfSkin(firstSkin && { material: firstSkin.material, wall: firstSkin.wall })
     s.setBooks(ordered)
   }, [ordered, firstSkin?.material, firstSkin?.wall]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { sceneRef.current?.setBasket(basketItems || []) }, [basketItems])
 
   // la place des marges change avec la taille de l'écran
   useEffect(() => { sceneRef.current?.resize() }, [mobile])

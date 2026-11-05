@@ -7,7 +7,7 @@ import { effectiveShelves, placeBook, moveBook } from './lib/shelfOps'
 import { useBasket } from './hooks/useBasket'
 import { SearchBasket, BasketTray } from './components/Basket'
 import { useIsMobile } from './hooks/useIsMobile'
-import { flyTo, flyIntoBasket, flyToRect } from './lib/fly'
+import { flyTo, flyToRect } from './lib/fly'
 import { MAX_BASKET } from './lib/basketSize'
 import { preloadCover } from './lib/covers'
 import { isDemoMode } from './lib/supabase'
@@ -74,10 +74,8 @@ function Library({ user, onSignOut }) {
   const [salon, setSalon] = useState(() => (HAS_WEBGL ? 'first' : null))
   const basket = useBasket(user.id)
   const mobile = useIsMobile()
-  const [bump, setBump] = useState(0)
   const [flying, setFlying] = useState(() => new Set())
   const bookcaseApi = useRef(null)
-  const searchBasketApi = useRef(null)
   const shelvesRef = useRef(shelves); shelvesRef.current = shelves
   const booksRef = useRef(books); booksRef.current = books
 
@@ -124,24 +122,9 @@ function Library({ user, onSignOut }) {
     const color = spineColors({ google_id: book.googleId, title: book.title })[0]
     const done = () => setFlying(f => { const n = new Set(f); n.delete(book.googleId); return n })
     setFlying(f => new Set(f).add(book.googleId))
-    const api = searchBasketApi.current
-    if (api) {
-      // envol continu : la couverture devient le livre 3D au-dessus du panier, puis il tombe dedans
-      api.expect(book.googleId)
-      basket.add(book)
-      flyIntoBasket({
-        from, src: srcUrl, color,
-        target: () => api.startRect(book.googleId),
-        ready: () => api.ready(book.googleId),
-        onLand: () => api.reveal(book.googleId),
-        onDone: done,
-      })
-    } else {
-      // panier dessiné (sans 3D)
-      flyTo(from, srcUrl, document.querySelector('.search-basket .bb-target'), () => {
-        basket.add(book); done(); setBump(n => n + 1)
-      }, color)
-    }
+    // la couverture s'envole jusqu'à la pile des livres à ranger
+    const target = document.querySelector('.search-basket.up .bb-target, .search-basket:not(.down) .bb-target') || document.querySelector('.search-basket .sb-tab')
+    flyTo(from, srcUrl, target, () => { basket.add(book); done() }, color)
   }, [basket, basketFull])
   const inBasket = useCallback(id => basket.has(id) || flying.has(id), [basket, flying])
 
@@ -330,10 +313,10 @@ function Library({ user, onSignOut }) {
             </button>
             <button type="button" className={'tab' + (guide ? ' on' : '')} onClick={() => { setFindOpen(false); if (basket.items.length) setGuide(g => !g); else openSearch() }}>
               <span className="tab-ico">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10h17l-1.8 9.5H5.3L3.5 10zM8 10l3-5.5M16 10l-3-5.5M8.5 13.5v3M12 13.5v3M15.5 13.5v3" /></svg>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5h16M5.5 19.5v-4h13v4M6.5 15.5v-4h11v4M8 11.5V8h8v3.5M12 4v4" /></svg>
                 {basket.items.length > 0 && <span className="tab-badge" key={basket.items.length}>{basket.items.length}</span>}
               </span>
-              <span>Panier</span>
+              <span>À ranger</span>
             </button>
           </nav>
         </>
@@ -355,7 +338,7 @@ function Library({ user, onSignOut }) {
         <>
           <SearchPanel open={searchOpen} onClosed={onSearchClosed} onPick={onPick} isInLibrary={isInLibrary} onScan={() => setScanner(true)} inBasket={inBasket} onBasket={addToBasket} basketFull={basketFull} basketCount={basket.items.length} basketBusy={flying.size > 0}
             onBasketDrop={(b, rect, src) => addToBasket(b, null, rect, src)}
-            basketSlot={<SearchBasket items={basket.items} bump={bump} mobile={mobile} apiRef={searchBasketApi} onBookClick={b => onPick(b, null)} onRemove={basket.remove} onDone={() => { closeSearch(); if (manual && effShelves.some(s => !s.pseudo)) openGuide() }} />} />
+            basketSlot={<SearchBasket items={basket.items} mobile={mobile} onBookClick={b => onPick(b, null)} onDone={() => { closeSearch(); if (manual && effShelves.some(s => !s.pseudo)) openGuide() }} />} />
           <button type="button" className="lbl box search-close-btn" style={{ zIndex: 59, position: 'fixed' }} onClick={closeSearch}>Fermer</button>
         </>
       )}
