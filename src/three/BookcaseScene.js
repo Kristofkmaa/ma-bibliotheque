@@ -423,9 +423,20 @@ export class BookcaseScene {
       const part = { r }
       const wood = this._woodMat('#D8CCB0'), wall = new THREE.MeshStandardMaterial({ color: '#DAD5CA', roughness: 0.95 })
       part.wood = wood; part.wall = wall
-      const plank = new THREE.Mesh(new THREE.BoxGeometry(CW + 2 * ST, PT, SD + 0.04), wood)
-      plank.position.set(0, y0 - PT / 2, 0.02)
+      // chaque bloc a sa planche du bas et sa planche du haut, dans son propre bois
+      // (la planche entre deux blocs est faite de deux moitiés, une par bloc)
+      const last = r === rows - 1
+      const bt = last ? PT : PT / 2
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(CW + 2 * ST, bt, SD + 0.04), wood)
+      plank.position.set(0, y0 - bt / 2, 0.02)
       plank.receiveShadow = plank.castShadow = true
+      let topBoard = null
+      if (r > 0) {
+        topBoard = new THREE.Mesh(new THREE.BoxGeometry(CW + 2 * ST, PT / 2, SD + 0.04), wood)
+        topBoard.position.set(0, y0 + RH + PT / 4, 0.02)
+        topBoard.receiveShadow = topBoard.castShadow = true
+        this.caseGroup.add(topBoard)
+      }
       const back = new THREE.Mesh(new THREE.PlaneGeometry(CW, RH + PT), wall)
       back.position.set(0, y0 + RH / 2 - PT / 2 + PT, -SD / 2)
       back.receiveShadow = true
@@ -442,7 +453,7 @@ export class BookcaseScene {
         seam.position.set(0, y0 + RH + PT / 2, 0.02)      // limite entre ce module et celui du dessus
         this.caseGroup.add(seam)
       }
-      part.plank = plank
+      part.plank = plank; part.top = topBoard
       const doorMatL = new THREE.MeshStandardMaterial({ color: '#E2D6BC', map: doorTexture('panneau'), roughness: 0.7, clippingPlanes: this.doorClips, clipShadows: true })
       const doorMatR = doorMatL.clone()
       const half = CW / 2 + 0.01
@@ -1165,6 +1176,7 @@ export class BookcaseScene {
         part.doorR.position.x = -CW / 2 + part.right.v + CW / 2 + ST / 2
         const b = Math.max(0, Math.min(1, part.born.v))
         part.plank.scale.x = Math.max(0.001, b)
+        if (part.top) part.top.scale.x = Math.max(0.001, b)
         if (!(part.left.done && part.right.done && part.born.done)) moving = true
         if (part.targetWood) {
           const f = 1 - Math.exp(-dt * 7)

@@ -3,6 +3,13 @@ import { LivingRoomScene, dayMode } from '../three/LivingRoomScene'
 import { TUTO_STEPS } from '../three/tvTutorial'
 
 const STEPS = TUTO_STEPS()
+
+// la télé : le tuto, ou mes livres en grand (par défaut une fois le tuto vu)
+const store = {
+  get: k => { try { return localStorage.getItem(k) } catch { return null } },
+  set: (k, v) => { try { localStorage.setItem(k, v) } catch { /* ignore */ } },
+}
+const TV_KEY = 'levana.tv.mode', SEEN_KEY = 'levana.tuto.vu', BUBBLE_KEY = 'levana.tuto.bulle'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`
@@ -27,6 +34,10 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
   const [going, setGoing] = useState(from === 'back')
   const [tv, setTv] = useState(false)           // tuto en grand
   const [slide, setSlide] = useState(0)
+  const [tvInfo, setTvInfo] = useState(null)    // { mode, i, count, book }
+  const [tvMode, setTvModeState] = useState(() => store.get(TV_KEY) || (store.get(SEEN_KEY) ? 'fav' : 'tuto'))
+  const [bubbleOff, setBubbleOff] = useState(() => store.get(BUBBLE_KEY) === 'off')
+  const setTvMode = m => { setTvModeState(m); store.set(TV_KEY, m) }
   const tvBubble = useRef(null)
   const basketBubble = useRef(null)
   const tvOverlay = useRef(null)
@@ -61,6 +72,8 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
   cb.current.onAddBooks = onAddBooks
   cb.current.getLibrary = getLibrary
   cb.current.count = count
+  cb.current.tvMode = tvMode
+  cb.current.bubbleOn = !bubbleOff && tvMode === 'tuto'
 
   useEffect(() => {
     const host = hostRef.current
@@ -71,6 +84,10 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
       onBasket: () => (cb.current.count > 0 ? cb.current.go('guide') : cb.current.onAddBooks?.()),
       onTvZoom: setTv,
       onTutSlide: setSlide,
+      onTvSlide: setTvInfo,
+      tvMode: () => cb.current.tvMode,
+      tvBubble: () => cb.current.bubbleOn,
+      onTvBubbleClose: () => { store.set(BUBBLE_KEY, 'off'); setBubbleOff(true) },
       bubble: kind => (kind === 'tv' ? tvBubble.current : basketBubble.current),
       tvOverlay: () => tvOverlay.current,
       getLibrary: () => cb.current.getLibrary?.(),
@@ -94,6 +111,22 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
     return () => { clearTimeout(t); s.dispose(); sceneRef.current = null }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const wasTv = useRef(false)
+  useEffect(() => {
+    if (tv) { wasTv.current = true; return }
+    if (!wasTv.current) return
+    wasTv.current = false
+    if (tvMode === 'tuto' && !store.get(SEEN_KEY)) {
+      store.set(SEEN_KEY, '1')
+      if (!store.get(TV_KEY)) setTvModeState('fav')
+    }
+  }, [tv]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    sceneRef.current?.setTvMode(tvMode)
+    sceneRef.current?.setTvBubble(!bubbleOff && tvMode === 'tuto')
+  }, [tvMode, bubbleOff])
+
   // Échap : on quitte le tuto
   useEffect(() => {
     if (!tv) return
@@ -115,9 +148,14 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
     s.setShelfSkin(firstSkin && { material: firstSkin.material, wall: firstSkin.wall })
     s.setBooks(ordered)
   }, [ordered, firstSkin?.material, firstSkin?.wall]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    sceneRef.current?.setTvBooks(reading.length ? reading.slice(0, 6) : recent, reading.length ? 'en_cours' : 'recent')
-  }, [reading, recent])
+  const tvBooks = useMemo(() => {
+    const withCover = books.filter(b => b.cover_url)
+    const loved = withCover.filter(b => (b.rating || 0) >= 4).sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    if (loved.length) return { list: loved.slice(0, 12), label: 'Mes coups de cœur' }
+    const rec = [...withCover].sort((a, b) => (b.added_at || '').localeCompare(a.added_at || '')).slice(0, 12)
+    return { list: rec, label: 'Ma bibliothèque' }
+  }, [books])
+  useEffect(() => { sceneRef.current?.setTvBooks(tvBooks.list, tvBooks.label) }, [tvBooks])
   useEffect(() => { sceneRef.current?.setBasket(basketItems || []) }, [basketItems])
 
   // la place des marges change avec la taille de l'écran
@@ -133,16 +171,27 @@ export default function LivingRoom({ books, shelves, basketItems, from, onEntere
       <canvas className="tv-overlay" ref={tvOverlay} style={{ display: 'none' }} aria-hidden="true" />
 
       {/* les bulles (tuto, livres à ranger) sont dessinées dans la scène 3D */}
-      {tv && (
+      {tv && (tvMode === 'fav' ? (
+        tvInfo?.book && (
+          <div className="tv-caption" key={'b' + tvInfo.i}>
+            <p className="tv-cap-title">{tvInfo.book.title}</p>
+            <p className="tv-cap-text">{(tvInfo.book.authors || []).join(', ')}</p>
+          </div>
+        )
+      ) : (
         <div className="tv-caption" key={slide}>
           <p className="tv-cap-title">{STEPS[slide]?.title}</p>
           <p className="tv-cap-text">{STEPS[slide]?.text}</p>
         </div>
-      )}
+      ))}
       {tv && (
         <div className="tv-controls">
-          <button type="button" className="tv-arrow" aria-label="Étape précédente" onClick={() => sceneRef.current?.tutPrev()}>‹</button>
-          <span className="lbl tv-step">Tuto · {slide + 1} / {STEPS.length}</span>
+          <div className="tv-modes" role="tablist" aria-label="Ce que passe la télé">
+            <button type="button" role="tab" aria-selected={tvMode === 'tuto'} className={'lbl tv-mode-btn' + (tvMode === 'tuto' ? ' on' : '')} onClick={() => setTvMode('tuto')}>Le tuto</button>
+            <button type="button" role="tab" aria-selected={tvMode === 'fav'} className={'lbl tv-mode-btn' + (tvMode === 'fav' ? ' on' : '')} onClick={() => setTvMode('fav')}>Mes livres</button>
+          </div>
+          <button type="button" className="tv-arrow" aria-label="Précédent" onClick={() => sceneRef.current?.tutPrev()}>‹</button>
+          <span className="lbl tv-step">{tvMode === 'fav' ? `Livre · ${(tvInfo?.i ?? 0) + 1} / ${tvInfo?.count || 0}` : `Tuto · ${slide + 1} / ${STEPS.length}`}</span>
           <button type="button" className="tv-arrow" aria-label="Étape suivante" onClick={() => sceneRef.current?.tutNext()}>›</button>
           <button type="button" className="lbl box tv-back" onClick={() => sceneRef.current?.unzoomTv()}>Revenir au salon</button>
         </div>

@@ -1423,3 +1423,10 @@ body.immersive .scene { padding: 0 !important; }
   animation: freeHint 3.2s ease both;
 }
 @keyframes freeHint { 0% { opacity: 0; transform: translate(-50%, 10px); } 12%, 75% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+
+/* Télé : le tuto ou mes livres */
+.tv-modes { flex-basis: 100%; display: flex; justify-content: center; margin-bottom: 4px; }
+.tv-mode-btn { height: 32px; padding: 0 14px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); }
+.tv-mode-btn + .tv-mode-btn { border-left: none; }
+.tv-mode-btn.on { background: var(--cobalt); border-color: var(--cobalt); color: #fff; }
+@media (max-width: 767px) { .tv-caption { bottom: calc(196px + env(safe-area-inset-bottom)); } }
