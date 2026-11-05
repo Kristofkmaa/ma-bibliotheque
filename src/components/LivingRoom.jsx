@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { LivingRoomScene, dayMode } from '../three/LivingRoomScene'
 import { useIsMobile } from '../hooks/useIsMobile'
 import SeriesTV from './SeriesTV'
+import TvBackdrop from './TvBackdrop'
 
 const store = {
   get: k => { try { return localStorage.getItem(k) } catch { return null } },
@@ -32,6 +33,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   const [tv, setTv] = useState(false)           // zoom sur la télé (en cours ou fini)
   const [inside, setInside] = useState(false)   // zoom fini : on est dans la télé
   const [bubbleOff, setBubbleOff] = useState(() => store.get(BUBBLE_KEY) === 'off')
+  const tvVideo = useRef(null)
   const count = basketItems?.length || 0
   const mobile = useIsMobile()
   const cb = useRef({})
@@ -74,6 +76,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       onBasket: () => (cb.current.count > 0 ? cb.current.go('guide') : cb.current.onAddBooks?.()),
       onTvZoom: on => { setTv(on); if (on) { store.set(BUBBLE_KEY, 'off'); setBubbleOff(true) } },
       onTvInside: setInside,
+      tvVideo: () => tvVideo.current,
       tvBubble: () => cb.current.bubbleOn,
       onTvBubbleClose: () => { store.set(BUBBLE_KEY, 'off'); setBubbleOff(true) },
       getLibrary: () => cb.current.getLibrary?.(),
@@ -135,6 +138,10 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   return (
     <div className={`salon mood-${mode}` + (going || tv ? ' going' : '') + (tv ? ' tv-mode' : '')} ref={rootRef}>
       <div className="salon-stage" ref={hostRef} />
+      {/* les génériques, en fond sur la télé (posés sur l'écran 3D par la scène) */}
+      <div className="tv-video" ref={tvVideo} aria-hidden="true">
+        {!tv && !going && tvSeries.length > 0 && <TvBackdrop series={tvSeries} />}
+      </div>
 
       {/* on a zoomé à bloc sur la télé : nos séries, il ne reste que le contour de l'écran */}
       {inside && (

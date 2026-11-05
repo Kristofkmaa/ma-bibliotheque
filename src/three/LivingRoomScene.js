@@ -817,6 +817,36 @@ export class LivingRoomScene {
     this.cb.onTvZoom?.(false)
   }
 
+  /**
+   * Le lecteur des génériques (un élément HTML de 640 × 360) posé exactement sur l'écran de la
+   * télé : on projette les quatre coins de l'écran et on déforme l'élément pour qu'il les
+   * rejoigne (perspective comprise). Caché quand l'écran est de dos, que son mur est baissé,
+   * ou pendant un trajet de caméra.
+   */
+  _placeTvVideo() {
+    const el = this.cb.tvVideo?.()
+    if (!el) return
+    const hide = () => { if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden' }
+    if (this.fly || this.tvZoom || (this.wallOf('left').f ?? 1) < 0.97) return hide()
+    const scr = this.tvScreen
+    scr.updateWorldMatrix(true, false)
+    const sp = scr.getWorldPosition(new THREE.Vector3())
+    const nrm = new THREE.Vector3(0, 0, 1).transformDirection(scr.matrixWorld)
+    if (nrm.dot(this.camera.position.clone().sub(sp).normalize()) < 0.12) return hide()
+    const S = this.renderer.domElement.getBoundingClientRect()
+    const pts = []
+    for (const [x, y] of [[-0.505, 0.285], [0.505, 0.285], [0.505, -0.285], [-0.505, -0.285]]) {
+      const v = scr.localToWorld(new THREE.Vector3(x, y, 0.002)).project(this.camera)
+      if (v.z > 1) return hide()
+      pts.push(S.left + ((v.x + 1) / 2) * S.width, S.top + ((1 - v.y) / 2) * S.height)
+    }
+    const m = quadMatrix(640, 360, pts)
+    if (!m) return hide()
+    const tf = `matrix3d(${m})`
+    if (el.style.transform !== tf) el.style.transform = tf
+    if (el.style.visibility !== 'visible') el.style.visibility = 'visible'
+  }
+
   /** Zoom terminé : on est dans la télé (le module des séries la recouvre). */
   get inTv() { return !!this.tvZoom && this.tvZoom.dir > 0 && this.tvZoom.k >= 1 }
 
@@ -1836,6 +1866,7 @@ export class LivingRoomScene {
       s.quaternion.copy(this.camera.quaternion)
     }
     // télé : nos séries défilent (plus fluide pendant qu'on s'en approche)
+    this._placeTvVideo()
     if (this.inTv) return           // on est dans la télé : le module des séries recouvre tout
     if (this.series.update(dt)) this._emitSlide()
     this.tvAcc = (this.tvAcc || 0) + dt
@@ -1914,4 +1945,34 @@ class RoundedPlane extends THREE.ShapeGeometry {
     const p = this.attributes.position, uv = this.attributes.uv
     for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getX(i) + w / 2) / w, (p.getY(i) + h / 2) / h)
   }
+}
+
+// ---- Un rectangle w × h déformé pour rejoindre quatre points (matrix3d CSS) -----------------
+function adj(m) {
+  return [
+    m[4] * m[8] - m[5] * m[7], m[2] * m[7] - m[1] * m[8], m[1] * m[5] - m[2] * m[4],
+    m[5] * m[6] - m[3] * m[8], m[0] * m[8] - m[2] * m[6], m[2] * m[3] - m[0] * m[5],
+    m[3] * m[7] - m[4] * m[6], m[1] * m[6] - m[0] * m[7], m[0] * m[4] - m[1] * m[3],
+  ]
+}
+function mulMM(a, b) {
+  const c = new Array(9)
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+    let s = 0
+    for (let k = 0; k < 3; k++) s += a[3 * i + k] * b[3 * k + j]
+    c[3 * i + j] = s
+  }
+  return c
+}
+const mulMV = (m, v) => [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]]
+function basis(p) {
+  const m = [p[0], p[2], p[4], p[1], p[3], p[5], 1, 1, 1]
+  const v = mulMV(adj(m), [p[6], p[7], 1])
+  return mulMM(m, [v[0], 0, 0, 0, v[1], 0, 0, 0, v[2]])
+}
+function quadMatrix(w, h, dst) {
+  const t = mulMM(basis(dst), adj(basis([0, 0, w, 0, w, h, 0, h])))
+  if (!t[8] || !t.every(Number.isFinite)) return null
+  for (let i = 0; i < 9; i++) t[i] /= t[8]
+  return [t[0], t[3], 0, t[6], t[1], t[4], 0, t[7], 0, 0, 1, 0, t[2], t[5], 0, t[8]].join(',')
 }
