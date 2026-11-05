@@ -2188,3 +2188,12 @@ body.immersive .scene { padding: 0 !important; }
 }
 .stv-player-frame { position: relative; }
 .stv-tap { position: absolute; left: 50%; bottom: 18px; translate: -50% 0; padding: 8px 14px; border-radius: 16px; background: rgba(0, 0, 0, 0.7); color: #F3EFE8; font-family: var(--sans); font-size: 12px; font-weight: 600; pointer-events: none; animation: fadeUp 0.4s both; white-space: nowrap; }
+/* sur l'image projetée : ce qui passe, au début de chaque générique */
+.tv-now {
+  position: absolute; left: 7%; bottom: 10%; z-index: 2; display: flex; flex-direction: column; gap: 4px; max-width: 70%;
+  padding: 10px 16px 12px; border-left: 4px solid #E8B04B; background: linear-gradient(90deg, rgba(10, 9, 8, 0.78), rgba(10, 9, 8, 0));
+  opacity: 0; transform: translateX(-14px); transition: opacity 0.6s ease, transform 0.6s cubic-bezier(.2, .8, .2, 1); pointer-events: none;
+}
+.tv-now.on { opacity: 1; transform: none; }
+.tv-now-kind { font-family: var(--sans); font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #E8B04B; }
+.tv-now-name { font-family: var(--sans); font-size: 34px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; color: #fff; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6); }

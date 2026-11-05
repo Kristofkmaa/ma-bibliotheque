@@ -59,11 +59,14 @@ export class TvSeries {
   }
   update(dt) {
     this.t += dt
+    if (this.hold) return false
     if (this.t > SLIDE && this.list.length > 1) { this.go(this.i + 1); return true }
     return false
   }
   go(i) { if (!this.list.length) return; this.i = (i + this.list.length) % this.list.length; this.t = 0 }
   next() { this.go(this.i + 1) }
+  /** Montrer une œuvre précise (celle dont le générique passe). */
+  showId(id) { const k = this.list.findIndex(x => x.id === id); if (k >= 0 && k !== this.i) this.go(k); this.hold = true }
   prev() { this.go(this.i - 1) }
 
   draw(g, w = TV_W, h = TV_H) {

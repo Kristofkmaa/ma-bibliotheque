@@ -866,6 +866,8 @@ export class LivingRoomScene {
     this._emitSlide()
   }
   setTvBubble(on) { this.tvBubbleOn = on }
+  /** L'affiche projetée montre l'œuvre dont le générique passe. */
+  showWork(id) { this.series.showId(id); this._drawTv() }
 
   /** L'intérieur de la vitrine : un boîtier par film ou série, dans l'ordre d'ajout. */
   _drawCabinet() {

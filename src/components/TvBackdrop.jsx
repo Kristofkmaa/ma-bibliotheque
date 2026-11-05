@@ -7,7 +7,7 @@ import { seriesVideos } from '../lib/tmdb'
  * exactement sur l'écran de la télé 3D (la scène le place à chaque image) ; il n'apparaît que
  * quand la vidéo tourne vraiment, sinon on voit l'écran des cassettes en dessous.
  */
-export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying }) {
+export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying, onNow }) {
   const [queue, setQueue] = useState([])        // [{ key, name }]
   const [i, setI] = useState(0)
   const [shown, setShown] = useState(false)
@@ -30,18 +30,27 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying 
   }
   useEffect(applySound, [sound])
   useEffect(() => { onPlaying?.(shown) }, [shown]) // eslint-disable-line react-hooks/exhaustive-deps
+  // ce qui passe : le salon le sait (l'affiche projetée suit), et un bandeau le dit sur l'image
+  const [caption, setCaption] = useState(false)
+  useEffect(() => {
+    if (!shown) return
+    setCaption(true)
+    const t = setTimeout(() => setCaption(false), 6000)
+    return () => clearTimeout(t)
+  }, [shown, i])
 
   // la liste des vidéos, dans l'ordre de nos séries préférées
   const sig = series.map(s => (s.media || 'tv') + s.tmdb_id).join(',')
   useEffect(() => {
     let live = true
-    Promise.all(series.slice(0, 20).map(s => seriesVideos(s.tmdb_id, s.media).then(v => (v[0] ? { key: v[0].key, name: s.name } : null))))
+    Promise.all(series.slice(0, 20).map(s => seriesVideos(s.tmdb_id, s.media).then(v => (v[0] ? { key: v[0].key, name: s.name, id: s.id, movie: s.media === 'movie', opening: v[0].type === 'Opening Credits' } : null))))
       .then(list => { if (live) { setQueue(list.filter(Boolean)); setI(0) } })
     return () => { live = false }
   }, [sig]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const v = queue.length ? queue[i % queue.length] : null
   if (v && !firstKey.current) firstKey.current = v.key
+  useEffect(() => { if (v) onNow?.(v.id) }, [v?.id, i]) // eslint-disable-line react-hooks/exhaustive-deps
   const next = () => { playing.current = false; setShown(false); setI(k => k + 1) }
   const command = (func, args = []) => frame.current?.contentWindow?.postMessage(JSON.stringify({ id: 'tvbg', channel: 'widget', event: 'command', func, args }), '*')
   // la vidéo change : le même lecteur la charge
@@ -90,7 +99,13 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying 
   if (!v || fails.current >= 3) return null
   const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(firstKey.current)}?autoplay=1&mute=1&playsinline=1&controls=0&disablekb=1&fs=0&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`
   return (
-    <iframe ref={frame} src={src} title={`Générique de ${v.name}`} onLoad={listen} tabIndex={-1}
-      className={shown ? 'on' : ''} allow="autoplay; encrypted-media" referrerPolicy="strict-origin-when-cross-origin" />
+    <>
+      <iframe ref={frame} src={src} title={`Générique de ${v.name}`} onLoad={listen} tabIndex={-1}
+        className={shown ? 'on' : ''} allow="autoplay; encrypted-media" referrerPolicy="strict-origin-when-cross-origin" />
+      <div className={'tv-now' + (shown && caption ? ' on' : '')} key={'c' + i}>
+        <span className="tv-now-kind">{v.movie ? 'Film' : 'Série'} · {v.opening ? 'Générique' : 'Bande-annonce'}</span>
+        <span className="tv-now-name">{v.name}</span>
+      </div>
+    </>
   )
 }
