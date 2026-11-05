@@ -1806,7 +1806,7 @@ export class LivingRoomScene {
       return
     }
     this._libraryToTop()
-    this.fly = { dir: 'in', start, t: 0, dur: 1.7, onDone }
+    this.fly = { dir: 'in', start, t: 0, dur: 1.7, onDone, fade0: this.projFade || 0 }
     this._setHover(null)
   }
 
@@ -1846,7 +1846,8 @@ export class LivingRoomScene {
     f.t += dt / f.dur
     const k = Math.min(1, f.t)
     const p = f.dir === 'in' ? k : 1 - k          // 0 : salon ; 1 : bibliothèque
-    this._fadeProjector(clamp(p * 2.2, 0, 1))    // le projecteur s'efface dès le début du trajet
+    // le projecteur s'efface dès le début du trajet (en repartant d'où il en était, depuis le canapé)
+    this._fadeProjector(f.dir === 'in' ? Math.max(f.fade0 || 0, clamp(p * 2.2, 0, 1)) : clamp(p * 2.2, 0, 1))
     const a = f.start.fr ? f.start : this._salonPose(f.start.az, f.start.el, f.start.dist, f.start.target)
     const b = f.libPose || this._libraryPose()
     this._applyPose(a, b, ease(p))
@@ -2063,6 +2064,9 @@ export class LivingRoomScene {
       for (let i = 0; i < sub; i++) this.seat.k.step(h)
       if (this.seat.turn) {
         const st = this.seat.turn
+        // on part vers la bibliothèque : le projecteur commence déjà à s'effacer
+        st.fade = Math.min(0.5, (st.fade || 0) + dt * 1.2)
+        this._fadeProjector(st.fade)
         this.seat.yaw += (st.to - this.seat.yaw) * (1 - Math.exp(-dt * 7))
         this.seat.pitch += (0.05 - this.seat.pitch) * (1 - Math.exp(-dt * 7))
         if (Math.abs(st.to - this.seat.yaw) < 0.02) { this.seat.turn = null; st.then() }
