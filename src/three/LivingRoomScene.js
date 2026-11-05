@@ -26,12 +26,12 @@ const TARGET0 = new THREE.Vector3(0, 0.95, 0)
 
 // emplacements (repère de la pièce)
 const BOOKCASE = { x: -1.05, z: -R + 0.2, w: 1.62, h: 2.18, d: 0.38 }   // mur du fond, à gauche (face à la caméra)
-const FIRE = { x: 1.2, w: 1.3, d: 0.3 }                                // mur du fond, à droite (loin des livres)
+const FIRE = { x: -0.95, w: 1.3, d: 0.3, h: 1.38 }                     // mur de devant, à gauche (loin des livres et du canapé)
 const TV = { z: 0.0 }                       // mur de gauche, en face du canapé
 const SOFA = { x: 1.34, z: 0.0 }            // face à la télé
 const TABLE = { x: -0.15, z: 0.0 }          // entre le canapé et la télé
 const LAMP = { x: 1.8, z: 1.38 }            // au bout du canapé
-const PLANT = { x: -1.6, z: 1.62 }          // coin, sous la fenêtre
+const PLANT = { x: 1.62, z: -1.62 }         // coin du fond, à droite
 const WINDOW = { z: 1.3, y: 1.55, w: 0.66, h: 1.0 }
 const SALON_ROWS = 4                        // la bibliothèque du salon montre au plus 4 étagères
 const TV_FOV = 46                           // zoom sur la télé : comme assis dans le canapé
@@ -47,6 +47,7 @@ const COL = {
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
 const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t) }
+const shortAngle = (a, b) => { const d = (((b - a) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; return d }
 const isUnder = (o, root) => { for (let p = o; p; p = p.parent) if (p === root) return true; return false }
 
 class Spring {
@@ -381,8 +382,8 @@ export class LivingRoomScene {
   _buildShell() {
     const g = this.room
     // socle (le plancher a une épaisseur : effet maquette)
-    const slab = this._rbox(2 * R + T, FT, 2 * R + T, 0.03, this._woodMat(COL.slab))
-    slab.position.set(-T / 2, -FT / 2, -T / 2)
+    const slab = this._rbox(2 * R + 2 * T, FT, 2 * R + 2 * T, 0.03, this._woodMat(COL.slab))
+    slab.position.set(0, -FT / 2, 0)
     slab.castShadow = false
     g.add(slab)
     const ptex = parquetTexture()
@@ -398,35 +399,70 @@ export class LivingRoomScene {
     const cs = contactShadowTexture(); this.disposables.push(cs)
     const shadow = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(7.6, 7.6)), new THREE.MeshBasicMaterial({ map: cs, transparent: true, depthWrite: false }))
     shadow.rotation.x = -Math.PI / 2
-    shadow.position.set(0.2, -FT - 0.05, 0.3)
+    shadow.position.set(0, -FT - 0.05, 0)
     g.add(shadow)
 
-    // mur du fond
-    const back = this._rbox(2 * R + T, H, T, 0.02, this._mat(COL.wallBack, { roughness: 0.95 }))
-    back.position.set(-T / 2, H / 2, -R - T / 2)
-    back.castShadow = false
-    g.add(back)
-    // mur de gauche, avec la fenêtre
-    const sh = new THREE.Shape()
-    sh.moveTo(-R, 0); sh.lineTo(R + T, 0); sh.lineTo(R + T, H); sh.lineTo(-R, H); sh.closePath()
-    const u0 = -WINDOW.z - WINDOW.w / 2, u1 = -WINDOW.z + WINDOW.w / 2
-    const v0 = WINDOW.y - WINDOW.h / 2, v1 = WINDOW.y + WINDOW.h / 2
-    const hole = new THREE.Path()
-    hole.moveTo(u0, v0); hole.lineTo(u0, v1); hole.lineTo(u1, v1); hole.lineTo(u1, v0); hole.closePath()
-    sh.holes.push(hole)
-    const lw = new THREE.Mesh(this._geo(new THREE.ExtrudeGeometry(sh, { depth: T, bevelEnabled: false })), this._mat(COL.wallLeft, { roughness: 0.95 }))
-    lw.rotation.y = Math.PI / 2
-    lw.position.set(-R - T, 0, 0)
-    lw.receiveShadow = true
-    g.add(lw)
-
-    // plinthes et chant des murs
+    // quatre murs : celui qui se trouve entre la caméra et la pièce s'abaisse (on tourne à 360°)
+    this.walls = []
     const baseMat = this._mat(COL.base, { roughness: 0.7 })
-    const pb = this._rbox(2 * R, 0.09, 0.025, 0.006, baseMat); pb.position.set(0, 0.045, -R + 0.0125); pb.castShadow = false; g.add(pb)
-    const pl = this._rbox(0.025, 0.09, 2 * R, 0.006, baseMat); pl.position.set(-R + 0.0125, 0.045, 0); pl.castShadow = false; g.add(pl)
     const capMat = this._mat('#F7F2EA', { roughness: 0.8 })
-    const c1 = this._rbox(2 * R + T + 0.02, 0.05, T + 0.04, 0.015, capMat); c1.position.set(-T / 2, H + 0.02, -R - T / 2); g.add(c1)
-    const c2 = this._rbox(T + 0.04, 0.05, 2 * R + 0.02, 0.015, capMat); c2.position.set(-R - T / 2, H + 0.02, 0); g.add(c2)
+    const wall = (name, n, build) => {
+      const grp = new THREE.Group()
+      g.add(grp)
+      const w = { name, grp, n, cut: new Spring(1, 70, 1), decor: [] }
+      build(grp, w)
+      this.walls.push(w)
+      return w
+    }
+    const L = 2 * R + 2 * T
+    wall('back', new THREE.Vector3(0, 0, -1), grp => {
+      const m = this._rbox(L, H, T, 0.02, this._mat(COL.wallBack, { roughness: 0.95 })); m.position.set(0, H / 2, -R - T / 2); m.castShadow = false; m.receiveShadow = true
+      const b = this._rbox(2 * R, 0.09, 0.025, 0.006, baseMat); b.position.set(0, 0.045, -R + 0.0125); b.castShadow = false
+      const c = this._rbox(L + 0.02, 0.05, T + 0.04, 0.015, capMat); c.position.set(0, H + 0.02, -R - T / 2)
+      grp.add(m, b, c)
+    })
+    wall('front', new THREE.Vector3(0, 0, 1), grp => {
+      const m = this._rbox(L, H, T, 0.02, this._mat(COL.wallBack, { roughness: 0.95 })); m.position.set(0, H / 2, R + T / 2); m.castShadow = false; m.receiveShadow = true
+      const b = this._rbox(2 * R, 0.09, 0.025, 0.006, baseMat); b.position.set(0, 0.045, R - 0.0125); b.castShadow = false
+      const c = this._rbox(L + 0.02, 0.05, T + 0.04, 0.015, capMat); c.position.set(0, H + 0.02, R + T / 2)
+      grp.add(m, b, c)
+    })
+    wall('left', new THREE.Vector3(-1, 0, 0), (grp, w) => {
+      // avec la fenêtre
+      const sh = new THREE.Shape()
+      sh.moveTo(-R, 0); sh.lineTo(R, 0); sh.lineTo(R, H); sh.lineTo(-R, H); sh.closePath()
+      const u0 = -WINDOW.z - WINDOW.w / 2, u1 = -WINDOW.z + WINDOW.w / 2
+      const v0 = WINDOW.y - WINDOW.h / 2, v1 = WINDOW.y + WINDOW.h / 2
+      const hole = new THREE.Path()
+      hole.moveTo(u0, v0); hole.lineTo(u0, v1); hole.lineTo(u1, v1); hole.lineTo(u1, v0); hole.closePath()
+      sh.holes.push(hole)
+      const m = new THREE.Mesh(this._geo(new THREE.ExtrudeGeometry(sh, { depth: T, bevelEnabled: false })), this._mat(COL.wallLeft, { roughness: 0.95 }))
+      m.rotation.y = Math.PI / 2
+      m.position.set(-R - T, 0, 0)
+      m.receiveShadow = true
+      const b = this._rbox(0.025, 0.09, 2 * R, 0.006, baseMat); b.position.set(-R + 0.0125, 0.045, 0); b.castShadow = false
+      const c = this._rbox(T + 0.04, 0.05, 2 * R + 0.02, 0.015, capMat); c.position.set(-R - T / 2, H + 0.02, 0)
+      grp.add(m, b, c)
+      // cadres au-dessus de la télé
+      const frameMat = this._woodMat(COL.walnut)
+      ;[[TV.z + 0.3, 1.86, 0.44, 0.58, 0], [TV.z - 0.24, 1.78, 0.34, 0.44, 1]].forEach(([z, y, fw, fh, k]) => {
+        const f = this._rbox(fw, fh, 0.035, 0.008, frameMat)
+        f.rotation.y = Math.PI / 2
+        f.position.set(-R + 0.02, y, z)
+        const art = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(fw - 0.06, fh - 0.06)), this._mat('#ffffff', { map: this._track(artTexture(k)), roughness: 0.9 }))
+        art.rotation.y = Math.PI / 2
+        art.position.set(-R + 0.039, y, z)
+        grp.add(f, art)
+        w.decor.push(f, art)
+      })
+    })
+    wall('right', new THREE.Vector3(1, 0, 0), grp => {
+      const m = this._rbox(T, H, 2 * R, 0.02, this._mat(COL.wallLeft, { roughness: 0.95 })); m.position.set(R + T / 2, H / 2, 0); m.castShadow = false; m.receiveShadow = true
+      const b = this._rbox(0.025, 0.09, 2 * R, 0.006, baseMat); b.position.set(R - 0.0125, 0.045, 0); b.castShadow = false
+      const c = this._rbox(T + 0.04, 0.05, 2 * R + 0.02, 0.015, capMat); c.position.set(R + T / 2, H + 0.02, 0)
+      grp.add(m, b, c)
+    })
+    this.wallOf = name => this.walls.find(w => w.name === name)
 
     // tapis
     const rug = new THREE.Mesh(this._geo(new RoundedPlane(2.5, 2.1, 0.12)), this._mat('#ffffff', { map: this._track(rugTexture()), roughness: 1 }))
@@ -435,17 +471,6 @@ export class LivingRoomScene {
     rug.receiveShadow = true
     g.add(rug)
 
-    // cadres au-dessus de la télé (mur de gauche)
-    const frameMat = this._woodMat(COL.walnut)
-    ;[[TV.z + 0.3, 1.86, 0.44, 0.58, 0], [TV.z - 0.24, 1.78, 0.34, 0.44, 1]].forEach(([z, y, w, h, k]) => {
-      const f = this._rbox(w, h, 0.035, 0.008, frameMat)
-      f.rotation.y = Math.PI / 2
-      f.position.set(-R + 0.02, y, z)
-      const art = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(w - 0.06, h - 0.06)), this._mat('#ffffff', { map: this._track(artTexture(k)), roughness: 0.9 }))
-      art.rotation.y = Math.PI / 2
-      art.position.set(-R + 0.039, y, z)
-      g.add(f, art)
-    })
   }
 
   _track(t) { this.disposables.push(t); return t }
@@ -596,12 +621,13 @@ export class LivingRoomScene {
   // ---- Cheminée ---------------------------------------------------------------------------
   _buildFireplace() {
     const grp = new THREE.Group()
-    grp.position.set(FIRE.x, 0, -R)   // contre le mur du fond, face à la pièce (+z)
+    grp.position.set(FIRE.x, 0, R)    // contre le mur de devant, face à la pièce (−z)
+    grp.rotation.y = Math.PI
     this.room.add(grp)
     const W = FIRE.w, D = FIRE.d
     const aw = 0.74, ah = 0.5, ay = 0.1, ar = aw / 2
     const outline = new THREE.Shape()
-    outline.moveTo(-W / 2, 0); outline.lineTo(W / 2, 0); outline.lineTo(W / 2, H); outline.lineTo(-W / 2, H); outline.closePath()
+    outline.moveTo(-W / 2, 0); outline.lineTo(W / 2, 0); outline.lineTo(W / 2, FIRE.h); outline.lineTo(-W / 2, FIRE.h); outline.closePath()
     const arch = new THREE.Path()
     arch.moveTo(-aw / 2, ay); arch.lineTo(aw / 2, ay); arch.lineTo(aw / 2, ay + ah)
     arch.absarc(0, ay + ah, ar, 0, Math.PI, false)
@@ -610,6 +636,11 @@ export class LivingRoomScene {
     const breast = new THREE.Mesh(this._geo(new THREE.ExtrudeGeometry(outline, { depth: D, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 3, curveSegments: 24 })), this._mat(COL.plaster, { roughness: 0.92 }))
     breast.castShadow = true; breast.receiveShadow = true
     grp.add(breast)
+    // dos plein (vue de derrière, quand le mur de devant est abaissé)
+    const backPlate = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(W + 0.02, FIRE.h + 0.02)), this._mat(COL.plaster, { roughness: 0.92 }))
+    backPlate.rotation.y = Math.PI
+    backPlate.position.set(0, FIRE.h / 2, -0.016)
+    grp.add(backPlate)
     // intérieur noirci
     const inner = new THREE.Shape()
     inner.moveTo(-aw / 2 + 0.01, ay); inner.lineTo(aw / 2 - 0.01, ay); inner.lineTo(aw / 2 - 0.01, ay + ah)
@@ -653,15 +684,19 @@ export class LivingRoomScene {
     })
     // lueur du feu
     this.fireLight = new THREE.PointLight(0xff8a3c, 2, 5.5, 1.6)
-    this.fireLight.position.set(FIRE.x, 0.55, -R + D + 0.45)
+    this.fireLight.position.set(FIRE.x, 0.55, R - D - 0.45)
     this.scene.add(this.fireLight)
     // déco de la tablette : miroir rond, bougies, petit vase
     const mirror = new THREE.Mesh(this._geo(new THREE.CircleGeometry(0.3, 48)), this._mat('#C9D3D8', { roughness: 0.15, metalness: 0.3 }))
-    mirror.position.set(0, 1.65, D + 0.03)
+    // le miroir est accroché au mur (il s'abaisse avec lui)
+    mirror.position.set(FIRE.x, 1.86, R - 0.014)
+    mirror.rotation.y = Math.PI
     const rim = new THREE.Mesh(this._geo(new THREE.TorusGeometry(0.3, 0.022, 10, 64)), this._mat(COL.brass, { roughness: 0.35, metalness: 0.6 }))
-    rim.position.copy(mirror.position)
+    rim.position.copy(mirror.position); rim.rotation.y = Math.PI
     rim.castShadow = true
-    grp.add(mirror, rim)
+    const fw = this.wallOf('front')
+    fw.grp.add(mirror, rim)
+    fw.decor.push(mirror, rim)
     this.candles = []
     ;[[-0.52, 0.16], [-0.43, 0.11]].forEach(([x, h]) => {
       const c = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.025, 0.025, h, 16)), this._mat('#F6F0E2', { roughness: 0.6 }))
@@ -833,7 +868,7 @@ export class LivingRoomScene {
     if (this.camera.aspect < 1) this.camera.setViewOffset(this.w, this.h, 0, Math.round(this.h * 0.2 * e), this.w, this.h)
     else this.camera.clearViewOffset()
     this.camera.updateProjectionMatrix()
-    this._placeCamera(a.az + (b.az - a.az) * e, a.el + (b.el - a.el) * e, dist, tgt)
+    this._placeCamera(a.az + shortAngle(a.az, b.az) * e, a.el + (b.el - a.el) * e, dist, tgt)
     if (z.dir < 0 && z.k <= 0) {
       this.tvZoom = null
       this.az.snap(a.az); this.el.snap(a.el); this.target.copy(a.target)
@@ -1161,7 +1196,9 @@ export class LivingRoomScene {
   _buildWindow() {
     const grp = new THREE.Group()
     grp.position.set(-R, WINDOW.y, WINDOW.z)
-    this.room.add(grp)
+    const lw = this.wallOf('left')
+    lw.grp.add(grp)
+    lw.decor.push(grp)
     const sky = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(WINDOW.w, WINDOW.h)), new THREE.MeshBasicMaterial({ map: this._track(skyTexture(this.mode)), toneMapped: false }))
     sky.rotation.y = Math.PI / 2
     sky.position.x = -T + 0.01
@@ -1230,10 +1267,10 @@ export class LivingRoomScene {
   /** Distance qui fait tenir toute la maquette à l'écran, quel que soit l'angle. */
   _fitDistance() {
     const pts = []
-    for (const x of [-R - T, R]) for (const y of [-FT, H + 0.05]) for (const z of [-R - T, R]) pts.push(new THREE.Vector3(x, y, z))
+    for (const x of [-R - T, R + T]) for (const y of [-FT, H + 0.05]) for (const z of [-R - T, R + T]) pts.push(new THREE.Vector3(x, y, z))
     const margin = this.cb.margins?.() || { top: 0.12, bottom: 0.14, side: 0.06 }
     const fits = d => {
-      for (const az of [AZ_MIN, AZ0, AZ_MAX]) {
+      for (let k = 0; k < 8; k++) { const az = AZ0 + (k * Math.PI) / 4
         this._placeCamera(az, EL0, d, TARGET0)
         this.camera.updateMatrixWorld()
         for (const p of pts) {
@@ -1397,7 +1434,7 @@ export class LivingRoomScene {
   _applyPose(a, b, e) {
     const c = this.camera
     const tgt = a.target.clone().lerp(b.target, e)
-    const az = a.az + (b.az - a.az) * e
+    const az = a.az + shortAngle(a.az, b.az) * e
     const el = a.el + (b.el - a.el) * e
     const dist = Math.exp(Math.log(a.dist) + (Math.log(b.dist) - Math.log(a.dist)) * e)
     this._placeCamera(az, el, dist, tgt)
@@ -1556,7 +1593,7 @@ export class LivingRoomScene {
         if (!p.drag && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) > 7) { p.drag = true; this._setHover(null) }
         if (p.drag && !this.tvZoom) {
           const k = 2.6 / Math.max(320, this.w)
-          this.az.t = clamp(this.az.t - dx * k, AZ_MIN - 0.08, AZ_MAX + 0.08)
+          this.az.t = this.az.t - dx * k      // tour complet autour de la pièce
           this.el.t = clamp(this.el.t + dy * k * 0.8, EL_MIN - 0.05, EL_MAX + 0.05)
           const now = performance.now(), dt = Math.max(1, now - p.lt)
           p.vx = p.vx * 0.6 + (dx / dt) * 0.4; p.vy = p.vy * 0.6 + (dy / dt) * 0.4; p.lt = now
@@ -1579,7 +1616,7 @@ export class LivingRoomScene {
       }
       if (p.drag) {
         const k = 2.6 / Math.max(320, this.w)
-        this.az.t = clamp(this.az.t - p.vx * 160 * k, AZ_MIN, AZ_MAX)
+        this.az.t = this.az.t - p.vx * 160 * k
         this.el.t = clamp(this.el.t + p.vy * 120 * k * 0.8, EL_MIN, EL_MAX)
         return
       }
@@ -1640,7 +1677,6 @@ export class LivingRoomScene {
       this._stepTvZoom(dt)
     } else {
       if (!this.pointer) {
-        this.az.t = clamp(this.az.t, AZ_MIN, AZ_MAX)
         this.el.t = clamp(this.el.t, EL_MIN, EL_MAX)
       }
       for (let i = 0; i < sub; i++) { this.az.step(h); this.el.step(h) }
@@ -1657,6 +1693,25 @@ export class LivingRoomScene {
     this.libKey.intensity = 1.55 * this.mix
     this.libFill.intensity = 0.35 * this.mix
     const vis = 1 - (this.fade || 0)
+
+    // murs : celui qui est entre la caméra et la pièce s'abaisse (petite bordure), les autres se relèvent
+    {
+      const cp = this.camera.position
+      const dx = cp.x, dz = cp.z, len = Math.hypot(dx, dz) || 1
+      for (const w of this.walls) {
+        const facing = (w.n.x * dx + w.n.z * dz) / len
+        w.cut.t = facing > 0.2 ? 0.07 : 1
+        if (!this.wallsReady) w.cut.snap(w.cut.t)          // à l'ouverture : déjà en place, sans animation
+        if (!w.cut.done || !this.wallsReady) {
+          for (let i = 0; i < sub; i++) w.cut.step(h)
+          w.grp.scale.y = Math.max(0.05, w.cut.v)
+          const show = w.cut.v > 0.6
+          for (const d of w.decor) d.visible = show
+          this.shadowDirty = Math.max(this.shadowDirty, 1)
+        }
+      }
+      this.wallsReady = true
+    }
 
     // survol à la souris
     if (this.hoverXY && !this.pointer && !this.fly && !this.tvZoom) {
