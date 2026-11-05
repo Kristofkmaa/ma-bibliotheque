@@ -993,6 +993,20 @@ export class LivingRoomScene {
     if (el.style.visibility !== 'visible') el.style.visibility = 'visible'
   }
 
+  /** Où se trouve l'image projetée à l'écran (en pixels de la page) : le menu s'ouvre depuis là. */
+  screenRect() {
+    this.camera.updateMatrixWorld()
+    this.tvScreen.updateWorldMatrix(true, false)
+    const S = this.renderer.domElement.getBoundingClientRect()
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+    for (const [x, y] of [[-SCR.w / 2, SCR.h / 2], [SCR.w / 2, SCR.h / 2], [SCR.w / 2, -SCR.h / 2], [-SCR.w / 2, -SCR.h / 2]]) {
+      const v = this.tvScreen.localToWorld(new THREE.Vector3(x, y, 0.002)).project(this.camera)
+      const px = S.left + ((v.x + 1) / 2) * S.width, py = S.top + ((1 - v.y) / 2) * S.height
+      x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py)
+    }
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+  }
+
   /** Zoom terminé : on est dans la télé (le module des séries la recouvre). */
   get inTv() { return !!this.tvZoom && this.tvZoom.kind === 'tv' && this.tvZoom.dir > 0 && this.tvZoom.k >= 1 }
 
@@ -1039,7 +1053,9 @@ export class LivingRoomScene {
       this.lensGlass.updateWorldMatrix(true, false)
       const lens = this.lensGlass.getWorldPosition(new THREE.Vector3())
       const screen = this.tvScreen.getWorldPosition(new THREE.Vector3())
-      const d = Math.min(SCR.w / 2 / (t * this.camera.aspect), SCR.h / 2 / t) * 0.94
+      // on s'arrête là où toute l'image tient à l'écran (avec une marge) : sur téléphone, elle
+      // est en bandeau au milieu ; le menu s'ouvrira depuis ce rectangle, comme une vidéo en plein écran
+      const d = Math.max(SCR.w / 2 / (t * this.camera.aspect), SCR.h / 2 / t) / 0.9
       const behind = new THREE.Vector3(lens.x + 1.3, lens.y + 0.5, lens.z + 0.42)  // derrière le projecteur, au-dessus : on le voit en bas, le faisceau part devant
       const through = new THREE.Vector3(lens.x - 0.35, lens.y + 0.02, lens.z)        // juste devant l'objectif, dans le faisceau
       const wall = new THREE.Vector3(screen.x + d, screen.y, screen.z)            // face à l'image

@@ -320,6 +320,22 @@ function Shelf({ list, pos, dragging, onPick, onOpen, onPlay, canPlay, stageRef,
   )
 }
 
+/** Derrière l'étagère : l'image du film ou de la série du milieu, qui change en fondu. */
+function ShelfBackdrop({ show }) {
+  const path = show?.backdrop_path || show?.poster_path || null
+  const [layers, setLayers] = useState(() => (path ? [path] : []))
+  useEffect(() => {
+    if (!path) return
+    setLayers(l => (l[l.length - 1] === path ? l : [...l.slice(-1), path]))
+  }, [path])
+  return (
+    <div className="sx-shelf-bg" aria-hidden="true">
+      {layers.map((p, i) => <img key={p} src={tmdbImg(p, 'w1280')} alt="" className={i === layers.length - 1 ? 'top' : ''} />)}
+      <div className="sx-shelf-bg-shade" />
+    </div>
+  )
+}
+
 /** Les grandes images d'une œuvre, qui défilent en fondu (avec un lent mouvement de caméra). */
 function Slideshow({ s }) {
   const [imgs, setImgs] = useState(() => [s.backdrop_path || s.poster_path].filter(Boolean))
@@ -470,7 +486,7 @@ function CategoryPicker({ value, all, onChange }) {
  * à notre façon (fond sombre, la grande affiche, des rangées par catégorie, la fiche) ; et la
  * recherche pour en ajouter.
  */
-export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, onRemove, onRenameCategory, onClose }) {
+export default function SeriesTV({ series, initialId = null, fromRect = null, onAdd, onUpdate, onRemove, onRenameCategory, onClose }) {
   const [kind, setKind] = useState('all')     // notre liste (tout), séries ou films
   const [sort, setSortState] = useState(() => { try { return localStorage.getItem('levana.series.tri') || 'cat' } catch { return 'cat' } })
   const setSort = v => { setSortState(v); try { localStorage.setItem('levana.series.tri', v) } catch { /* ignore */ } }
@@ -552,11 +568,29 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
   }
   const stopVideo = useCallback(() => setPlaying(null), [])
 
+  // comme une vidéo qui passe en plein écran : le menu s'ouvre depuis l'image projetée
+  const rootRef = useRef(null)
+  const rectInset = useCallback(() => {
+    const r = fromRect
+    if (!r || !(r.w > 0)) return null
+    const W = window.innerWidth, H = window.innerHeight
+    return `inset(${Math.max(0, r.y)}px ${Math.max(0, W - r.x - r.w)}px ${Math.max(0, H - r.y - r.h)}px ${Math.max(0, r.x)}px round 6px)`
+  }, [fromRect])
+  useEffect(() => {
+    const el = rootRef.current, from = rectInset()
+    if (!el?.animate || !from) return
+    el.animate([{ clipPath: from, opacity: 0.6 }, { clipPath: 'inset(0px 0px 0px 0px round 0px)', opacity: 1 }],
+      { duration: 650, easing: 'cubic-bezier(.2, .8, .2, 1)', fill: 'both' })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const close = useCallback(() => {
     if (closing) return
     setClosing(true)
-    setTimeout(onClose, 320)
-  }, [closing, onClose])
+    const el = rootRef.current, to = rectInset()
+    if (el?.animate && to) {
+      el.animate([{ clipPath: 'inset(0px 0px 0px 0px round 0px)', opacity: 1 }, { clipPath: to, opacity: 0.4 }],
+        { duration: 420, easing: 'cubic-bezier(.5, 0, .8, .4)', fill: 'forwards' }).finished.then(onClose, onClose)
+    } else setTimeout(onClose, 320)
+  }, [closing, onClose, rectInset])
 
   useEffect(() => {
     const k = e => {
@@ -578,7 +612,7 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
   const nTv = series.filter(x => !isMovie(x)).length, nMovie = series.length - nTv
 
   return createPortal(
-    <div className={'stv sx' + (closing ? ' closing' : '')} role="dialog" aria-label="Nos films et séries">
+    <div ref={rootRef} className={'stv sx' + (closing ? ' closing' : '') + (fromRect ? ' from-rect' : '')} role="dialog" aria-label="Nos films et séries">
       <div className="stv-bezel">
         <div className={'stv-screen sx-screen sx-v-' + view} onScroll={e => { e.currentTarget.scrollTop = 0 }}>
           <header className={'sx-top' + (scrolled || view !== 'home' ? ' solid' : '')}>
@@ -594,7 +628,8 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
 
           {view === 'search' && <SeriesSearch have={have} onAdd={added} />}
 
-          {view === 'home' && (
+          {view === 'home' && (<>
+            {layout === '3d' && shelfCur && <ShelfBackdrop show={drag?.moved ? shelfList[clamp(Math.round(drag.p), 0, shelfList.length - 1)] : shelfCur} />}
             <div className="sx-home sx-home-list" ref={homeRef} onScroll={e => setScrolled(e.currentTarget.scrollTop > 10)}>
               <section className="sx-list" aria-label="Notre liste">
                 <header className="sx-list-head">
@@ -657,7 +692,7 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
                 })()}
               </section>
             </div>
-          )}
+          </>)}
 
           {cur && (
             <DetailPage key={cur.id} s={cur} videos={curVideos} allCats={allCats} onBack={() => setId(null)} onPlay={() => setPlaying(cur)}

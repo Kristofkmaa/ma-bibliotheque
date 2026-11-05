@@ -179,7 +179,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
 
       {/* on a zoomé à bloc sur la télé : nos séries, il ne reste que le contour de l'écran */}
       {inside === 'tv' && (
-        <SeriesTV series={series || []} onAdd={onAddSeries} onUpdate={onUpdateSeries} onRemove={onRemoveSeries} onRenameCategory={onRenameCategory}
+        <SeriesTV series={series || []} fromRect={sceneRef.current?.screenRect?.()} onAdd={onAddSeries} onUpdate={onUpdateSeries} onRemove={onRemoveSeries} onRenameCategory={onRenameCategory}
           onClose={() => sceneRef.current?.unzoomTv()} />
       )}
 
