@@ -953,6 +953,11 @@ export class LivingRoomScene {
     this._setHover(null)
     this._drawTv()
     this.tvZoom = { kind, k: 0, dir: 1, from: { target: this.target.clone(), az: this.az.v + (this.lastDrift || 0), el: this.el.v, dist: this.dist } }
+    if (kind === 'tv' && this.seat.on && this.seat.k.v > 0.95) {
+      // depuis le canapé : on part de là où l'on est assis, du regard qu'on a
+      const { eye, look } = this._seatPose()
+      Object.assign(this.tvZoom, { fromSeat: true, startPos: eye, startLook: look, seatFov: this.camera.fov })
+    }
     this.cb.onTvZoom?.(true)
     this._emitSlide()
   }
@@ -1016,7 +1021,7 @@ export class LivingRoomScene {
 
   _stepTvZoom(dt) {
     const z = this.tvZoom
-    z.k = clamp(z.k + (z.dir * dt) / (z.kind === 'tv' ? 1.9 : 1.1), 0, 1)
+    z.k = clamp(z.k + (z.dir * dt) / (z.fromSeat ? 1.2 : z.kind === 'tv' ? 1.9 : 1.1), 0, 1)
     const e = ease(z.k), a = z.from, b = this._tvView()
     // la caméra garde son objectif (rien ne se déforme) ; elle tourne vers la télé, puis descend
     // à sa hauteur seulement à la fin (elle passe au-dessus de la lampe et du canapé)
@@ -1035,6 +1040,14 @@ export class LivingRoomScene {
     }
     if (z.kind === 'tv') this._beamPath(z, a)
     else this._placeCamera(a.az + shortAngle(a.az, b.az) * e, a.el + (b.el - a.el) * eEl, dist, tgt)
+    if (z.dir < 0 && z.k <= 0 && z.fromSeat) {
+      // retour au canapé, à la même place
+      this.tvZoom = null
+      this.az.snap(a.az); this.el.snap(a.el); this.target.copy(a.target)
+      this.seat.on = true; this.seat.k.snap(1); this.cb.onSeat?.(true)
+      this.idleAt = this.time
+      return
+    }
     if (z.dir < 0 && z.k <= 0) {
       this.tvZoom = null
       this.az.snap(a.az); this.el.snap(a.el); this.target.copy(a.target)
@@ -1050,6 +1063,7 @@ export class LivingRoomScene {
    * qui remplit alors l'écran. Au retour, le même chemin à l'envers.
    */
   _beamPath(z, a) {
+    if (z.fromSeat) { this._seatToScreen(z); return }
     if (!z.path) {
       const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
       const start = new THREE.Vector3(
@@ -1082,6 +1096,26 @@ export class LivingRoomScene {
       cam.position.copy(P.ride.getPoint(u))
       cam.lookAt(P.screen)
     }
+  }
+
+  /**
+   * Depuis le canapé : on se tourne vers l'image et on avance droit dans son axe jusqu'à la voir
+   * entière (sur un téléphone en hauteur, elle tient souvent déjà : on ne fait que se tourner).
+   */
+  _seatToScreen(z) {
+    const cam = this.camera
+    if (!z.path) {
+      const t = Math.tan(THREE.MathUtils.degToRad(z.seatFov / 2))
+      const screen = this.tvScreen.getWorldPosition(new THREE.Vector3())
+      const need = Math.max(SCR.w / 2 / (t * cam.aspect), SCR.h / 2 / t) / 0.9
+      const here = z.startPos.x - screen.x
+      const end = new THREE.Vector3(screen.x + Math.min(need, here), screen.y, screen.z)
+      z.path = { end, screen }
+    }
+    // d'abord le regard (vite), puis le corps (plus lentement)
+    const look = z.startLook.clone().lerp(z.path.screen, ease(clamp(z.k / 0.55, 0, 1)))
+    cam.position.copy(z.startPos).lerp(z.path.end, ease(clamp((z.k - 0.2) / 0.8, 0, 1)))
+    cam.lookAt(look)
   }
 
   /** La lampe passe devant la télé : elle s'efface pendant le zoom. */
@@ -1733,7 +1767,18 @@ export class LivingRoomScene {
     if (this.tvZoom) { this.pendingEnter = onDone || null; this.unzoomTv(); return }
     const lib = this.cb.getLibrary?.()
     if (lib && (!this.mirror || this.mirror.lib !== lib)) this.setWall(lib)
-    const start = { az: this.az.v + (this.lastDrift || 0), el: this.el.v, dist: this.dist, target: this.target.clone() }
+    let start = { az: this.az.v + (this.lastDrift || 0), el: this.el.v, dist: this.dist, target: this.target.clone() }
+    if (this.seat.on && this.seat.k.v > 0.95) {
+      // assis : on part du regard qu'on a dans le canapé (même objectif), sans se relever
+      const { eye, look } = this._seatPose()
+      const D = 2.5
+      const target = eye.clone().add(look.clone().sub(eye).normalize().multiplyScalar(D))
+      const off = eye.clone().sub(target)
+      const t = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)), asp = this.camera.aspect
+      start = { target, az: Math.atan2(off.x, off.z), el: Math.asin(clamp(off.y / D, -1, 1)), dist: D, fr: { l: -t * asp, r: t * asp, t, b: -t } }
+      this.seat.on = false; this.seat.then = null; this.seat.k.snap(0); this.seat.k.t = 0
+      this.cb.onSeat?.(false)
+    }
     if (!this.mirror) {
       // bibliothèque pas encore prête : simple approche
       this.fly = { legacy: true, from: start, to: this._bookcaseView(), t: 0, dur: 1.15, onDone }
@@ -1779,7 +1824,7 @@ export class LivingRoomScene {
     f.t += dt / f.dur
     const k = Math.min(1, f.t)
     const p = f.dir === 'in' ? k : 1 - k          // 0 : salon ; 1 : bibliothèque
-    const a = this._salonPose(f.start.az, f.start.el, f.start.dist, f.start.target)
+    const a = f.start.fr ? f.start : this._salonPose(f.start.az, f.start.el, f.start.dist, f.start.target)
     const b = f.libPose || this._libraryPose()
     this._applyPose(a, b, ease(p))
     this.shadowDirty = Math.max(this.shadowDirty, 1)
@@ -1942,7 +1987,11 @@ export class LivingRoomScene {
   /** Ce que fait chaque objet quand on le touche. */
   tap(kind) {
     // assis : pour aller dans la télé, le meuble ou la bibliothèque, on se lève d'abord
-    if (this.seat?.on && ['tv', 'projector', 'tvbubble', 'cabinet', 'bookcase'].includes(kind)) { this.stand(() => this.tap(kind)); return }
+    if (this.seat?.on) {
+      if (['tv', 'projector', 'tvbubble'].includes(kind)) { if (!this.tvZoom) this.zoomTv('tv'); return }   // droit vers l'image
+      if (kind === 'bookcase') { this.seat.turn = { to: 0.85, then: () => this.cb.onEnter?.() }; return }  // on tourne la tête, puis on y va
+      if (kind === 'cabinet') { this.stand(() => this.tap(kind)); return }
+    }
     const it = this.items.get(kind)
     if (it) it.bounce.vel += kind === 'bookcase' ? 0.6 : 1.4
     this.shadowDirty = 2
@@ -1988,6 +2037,12 @@ export class LivingRoomScene {
       this._placeCamera(this.az.v + this.lastDrift, this.el.v, this.dist, this.target)
       // assis dans le canapé : on glisse de la vue d'ensemble jusqu'à la place, à hauteur des yeux
       for (let i = 0; i < sub; i++) this.seat.k.step(h)
+      if (this.seat.turn) {
+        const st = this.seat.turn
+        this.seat.yaw += (st.to - this.seat.yaw) * (1 - Math.exp(-dt * 7))
+        this.seat.pitch += (0.05 - this.seat.pitch) * (1 - Math.exp(-dt * 7))
+        if (Math.abs(st.to - this.seat.yaw) < 0.02) { this.seat.turn = null; st.then() }
+      }
       const sk = clamp(this.seat.k.v, 0, 1)
       const cam = this.camera
       if (sk > 0.001) {
