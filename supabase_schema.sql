@@ -138,3 +138,6 @@ drop policy if exists "Suppression de ses séries" on user_series;
 create policy "Suppression de ses séries" on user_series for delete using (auth.uid() = user_id);
 
 create index if not exists idx_user_series_user on user_series(user_id, added_at desc);
+
+-- Catégories de séries (à exécuter une fois ; sans elle, les catégories restent dans le navigateur)
+alter table user_series add column if not exists category text;

@@ -374,7 +374,10 @@ export class LivingRoomScene {
     this.baseLights = { hemi: m.hemi[2], key: m.key[1], fill: m.fill }
     this.mix = 0     // 0 : lumière du salon ; 1 : lumière de la bibliothèque
     this.firePower = new Spring(m.fire, 30, 0.5)
-    this.firePower.base = m.fire
+    this.fireFull = m.fire
+    this.fireLow = store('levana.salon.feu') === 'bas'
+    this.firePower.base = this.fireLow ? Math.min(m.fire, 0.28) : m.fire
+    this.firePower.v = this.firePower.base
     this.setLamp(m.lamp)
   }
 
@@ -708,7 +711,7 @@ export class LivingRoomScene {
       const tw = new THREE.Mesh(this._geo(new THREE.TubeGeometry(curve, 8, 0.004, 4)), twigMat)
       vase.add(tw)
     }
-    this._register('fire', grp, 'La cheminée')
+    this._register('fire', grp, 'Baisser le feu')
     this.wallOf('front').attached.push(grp)
   }
 
@@ -743,14 +746,17 @@ export class LivingRoomScene {
     this._register('cabinet', grp, 'Nos séries')
     this.wallOf('left').attached.push(grp)
 
-    // la toile de projection, sur le mur : un fin cadre noir et l'image projetée
+    // l'image projetée directement sur le mur : bords fondus, halo de lumière autour
     const scr = new THREE.Group()
-    scr.position.set(-R + 0.012, 0, TV.z)
+    scr.position.set(-R + 0.004, 0, TV.z)
     scr.rotation.y = Math.PI / 2
     this.room.add(scr)
-    const border = this._rbox(SCR.w + 0.07, SCR.h + 0.07, 0.016, 0.006, this._mat('#151517', { roughness: 0.5 }))
-    border.position.set(0, SCR.y, 0)
-    scr.add(border)
+    const halo = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(SCR.w * 1.32, SCR.h * 1.5)), new THREE.MeshBasicMaterial({
+      map: this._track(projGlowTexture()), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
+    }))
+    halo.position.set(0, SCR.y, 0.002)
+    scr.add(halo)
+    this.projHalo = halo
     this.tvCanvas = document.createElement('canvas')
     this.tvCanvas.width = TV_W; this.tvCanvas.height = TV_H
     this.series = new TvSeries(() => { if (this.tvCanvas) this._drawTv() })
@@ -758,8 +764,10 @@ export class LivingRoomScene {
     this.tvTex = this._track(new THREE.CanvasTexture(this.tvCanvas))
     this.tvTex.colorSpace = THREE.SRGBColorSpace
     this.tvTex.anisotropy = 4
-    const screen = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(SCR.w, SCR.h)), new THREE.MeshBasicMaterial({ map: this.tvTex, toneMapped: false, color: 0xf4f1ea }))
-    screen.position.set(0, SCR.y, 0.012)
+    const screen = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(SCR.w, SCR.h)), new THREE.MeshBasicMaterial({
+      map: this.tvTex, alphaMap: this._track(featherTexture()), transparent: true, depthWrite: false, toneMapped: false, color: 0xf1ede6,
+    }))
+    screen.position.set(0, SCR.y, 0.004)
     scr.add(screen)
     this.tvScreen = screen
     this._drawTv()
@@ -1335,6 +1343,7 @@ export class LivingRoomScene {
       c.rotation.y = Math.PI / 2
       c.position.set(0.06, -0.12, s * (WINDOW.w / 2 + 0.14))
       c.castShadow = true
+      c.userData.side = s
       grp.add(c)
       this.curtains.push(c)
     }
@@ -1342,7 +1351,43 @@ export class LivingRoomScene {
     rod.rotation.x = Math.PI / 2
     rod.position.set(0.07, WINDOW.h / 2 + 0.14, 0)
     grp.add(rod)
-    this._register('window', grp, 'La fenêtre')
+    this._register('window', grp, 'Fermer les rideaux')
+    this.sky = sky
+    // rideaux fermés : pour mieux voir la projection (gardé d'une visite à l'autre)
+    this.curtainsClosed = store('levana.salon.rideaux') === '1'
+    this.curtainK = new Spring(this.curtainsClosed ? 1 : 0, 26, 0.9)
+    this.curtainK.t = this.curtainK.v
+    this._applyCurtains()
+  }
+
+  /** Le feu : bas (des braises, sa lumière ne gêne plus la projection) ou vif. */
+  setFireLow(low) {
+    this.fireLow = low
+    this.firePower.base = low ? Math.min(this.fireFull, 0.28) : this.fireFull
+    if (!low) this.firePower.vel += 4
+    store('levana.salon.feu', low ? 'bas' : 'vif')
+    const it = this.items.get('fire')
+    if (it) it.label = low ? 'Raviver le feu' : 'Baisser le feu'
+  }
+
+  setCurtains(closed) {
+    this.curtainsClosed = closed
+    this.curtainK.t = closed ? 1 : 0
+    store('levana.salon.rideaux', closed ? '1' : '0')
+    const it = this.items.get('window')
+    if (it) it.label = closed ? 'Ouvrir les rideaux' : 'Fermer les rideaux'
+  }
+
+  _applyCurtains() {
+    const k = clamp(this.curtainK.v, 0, 1)
+    for (const c of this.curtains) {
+      const s = c.userData.side
+      // ouverts : de chaque côté ; fermés : ils se rejoignent au milieu de la fenêtre
+      c.position.z = s * ((WINDOW.w / 2 + 0.14) * (1 - k) + (WINDOW.w / 4 - 0.05) * k)
+      c.scale.x = 1 + 0.32 * k
+    }
+    if (this.sky) this.sky.material.color.setScalar(1 - 0.75 * k)
+    this.dimK = k
   }
 
   // ---- Pouf --------------------------------------------------------------------------------
@@ -1757,7 +1802,8 @@ export class LivingRoomScene {
     this.shadowDirty = 2
     switch (kind) {
       case 'bookcase': this.cb.onEnter?.(); break
-      case 'fire': this.firePower.vel += 6; this.cb.onTap?.(kind); break
+      case 'fire': this.setFireLow(!this.fireLow); this.cb.onTap?.(kind); break
+      case 'window': this.setCurtains(!this.curtainsClosed); break
       case 'lamp': this.setLamp(!this.lampState); break
       case 'sofa': this.cushions.forEach((c, i) => { c.s.vel -= 1.1 + (i % 3) * 0.2 }); break
       case 'plant': this.leaves.forEach((l, i) => { l.sway.vel += (i % 2 ? 1 : -1) * 3 }); break
@@ -1798,8 +1844,11 @@ export class LivingRoomScene {
     }
     // lumières : salon → bibliothèque
     const sal = 1 - this.mix
-    this.hemi.intensity = this.baseLights.hemi * sal
-    this.key.intensity = this.baseLights.key * sal
+    // rideaux : on avance doucement, la pièce s'assombrit un peu
+    if (this.curtainK && !this.curtainK.done) { for (let i = 0; i < sub; i++) this.curtainK.step(h); this._applyCurtains(); this.shadowDirty = Math.max(this.shadowDirty, 1) }
+    const dim = 1 - 0.28 * (this.dimK || 0)
+    this.hemi.intensity = this.baseLights.hemi * sal * dim
+    this.key.intensity = this.baseLights.key * sal * (1 - 0.45 * (this.dimK || 0))
     this.fill.intensity = this.baseLights.fill * sal
     this.libHemi.intensity = 1.35 * this.mix
     this.libKey.intensity = 1.55 * this.mix
@@ -2029,4 +2078,33 @@ function quadMatrix(w, h, dst) {
   if (!t[8] || !t.every(Number.isFinite)) return null
   for (let i = 0; i < 9; i++) t[i] /= t[8]
   return [t[0], t[3], 0, t[6], t[1], t[4], 0, t[7], 0, 0, 1, 0, t[2], t[5], 0, t[8]].join(',')
+}
+
+// ---- Préférences du salon (rideaux, feu) --------------------------------------------------
+function store(k, v) {
+  try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v) } catch { /* ignore */ }
+  return null
+}
+
+/** Masque de l'image projetée : pleine au centre, fondue sur les bords (la lumière s'étale). */
+function featherTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 144
+  const g = c.getContext('2d')
+  g.fillStyle = '#000'; g.fillRect(0, 0, 256, 144)
+  g.filter = 'blur(5px)'
+  g.fillStyle = '#fff'; g.fillRect(9, 9, 238, 126)
+  const t = new THREE.CanvasTexture(c)
+  return t
+}
+
+/** Le halo de lumière autour de l'image, sur le mur. */
+function projGlowTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 160
+  const g = c.getContext('2d')
+  const r = g.createRadialGradient(128, 80, 20, 128, 80, 128)
+  r.addColorStop(0, 'rgba(255,246,226,0.55)'); r.addColorStop(0.55, 'rgba(255,240,215,0.22)'); r.addColorStop(1, 'rgba(255,240,215,0)')
+  g.fillStyle = r; g.fillRect(0, 0, 256, 160)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
 }
