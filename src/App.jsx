@@ -35,14 +35,6 @@ function Bookcase(props) {
   )
 }
 
-const SALON_SEEN = 'levana.salon.vu'
-function salonSeen() {
-  try { return !!sessionStorage.getItem(SALON_SEEN) } catch { return false }
-}
-function markSalonSeen() {
-  try { sessionStorage.setItem(SALON_SEEN, '1') } catch { /* ignore */ }
-}
-
 function readPref(key, fallback) {
   try { return localStorage.getItem(key) || fallback } catch { return fallback }
 }
@@ -75,8 +67,9 @@ function Library({ user, onSignOut }) {
   const [scanner, setScanner] = useState(false)
   const [findOpen, setFindOpen] = useState(false)   // téléphone : « Chercher » (retrouver un livre, ranger par)
   const [guide, setGuide] = useState(false)     // livres du panier sortis en bas de l'écran, prêts à ranger
-  // salon d'accueil : 'first' à l'arrivée, 'back' quand on y retourne, null dans la bibliothèque
-  const [salon, setSalon] = useState(() => (HAS_WEBGL && !salonSeen() ? 'first' : null))
+  // salon d'accueil : on y arrive toujours en ouvrant le site ('first'), 'back' quand on y
+  // retourne, null dans la bibliothèque
+  const [salon, setSalon] = useState(() => (HAS_WEBGL ? 'first' : null))
   const basket = useBasket(user.id)
   const mobile = useIsMobile()
   const [bump, setBump] = useState(0)
@@ -206,7 +199,7 @@ function Library({ user, onSignOut }) {
   }, [])
 
   const openGuide = useCallback(() => {
-    if (salon) { markSalonSeen(); setSalon(null) }
+    if (salon) setSalon(null)
     setGuide(true)
   }, [salon])
 
@@ -398,7 +391,7 @@ function Library({ user, onSignOut }) {
         <Suspense fallback={<div className="salon" />}>
           <LivingRoom
             from={salon} books={books} shelves={effShelves} basketItems={basket.items}
-            onEntered={next => { markSalonSeen(); setSalon(null); if (next === 'guide' && manual && basket.items.length) setGuide(true) }}
+            onEntered={next => { setSalon(null); if (next === 'guide' && manual && basket.items.length) setGuide(true) }}
             onOpenBook={b => (b ? openBook(b, null) : openSearch())}
             onAddBooks={() => openSearch()}
             onSignOut={onSignOut}
