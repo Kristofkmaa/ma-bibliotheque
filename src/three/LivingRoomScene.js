@@ -2,10 +2,8 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { grainTexture, doorTexture } from './textures'
 import { weaveTexture, ropeTexture } from './BasketScene'
-import { spineColors, toDisplay } from '../lib/bookUtils'
-import { preloadCover } from '../lib/covers'
-import { TvTutorial, TV_W, TV_H } from './tvTutorial'
-import { TvFavorites } from './tvFavorites'
+import { spineColors } from '../lib/bookUtils'
+import { TvSeries, TV_W, TV_H } from './tvSeries'
 import { resolveSkin } from '../lib/skins'
 import { RH, PT, SD, ST } from './BookcaseScene'
 import { noTouchSelect } from './webgl'
@@ -766,9 +764,7 @@ export class LivingRoomScene {
     tv.add(stand, neck, frame)
     this.tvCanvas = document.createElement('canvas')
     this.tvCanvas.width = TV_W; this.tvCanvas.height = TV_H
-    this.tut = new TvTutorial()
-    this.fav = new TvFavorites()
-    this.tvMode = this.cb.tvMode?.() || 'tuto'      // le tuto, ou mes livres en grand
+    this.series = new TvSeries(() => { if (this.tvCanvas) this._drawTv() })
     this.tvBubbleOn = this.cb.tvBubble?.() ?? true
     this.tvTex = this._track(new THREE.CanvasTexture(this.tvCanvas))
     this.tvTex.colorSpace = THREE.SRGBColorSpace
@@ -776,103 +772,40 @@ export class LivingRoomScene {
     screen.position.set(0, 0.42, 0.0235)
     tv.add(screen)
     this.tvScreen = screen
-    this.tvList = []
-    this.tvIndex = 0
-    this.tvSwitch = 1
     this._drawTv()
-    this._register('tv', grp, 'Le tuto')
+    this._register('tv', grp, 'Nos séries')
     this.wallOf('left').attached.push(grp)
   }
 
-  /** Livres à montrer sur l'écran : en cours, sinon les derniers arrivés. */
-  /** Livres à montrer en grand sur la télé (mode « mes livres »). */
-  setTvBooks(list, label) {
-    this.fav ||= new TvFavorites()
-    this.fav.setBooks(list, label)
-    if (this.tvMode === 'fav') this._drawTv()
-  }
-
-  /** Ce que passe la télé : 'tuto' ou 'fav' (la couverture de mes livres, en grand). */
-  setTvMode(mode) {
-    this.fav ||= new TvFavorites()
-    if (mode === this.tvMode) return
-    this.tvMode = mode
-    if (mode === 'tuto') this.tut.go(0)
+  /** Nos séries, sur l'écran de la télé. */
+  setSeries(list) {
+    this.series.setSeries(list)
     this._drawTv()
     this._emitSlide()
   }
-  get screen() { return this.tvMode === 'fav' ? (this.fav ||= new TvFavorites()) : this.tut }
   setTvBubble(on) { this.tvBubbleOn = on }
 
   _emitSlide() {
-    const sc = this.screen
-    if (this.tvMode === 'fav') {
-      const b = this.fav.book
-      this.cb.onTvSlide?.({ mode: 'fav', i: sc.i, count: sc.count, book: b })
-    } else {
-      this.cb.onTvSlide?.({ mode: 'tuto', i: sc.i, count: sc.count })
-      this.cb.onTutSlide?.(sc.i)
-    }
+    this.cb.onTvSlide?.({ i: this.series.i, count: this.series.count })
   }
 
-  _setTvBooksOld(list, kind) {
-    const sig = kind + '|' + list.map(b => b.id).join(',')
-    if (sig === this.tvSig) return
-    this.tvSig = sig
-    this.tvList = list
-    this.tvKind = kind
-    this.tvIndex = 0
-    this.tvImgs = new Map()
-    list.forEach(b => preloadCover(b).then(res => { if (res?.img) { this.tvImgs.set(b.id, res.img); this._drawTv() } }))
-    this.tvNext = this.time + 6
-    this._drawTv()
-  }
-  get tvBook() { return this.tvList[this.tvIndex] || null }
-
-  /** L'écran de la télé : le tuto, en boucle. */
   _drawTv() {
-    this.screen.draw(this.tvCanvas.getContext('2d'), TV_W, TV_H)
+    this.series.draw(this.tvCanvas.getContext('2d'), TV_W, TV_H)
     this.tvTex.needsUpdate = true
-  }
-
-  /**
-   * Zoom terminé : un calque net (à la définition de l'écran du téléphone) se pose exactement
-   * sur l'écran de la télé. La texture 3D suffit de loin, pas de près.
-   */
-  _placeTvOverlay() {
-    const el = this.cb.tvOverlay?.()
-    if (!el) return false
-    const on = !!this.tvZoom && this.tvZoom.dir > 0 && this.tvZoom.k >= 1
-    if (!on) { if (el.style.display !== 'none') el.style.display = 'none'; return false }
-    const S = this.renderer.domElement.getBoundingClientRect()
-    const pts = [[-0.505, 0.285], [0.505, -0.285]].map(([x, y]) => {
-      const v = this.tvScreen.localToWorld(new THREE.Vector3(x, y, 0.001)).project(this.camera)
-      return { x: S.left + ((v.x + 1) / 2) * S.width, y: S.top + ((1 - v.y) / 2) * S.height }
-    })
-    const x = Math.min(pts[0].x, pts[1].x), y = Math.min(pts[0].y, pts[1].y)
-    const w = Math.abs(pts[1].x - pts[0].x), h = Math.abs(pts[1].y - pts[0].y)
-    const dpr = Math.min(3, window.devicePixelRatio || 1)
-    const cw = Math.round(w * dpr), ch = Math.round(h * dpr)
-    if (el.width !== cw || el.height !== ch) { el.width = cw; el.height = ch }
-    Object.assign(el.style, { display: 'block', left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` })
-    this.screen.draw(el.getContext('2d'), cw, ch)
-    return true
   }
 
   // ---- Zoom sur la télé (le tuto en grand) -------------------------------------------------
   _tvView() {
-    // face à l'écran, comme assis dans le canapé (rien entre la caméra et la télé)
+    // face à l'écran, tout près : l'écran remplit la vue (on entre dans la télé)
     const target = this.tvScreen.getWorldPosition(new THREE.Vector3())
     const t = Math.tan(THREE.MathUtils.degToRad(TV_FOV / 2))
-    const dist = Math.max((1.01 * 1.1) / 2 / (t * this.camera.aspect), (0.57 * 1.9) / 2 / t)
-    // la télé reste au milieu (le texte du tuto se lit dessous), le regard passe au-dessus de la table basse
-    return { target, az: Math.PI / 2, el: 0.06, dist }
+    const dist = Math.min(1.01 / 2 / (t * this.camera.aspect), 0.57 / 2 / t) * 0.94
+    return { target, az: Math.PI / 2, el: 0, dist }
   }
 
   zoomTv() {
     if (this.fly || this.tvZoom) return
     this._setHover(null)
-    if (this.tvMode !== 'fav') this.tut.go(0)
     this._drawTv()
     this.tvZoom = { k: 0, dir: 1, from: { target: this.target.clone(), az: this.az.v + (this.lastDrift || 0), el: this.el.v, dist: this.dist } }
     this.cb.onTvZoom?.(true)
@@ -885,8 +818,8 @@ export class LivingRoomScene {
     this.cb.onTvZoom?.(false)
   }
 
-  tutNext() { this.screen.next(); this._drawTv(); this._emitSlide() }
-  tutPrev() { this.screen.prev(); this._drawTv(); this._emitSlide() }
+  /** Zoom terminé : on est dans la télé (le module des séries la recouvre). */
+  get inTv() { return !!this.tvZoom && this.tvZoom.dir > 0 && this.tvZoom.k >= 1 }
 
   _stepTvZoom(dt) {
     const z = this.tvZoom
@@ -895,10 +828,10 @@ export class LivingRoomScene {
     const tgt = a.target.clone().lerp(b.target, e)
     const dist = Math.exp(Math.log(a.dist) + (Math.log(b.dist) - Math.log(a.dist)) * e)
     this.camera.fov = FOV + (TV_FOV - FOV) * e
-    // téléphone : l'image glisse vers le haut (la télé au-dessus du texte du tuto), sans baisser la caméra
-    if (this.camera.aspect < 1) this.camera.setViewOffset(this.w, this.h, 0, Math.round(this.h * 0.2 * e), this.w, this.h)
-    else this.camera.clearViewOffset()
+    this.camera.clearViewOffset()
     this.camera.updateProjectionMatrix()
+    if (z.dir > 0 && z.k >= 1 && !z.inside) { z.inside = true; this.cb.onTvInside?.(true) }
+    if (z.dir < 0 && z.inside) { z.inside = false; this.cb.onTvInside?.(false) }
     this._placeCamera(a.az + shortAngle(a.az, b.az) * e, a.el + (b.el - a.el) * e, dist, tgt)
     if (z.dir < 0 && z.k <= 0) {
       this.tvZoom = null
@@ -1032,7 +965,7 @@ export class LivingRoomScene {
 
   /** Les bulles au-dessus de la télé et du panier. */
   _placeBubbles(dt) {
-    if (!this.bubbles?.tv) this._setBubble('tv', 'Le tuto du site')
+    if (!this.bubbles?.tv) this._setBubble('tv', 'Nos séries')
     this.bornAt ||= performance.now()
     const free = !this.fly && !this.tvZoom && performance.now() - this.bornAt > 1200
     const f = 1 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))
@@ -1054,54 +987,6 @@ export class LivingRoomScene {
       b.sprite.position.copy(pos)
       b.sprite.position.y += Math.sin(this.time * 2 + (kind === 'tv' ? 0 : 1.7)) * 0.025
     }
-  }
-
-  _drawTvBooks() {
-    const c = this.tvCanvas, g = c.getContext('2d'), w = c.width, h = c.height
-    const grad = g.createLinearGradient(0, 0, w, h)
-    grad.addColorStop(0, '#1E2A55'); grad.addColorStop(1, '#2B47B0')
-    g.fillStyle = grad; g.fillRect(0, 0, w, h)
-    const b = this.tvBook
-    const sw = this.tvSwitch ?? 1      // 0 → 1 pendant le changement de livre
-    g.save()
-    g.globalAlpha = clamp(sw * 1.4 - 0.2, 0, 1)
-    g.translate((1 - ease(clamp(sw, 0, 1))) * 60, 0)
-    g.textBaseline = 'alphabetic'
-    if (b) {
-      const d = toDisplay(b)
-      const img = this.tvImgs?.get(b.id)
-      const ch = 280, cw = 186, cx = 48, cy = (h - ch) / 2
-      g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(cx + 8, cy + 10, cw, ch)
-      if (img) g.drawImage(img, cx, cy, cw, ch)
-      else { g.fillStyle = spineColors(b)[0]; g.fillRect(cx, cy, cw, ch) }
-      g.fillStyle = '#F4C35A'
-      g.font = '600 17px "Inter Tight", system-ui, sans-serif'
-      g.fillText((this.tvKind === 'en_cours' ? 'EN COURS DE LECTURE' : 'DERNIER ARRIVÉ').split('').join(String.fromCharCode(8202)), 270, 96)
-      g.fillStyle = '#F4F2ED'
-      g.font = '500 40px "Newsreader", Georgia, serif'
-      const lines = wrap(g, d.title, w - 300, 3)
-      lines.forEach((l, k) => g.fillText(l, 270, 148 + k * 44))
-      g.fillStyle = 'rgba(244,242,237,0.7)'
-      g.font = 'italic 400 24px "Newsreader", Georgia, serif'
-      g.fillText(wrap(g, d.authors.join(', '), w - 300, 1)[0] || '', 270, 160 + lines.length * 44)
-      if (this.tvList.length > 1) {
-        this.tvList.forEach((_, k) => { g.fillStyle = k === this.tvIndex ? '#F4C35A' : 'rgba(244,242,237,0.35)'; g.beginPath(); g.arc(276 + k * 18, h - 44, 5, 0, 7); g.fill() })
-      }
-    } else {
-      g.fillStyle = '#F4F2ED'; g.textAlign = 'center'
-      g.font = '500 46px "Newsreader", Georgia, serif'
-      g.fillText('Bienvenue', w / 2, h / 2 - 6)
-      g.font = 'italic 400 24px "Newsreader", Georgia, serif'
-      g.fillStyle = 'rgba(244,242,237,0.75)'
-      g.fillText('Tes lectures en cours passeront ici', w / 2, h / 2 + 36)
-      g.textAlign = 'left'
-    }
-    g.restore()
-    // reflet
-    const r = g.createLinearGradient(0, 0, w, h)
-    r.addColorStop(0, 'rgba(255,255,255,0.08)'); r.addColorStop(0.45, 'rgba(255,255,255,0)')
-    g.fillStyle = r; g.fillRect(0, 0, w, h)
-    this.tvTex.needsUpdate = true
   }
 
   // ---- Canapé ------------------------------------------------------------------------------
@@ -1756,12 +1641,7 @@ export class LivingRoomScene {
       const p = this.pointer
       if (!p || p.id !== e.pointerId) return
       this.pointer = null
-      if (this.tvZoom) {
-        const dx = p.x - p.x0
-        if (p.drag) { if (Math.abs(dx) > 40) { if (dx < 0) this.tutNext(); else this.tutPrev() } return }
-        if (pick(e.clientX, e.clientY) === 'tv') this.tutNext()
-        return
-      }
+      if (this.tvZoom) return
       if (p.drag) {
         const k = 2.6 / Math.max(320, this.w)
         this.az.t = this.az.t - p.vx * 160 * k
@@ -1800,7 +1680,7 @@ export class LivingRoomScene {
       case 'lamp': this.setLamp(!this.lampState); break
       case 'sofa': this.cushions.forEach((c, i) => { c.s.vel -= 1.1 + (i % 3) * 0.2 }); break
       case 'plant': this.leaves.forEach((l, i) => { l.sway.vel += (i % 2 ? 1 : -1) * 3 }); break
-      case 'tv': if (this.tvZoom) this.tutNext(); else this.zoomTv(); break
+      case 'tv': if (!this.tvZoom) this.zoomTv(); break
       case 'tvbubble': this.zoomTv(); break
       case 'tvbubble-close': this.tvBubbleOn = false; this.cb.onTvBubbleClose?.(); break
       case 'basketbubble': this.cb.onBasket?.(); break
@@ -1955,11 +1835,11 @@ export class LivingRoomScene {
       s.scale.setScalar(0.6 + t * 1.2)
       s.quaternion.copy(this.camera.quaternion)
     }
-    // télé : le tuto tourne en boucle (plus fluide quand on le regarde en grand)
-    if (this.screen.update(dt)) this._emitSlide()
+    // télé : nos séries défilent (plus fluide pendant qu'on s'en approche)
+    if (this.inTv) return           // on est dans la télé : le module des séries recouvre tout
+    if (this.series.update(dt)) this._emitSlide()
     this.tvAcc = (this.tvAcc || 0) + dt
-    const sharp = this._placeTvOverlay()
-    if (!sharp && this.tvAcc >= (this.tvZoom ? 1 / 30 : 1 / 12)) { this.tvAcc = 0; this._drawTv() }
+    if (this.tvAcc >= (this.tvZoom ? 1 / 30 : 1 / 12)) { this.tvAcc = 0; this._drawTv() }
     this._placeBubbles(dt)
 
     if (moving) this.shadowDirty = Math.max(this.shadowDirty, 1)
@@ -2019,24 +1899,6 @@ function hashId(s) {
   return Math.abs(h)
 }
 
-function wrap(g, text, maxW, maxLines) {
-  const words = (text || '').split(/\s+/)
-  const lines = []
-  let line = ''
-  for (const w of words) {
-    const t = line ? line + ' ' + w : w
-    if (g.measureText(t).width > maxW && line) { lines.push(line); line = w } else line = t
-  }
-  if (line) lines.push(line)
-  if (lines.length > maxLines) {
-    const keep = lines.slice(0, maxLines)
-    let last = keep[maxLines - 1]
-    while (g.measureText(last + '…').width > maxW && last.length > 1) last = last.slice(0, -1)
-    keep[maxLines - 1] = last.trimEnd() + '…'
-    return keep
-  }
-  return lines
-}
 
 /** Rectangle aux coins arrondis, à plat (tapis). */
 class RoundedPlane extends THREE.ShapeGeometry {

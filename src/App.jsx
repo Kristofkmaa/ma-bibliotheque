@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useAuth } from './hooks/useAuth'
 import { useLibrary } from './hooks/useLibrary'
 import { useShelves } from './hooks/useShelves'
+import { useSeries } from './hooks/useSeries'
 import { effectiveShelves, placeBook, moveBook } from './lib/shelfOps'
 import { useBasket } from './hooks/useBasket'
 import { SearchBasket, BasketTray } from './components/Basket'
@@ -54,6 +55,7 @@ function Logo({ sub = 'Bibliothèque' }) {
 function Library({ user, onSignOut }) {
   const { books, loading, addBook, updateBook, removeBook, removeBooks, isInLibrary } = useLibrary(user.id)
   const { shelves, commit: commitShelves, storage } = useShelves(user.id)
+  const { series, addSeries, updateSeries, removeSeries } = useSeries(user.id)
   const [sort, setSortState] = useState(() => readPref('levana.sort2', 'manual'))
   const [newShelfSignal] = useState(0)
   const [shelvesOpen, setShelvesOpen] = useState(null)   // null : fermé ; sinon { id } de l'étagère à montrer
@@ -391,6 +393,7 @@ function Library({ user, onSignOut }) {
         <Suspense fallback={<div className="salon" />}>
           <LivingRoom
             from={salon} books={books} shelves={effShelves} basketItems={basket.items}
+            series={series} onAddSeries={addSeries} onUpdateSeries={updateSeries} onRemoveSeries={removeSeries}
             onEntered={next => { setSalon(null); if (next === 'guide' && manual && basket.items.length) setGuide(true) }}
             onOpenBook={b => (b ? openBook(b, null) : openSearch())}
             onAddBooks={() => openSearch()}

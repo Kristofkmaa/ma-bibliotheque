@@ -3,7 +3,7 @@
  * que si son serveur l'autorise (CORS). On la récupère ici et on la renvoie avec l'en-tête
  * qui va bien. Seuls quelques hôtes de couvertures sont acceptés (pas de relais ouvert).
  */
-const ALLOWED = ['books.google.com', 'books.googleusercontent.com', 'covers.openlibrary.org', 'archive.org']
+const ALLOWED = ['books.google.com', 'books.googleusercontent.com', 'covers.openlibrary.org', 'archive.org', 'image.tmdb.org']
 
 export default async function handler(req, res) {
   try {

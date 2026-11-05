@@ -100,3 +100,41 @@ drop policy if exists "Suppression de ses étagères" on shelves;
 create policy "Suppression de ses étagères" on shelves for delete using (auth.uid() = user_id);
 
 create index if not exists idx_shelves_user on shelves(user_id, position);
+
+-- =============================================
+-- Nos séries préférées (la télé du salon)
+-- À exécuter une fois : tant que cette table n'existe pas, le site garde
+-- les séries dans le navigateur, puis les envoie ici dès qu'elle existe.
+-- =============================================
+create table if not exists user_series (
+  id              uuid primary key default gen_random_uuid(),
+  user_id         uuid references auth.users(id) on delete cascade not null,
+  tmdb_id         integer not null,
+  name            text not null,
+  overview        text,
+  first_air_date  text,
+  poster_path     text,
+  backdrop_path   text,
+  genres          text[] default '{}',
+  seasons         integer,
+  networks        text[] default '{}',
+  rating          integer check (rating between 1 and 5),
+  added_at        timestamptz default now(),
+  unique(user_id, tmdb_id)
+);
+
+alter table user_series enable row level security;
+
+drop policy if exists "Lecture de ses séries" on user_series;
+create policy "Lecture de ses séries" on user_series for select using (auth.uid() = user_id);
+
+drop policy if exists "Ajout de ses séries" on user_series;
+create policy "Ajout de ses séries" on user_series for insert with check (auth.uid() = user_id);
+
+drop policy if exists "Modification de ses séries" on user_series;
+create policy "Modification de ses séries" on user_series for update using (auth.uid() = user_id);
+
+drop policy if exists "Suppression de ses séries" on user_series;
+create policy "Suppression de ses séries" on user_series for delete using (auth.uid() = user_id);
+
+create index if not exists idx_user_series_user on user_series(user_id, added_at desc);
