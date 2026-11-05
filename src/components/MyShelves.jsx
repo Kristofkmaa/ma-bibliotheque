@@ -24,13 +24,18 @@ export default function MyShelves({ eff, commit, onClose, initialId, onDeleteBoo
   const [closing, setClosing] = useState(false)
   const nameRef = useRef(null)
   const caseRef = useRef(null)
+  const panelRef = useRef(null)
   const flip = useRef(null)
 
   // la sélection suit l'étagère (y compris quand l'étagère par défaut reçoit un vrai identifiant)
   useEffect(() => {
     if (!shelf && real.length) setSel(real[0].id)
   }, [shelf, real])
-  useEffect(() => { setName(shelf?.name || ''); setDel(null); setErr('') }, [sel]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setName(shelf?.name || ''); setDel(null); setErr('')
+    // suppression demandée par un balayage sur une autre étagère : on la lance une fois sélectionnée
+    if (pendingDel.current && pendingDel.current === sel) { pendingDel.current = null; askDelete(true) }
+  }, [sel]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // FLIP : les étagères glissent vers leur nouvelle place quand on change l'ordre
   const remember = () => {
@@ -93,11 +98,64 @@ export default function MyShelves({ eff, commit, onClose, initialId, onDeleteBoo
     return real[i + 1] || real[i - 1] || null
   }
 
-  const askDelete = () => {
+  const askDelete = (scroll = false) => {
     if (!shelf || real.length < 2) return
     setErr('')
     setDest(neighbour()?.id || '')
     setDel('ask')
+    if (scroll) setTimeout(() => panelRef.current?.querySelector('.ms-danger')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80)
+  }
+
+  // ---- Balayer une étagère vers la gauche (comme sur iPhone) : « Supprimer » apparaît ----------
+  const REVEAL = 92
+  const [swiped, setSwiped] = useState(null)
+  const swipeMoved = useRef(false)
+  const pendingDel = useRef(null)
+  const rowEls = useRef({})
+  const swipeDelete = id => {
+    setSwiped(null)
+    if (real.length < 2) return
+    if (id === sel) askDelete(true)
+    else { saveName(); pendingDel.current = id; setSel(id) }
+  }
+  const startSwipe = (e, id) => {
+    if (e.button > 0) return
+    const el = rowEls.current[id]
+    if (!el) return
+    const x0 = e.clientX, y0 = e.clientY
+    const base = swiped === id ? -REVEAL : 0
+    let dragging = false, dead = false
+    const done = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up) }
+    const move = ev => {
+      if (dead) return
+      const dx = ev.clientX - x0, dy = ev.clientY - y0
+      if (!dragging) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { dead = true; return }     // on fait défiler la liste
+        if (Math.abs(dx) < 8) return
+        dragging = true; swipeMoved.current = true
+        el.style.transition = 'none'
+        el.parentElement?.classList.add('dragging')
+        if (swiped && swiped !== id) setSwiped(null)
+      }
+      ev.preventDefault()
+      let x = base + dx
+      if (x > 0) x *= 0.25
+      if (x < -REVEAL) x = -REVEAL + (x + REVEAL) * 0.45
+      el.style.transform = `translateX(${x}px)`
+    }
+    const up = ev => {
+      done()
+      if (!dragging) return
+      el.parentElement?.classList.remove('dragging')
+      el.style.transition = ''
+      el.style.transform = ''
+      const x = base + (ev.clientX - x0)
+      if (x < -REVEAL * 1.8 && real.length >= 2) { swipeDelete(id); return }   // grand balayage : on demande tout de suite
+      setSwiped(x < -REVEAL / 2 ? id : null)
+    }
+    window.addEventListener('pointermove', move, { passive: false })
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
   }
 
   // l'étagère se replie, puis on enregistre
@@ -142,7 +200,7 @@ export default function MyShelves({ eff, commit, onClose, initialId, onDeleteBoo
 
   return (
     <div className={'ms-backdrop' + (closing ? ' closing' : '')} onPointerDown={e => { if (e.target === e.currentTarget) close() }}>
-      <div className="ms-panel grain" role="dialog" aria-modal="true" aria-label="Mes étagères">
+      <div className="ms-panel grain" ref={panelRef} role="dialog" aria-modal="true" aria-label="Mes étagères">
         <div className="ms-head">
           <div className="ms-title">Mes étagères <span className="lbl">{plural(real.length, 'étagère')}</span></div>
           <button type="button" className="lbl box" onClick={close}>Fermer</button>
@@ -157,11 +215,24 @@ export default function MyShelves({ eff, commit, onClose, initialId, onDeleteBoo
                 const pal = resolveSkin(s)
                 const on = s.id === sel
                 return (
+                  <div key={s.id} data-id={s.id} className={'ms-swipe' + (swiped === s.id ? ' open' : '') + (leaving === s.id ? ' leaving' : '')}>
                   <button
-                    key={s.id} type="button" data-id={s.id}
-                    className={`ms-row d-${pal.doors}` + (on ? ' on' : '') + (fresh === s.id ? ' fresh' : '') + (leaving === s.id ? ' leaving' : '')}
+                    type="button" className="ms-swipe-act" tabIndex={swiped === s.id ? 0 : -1} disabled={real.length < 2}
+                    onClick={() => swipeDelete(s.id)} aria-label={`Supprimer l’étagère ${s.name}`}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5" /></svg>
+                    <span>{real.length < 2 ? 'Dernière' : 'Supprimer'}</span>
+                  </button>
+                  <button
+                    type="button" ref={el => { rowEls.current[s.id] = el }}
+                    className={`ms-row d-${pal.doors}` + (on ? ' on' : '') + (fresh === s.id ? ' fresh' : '')}
                     style={skinVars(pal)}
-                    onClick={() => { if (s.id !== sel) { saveName(); setSel(s.id) } }}
+                    onPointerDown={e => startSwipe(e, s.id)}
+                    onClick={() => {
+                      if (swipeMoved.current) { swipeMoved.current = false; return }
+                      if (swiped) { setSwiped(null); return }
+                      if (s.id !== sel) { saveName(); setSel(s.id) }
+                    }}
                     aria-pressed={on}
                   >
                     <span className="ms-cell">
@@ -170,6 +241,7 @@ export default function MyShelves({ eff, commit, onClose, initialId, onDeleteBoo
                     </span>
                     <span className="ms-plank"><span className="ms-label">{s.id === sel ? name || s.name : s.name}</span></span>
                   </button>
+                  </div>
                 )
               })}
               {loose && (
@@ -185,6 +257,7 @@ export default function MyShelves({ eff, commit, onClose, initialId, onDeleteBoo
             <button type="button" className="ms-add" onClick={add}>
               <span className="ms-add-plus" aria-hidden="true">+</span> Nouvelle étagère
             </button>
+            {real.length > 1 && <p className="ms-swipe-hint">Astuce : fais glisser une étagère vers la gauche pour la supprimer.</p>}
           </div>
 
           {/* réglages de l'étagère choisie */}
