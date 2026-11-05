@@ -36,6 +36,8 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   const tvVideo = useRef(null)
   const [sound, setSound] = useState(false)      // le son de la télé (coupé à l'arrivée)
   const [onAir, setOnAir] = useState(false)      // un générique passe
+  // rideaux fermés : tout le salon passe en sombre (mode cinéma)
+  const [cinema, setCinema] = useState(() => { try { return localStorage.getItem('levana.salon.rideaux') === '1' } catch { return false } })
   const count = basketItems?.length || 0
   const mobile = useIsMobile()
   const cb = useRef({})
@@ -78,6 +80,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       onBasket: () => (cb.current.count > 0 ? cb.current.go('guide') : cb.current.onAddBooks?.()),
       onTvZoom: on => { setTv(on); if (on) { store.set(BUBBLE_KEY, 'off'); setBubbleOff(true) } },
       onTvInside: setInside,
+      onCinema: setCinema,
       tvVideo: () => tvVideo.current,
       tvBubble: () => cb.current.bubbleOn,
       onTvBubbleClose: () => { store.set(BUBBLE_KEY, 'off'); setBubbleOff(true) },
@@ -138,7 +141,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
     : 'Ta bibliothèque t’attend'
 
   return (
-    <div className={`salon mood-${mode}` + (going || tv ? ' going' : '') + (tv ? ' tv-mode' : '')} ref={rootRef}>
+    <div className={`salon mood-${mode}` + (going || tv ? ' going' : '') + (tv ? ' tv-mode' : '') + (cinema ? ' cinema' : '')} ref={rootRef}>
       <div className="salon-stage" ref={hostRef} />
       {/* les génériques, en fond sur la télé (posés sur l'écran 3D par la scène) */}
       <div className="tv-video" ref={tvVideo} aria-hidden="true">

@@ -1869,3 +1869,18 @@ body.immersive .scene { padding: 0 !important; }
 .vx-seg button.on { background: var(--stv-accent); color: #fff; }
 .vx-seg-top { position: relative; z-index: 3; justify-self: start; margin: 2px clamp(16px, 3.4vw, 48px) 0; }
 .stv.vhs .stv-screen.vx-v-catalog:has(.vx-seg-top) { grid-template-rows: auto auto minmax(0, 1fr); }
+
+/* Mode cinéma : rideaux fermés, tout le salon passe en sombre */
+.salon { transition: background-color 0.8s ease; }
+.salon.cinema { background-color: #0E0D0C; background-image: none; }
+.salon.cinema .logo-name, .salon.cinema .salon-hello { color: #F1ECE3; }
+.salon.cinema .logo-sub, .salon.cinema .salon-sub, .salon.cinema .salon-hint, .salon.cinema .salon-out { color: rgba(241, 236, 227, 0.6); }
+.salon.cinema .salon-go { background: rgba(20, 18, 16, 0.6); color: #F1ECE3; border-color: rgba(241, 236, 227, 0.5); }
+.salon.cinema .salon-go.cobalt { background: var(--cobalt); color: #fff; border-color: var(--cobalt); }
+.salon.cinema .tabbar { background-color: #161412; border-top-color: rgba(255, 255, 255, 0.08); }
+.salon.cinema .salon-tabs .tab { color: #F1ECE3; }
+.salon.cinema .salon-tabs-hint { color: rgba(241, 236, 227, 0.55); }
+.salon.cinema .tv-sound { background: #1C1A17; color: #F1ECE3; border-color: rgba(255, 255, 255, 0.15); }
+.salon.cinema .tv-sound.on { background: var(--cobalt); }
+.salon.cinema .salon-chip { background: #1C1A17; color: #F1ECE3; }
+.salon .logo-name, .salon .salon-hello, .salon .salon-sub { transition: color 0.8s ease; }

@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { grainTexture, doorTexture } from './textures'
+import { grainTexture } from './textures'
 import { weaveTexture, ropeTexture } from './BasketScene'
 import { spineColors } from '../lib/bookUtils'
 import { TvSeries, TV_W, TV_H } from './tvSeries'
@@ -14,28 +14,30 @@ import { noTouchSelect } from './webgl'
  * on touche un objet pour qu'il réagisse ; la bibliothèque mène au mur de livres.
  */
 
-const R = 2            // demi-côté de la pièce
+const R = 2.4          // demi-côté de la pièce (assez grande : chaque mur a son rôle)
 const H = 3.0          // hauteur des murs (la pièce occupe la hauteur d'un téléphone)
 const T = 0.12         // épaisseur des murs
 const FT = 0.2         // épaisseur du plancher
 const FOV = 30
 const AZ_MIN = 0.18, AZ_MAX = 1.2, AZ0 = 0.62
-const EL_MIN = 0.3, EL_MAX = 0.78, EL0 = 0.5
+const EL_MIN = 0.3, EL_MAX = 0.82, EL0 = 0.58
 const TARGET0 = new THREE.Vector3(0, 0.95, 0)
 
 // emplacements (repère de la pièce)
 const BOOKCASE = { x: -1.05, z: -R + 0.2, w: 1.62, h: 2.18, d: 0.38 }   // mur du fond, à gauche (face à la caméra)
 const FIRE = { x: 0, w: 1.3, d: 0.3, h: 1.38 }                         // centrée sur le mur de devant (loin des livres et du canapé)
-const TV = { z: -0.5 }                      // mur de gauche, en face du canapé : la toile de projection
-const SCR = { w: 2.2, h: 1.24, y: 1.56 }    // l'image projetée (16:9), presque tout le mur
-const PROJ = { x: 0.95, y: 2.55 }           // le vidéoprojecteur, suspendu au-dessus du canapé
-// les meubles en plus grand (la pièce garde sa taille : elle est plus remplie, tout se voit mieux)
-const BIG = { sofa: 1.2, fire: 1.2, table: 1.12, basket: 1.12, lamp: 1.15, plant: 1.25, pouf: 1.15, cabinet: 1.15, projector: 1.35 }
-const SOFA = { x: 1.34, z: 0.0 }            // face à la télé
-const TABLE = { x: -0.15, z: 0.0 }          // entre le canapé et la télé
-const LAMP = { x: 1.8, z: 1.38 }            // au bout du canapé
-const PLANT = { x: 1.62, z: -1.62 }         // coin du fond, à droite
-const WINDOW = { z: 1.42, y: 1.62, w: 0.66, h: 1.06 }
+// le mur de gauche est tout entier pour le vidéoprojecteur ; celui du fond pour la bibliothèque
+const TV = { z: 0 }                         // mur de gauche, en face du canapé : l'image projetée
+const SCR = { w: 3.0, h: 1.69, y: 1.68 }    // l'image projetée (16:9), presque tout le mur
+const PROJ = { x: 1.0, y: 2.62 }            // le vidéoprojecteur, suspendu au-dessus du canapé
+// les meubles en plus grand
+const BIG = { sofa: 1.4, fire: 1.3, table: 1.25, basket: 1.25, lamp: 1.25, plant: 1.35, pouf: 1.25, cabinet: 1, projector: 1.4 }
+const SOFA = { x: R - 0.78, z: 0.0 }        // contre le mur de droite, face à l'image
+const TABLE = { x: 0.1, z: 0.0 }            // entre le canapé et l'image
+const LAMP = { x: R - 0.45, z: 1.82 }       // au bout du canapé
+const PLANT = { x: R - 0.45, z: -R + 0.45 } // coin du fond, à droite
+const POUF = { x: 0.55, z: -1.45 }
+const WINDOW = { z: 0, y: 1.82, w: 0.8, h: 1.1 }   // mur de droite, derrière le canapé
 const SALON_ROWS = 4                        // la bibliothèque du salon montre au plus 4 étagères
 
 const COL = {
@@ -317,7 +319,7 @@ export class LivingRoomScene {
     this.last = performance.now()
     this._loop = this._loop.bind(this)
     this.raf = requestAnimationFrame(this._loop)
-    document.fonts?.ready.then(() => { if (this.tvCanvas) this._drawTv() })
+    document.fonts?.ready.then(() => { if (this.tvCanvas) this._drawTv(); this._drawCabinet() })
   }
 
   // ---- Matériaux --------------------------------------------------------------------------
@@ -438,29 +440,27 @@ export class LivingRoomScene {
       const c = this._rbox(L + 0.02, 0.05, T + 0.04, 0.015, capMat); c.position.set(0, H + 0.02, R + T / 2)
       grp.add(m, b, c)
     })
-    wall('left', new THREE.Vector3(-1, 0, 0), (grp, w) => {
-      // avec la fenêtre
+    // un mur latéral (x = ±R), percé d'une fenêtre s'il le faut
+    const sideWall = (sx, hole) => {
       const sh = new THREE.Shape()
       sh.moveTo(-R, 0); sh.lineTo(R, 0); sh.lineTo(R, H); sh.lineTo(-R, H); sh.closePath()
-      const u0 = -WINDOW.z - WINDOW.w / 2, u1 = -WINDOW.z + WINDOW.w / 2
-      const v0 = WINDOW.y - WINDOW.h / 2, v1 = WINDOW.y + WINDOW.h / 2
-      const hole = new THREE.Path()
-      hole.moveTo(u0, v0); hole.lineTo(u0, v1); hole.lineTo(u1, v1); hole.lineTo(u1, v0); hole.closePath()
-      sh.holes.push(hole)
+      if (hole) {
+        const u0 = -WINDOW.z - WINDOW.w / 2, u1 = -WINDOW.z + WINDOW.w / 2
+        const v0 = WINDOW.y - WINDOW.h / 2, v1 = WINDOW.y + WINDOW.h / 2
+        const p = new THREE.Path()
+        p.moveTo(u0, v0); p.lineTo(u0, v1); p.lineTo(u1, v1); p.lineTo(u1, v0); p.closePath()
+        sh.holes.push(p)
+      }
       const m = new THREE.Mesh(this._geo(new THREE.ExtrudeGeometry(sh, { depth: T, bevelEnabled: false })), this._mat(COL.wallLeft, { roughness: 0.95 }))
       m.rotation.y = Math.PI / 2
-      m.position.set(-R - T, 0, 0)
+      m.position.set(sx < 0 ? -R - T : R, 0, 0)
       m.receiveShadow = true
-      const b = this._rbox(0.025, 0.09, 2 * R, 0.006, baseMat); b.position.set(-R + 0.0125, 0.045, 0); b.castShadow = false
-      const c = this._rbox(T + 0.04, 0.05, 2 * R + 0.02, 0.015, capMat); c.position.set(-R - T / 2, H + 0.02, 0)
-      grp.add(m, b, c)
-    })
-    wall('right', new THREE.Vector3(1, 0, 0), grp => {
-      const m = this._rbox(T, H, 2 * R, 0.02, this._mat(COL.wallLeft, { roughness: 0.95 })); m.position.set(R + T / 2, H / 2, 0); m.castShadow = false; m.receiveShadow = true
-      const b = this._rbox(0.025, 0.09, 2 * R, 0.006, baseMat); b.position.set(R - 0.0125, 0.045, 0); b.castShadow = false
-      const c = this._rbox(T + 0.04, 0.05, 2 * R + 0.02, 0.015, capMat); c.position.set(R + T / 2, H + 0.02, 0)
-      grp.add(m, b, c)
-    })
+      const b = this._rbox(0.025, 0.09, 2 * R, 0.006, baseMat); b.position.set(sx * (R - 0.0125), 0.045, 0); b.castShadow = false
+      const c = this._rbox(T + 0.04, 0.05, 2 * R + 0.02, 0.015, capMat); c.position.set(sx * (R + T / 2), H + 0.02, 0)
+      return [m, b, c]
+    }
+    wall('left', new THREE.Vector3(-1, 0, 0), grp => { grp.add(...sideWall(-1, false)) })
+    wall('right', new THREE.Vector3(1, 0, 0), grp => { grp.add(...sideWall(1, true)) })
     this.wallOf = name => this.walls.find(w => w.name === name)
 
     // tapis
@@ -729,7 +729,7 @@ export class LivingRoomScene {
     grp.position.set(-R + 0.22, 0, TV.z)
     grp.rotation.y = Math.PI / 2      // contre le mur de gauche, face au canapé (+x)
     this.room.add(grp)
-    const W = 1.3, Hh = 0.44, D = 0.4, leg = 0.14
+    const W = 2.3, Hh = 0.5, D = 0.42, leg = 0.14
     const wood = this._woodMat(COL.walnut)
     const body = this._rbox(W, Hh, D, 0.03, wood)
     body.position.y = leg + Hh / 2
@@ -741,16 +741,33 @@ export class LivingRoomScene {
       l.castShadow = true
       grp.add(l)
     }
-    const caneTex = doorTexture('cannage')
-    const caneMat = this._mat(COL.oak, { map: caneTex, roughness: 0.8 })
+    // la vitrine : nos films et séries rangés dedans, derrière deux portes vitrées coulissantes
+    const iw = W - 0.1, ih = Hh - 0.1
+    this.cabCanvas = document.createElement('canvas')
+    this.cabCanvas.width = 2048; this.cabCanvas.height = Math.round(2048 * ih / iw)
+    this.cabTex = this._track(new THREE.CanvasTexture(this.cabCanvas))
+    this.cabTex.colorSpace = THREE.SRGBColorSpace
+    this.cabTex.anisotropy = 8
+    const inside = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(iw, ih)), this._mat('#ffffff', { map: this.cabTex, roughness: 0.75 }))
+    inside.position.set(0, leg + Hh / 2, D / 2 + 0.003)
+    grp.add(inside)
+    const glass = new THREE.MeshBasicMaterial({ map: this._track(glassTexture()), transparent: true, depthWrite: false, toneMapped: false })
+    const brass = this._mat(COL.brass, { metalness: 0.6, roughness: 0.3 })
     for (const sx of [-1, 1]) {
-      const door = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(W / 2 - 0.06, Hh - 0.07)), caneMat)
-      door.position.set(sx * (W / 4 - 0.005), leg + Hh / 2, D / 2 + 0.002)
+      const door = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(iw / 2 + 0.01, ih)), glass)
+      door.position.set(sx * (iw / 4), leg + Hh / 2, D / 2 + 0.012 + (sx > 0 ? 0.006 : 0))
       grp.add(door)
-      const knob = new THREE.Mesh(this._geo(new THREE.SphereGeometry(0.015, 10, 8)), this._mat(COL.brass, { metalness: 0.6, roughness: 0.3 }))
-      knob.position.set(sx * 0.05, leg + Hh / 2, D / 2 + 0.015)
-      grp.add(knob)
+      const pull = this._rbox(0.012, ih * 0.5, 0.012, 0.004, brass)
+      pull.position.set(sx * 0.06, leg + Hh / 2, D / 2 + 0.024)
+      grp.add(pull)
     }
+    // l'encadrement de la vitrine
+    for (const [w, h, x, y] of [[W - 0.04, 0.05, 0, leg + Hh - 0.025], [W - 0.04, 0.05, 0, leg + 0.025], [0.05, Hh, -W / 2 + 0.025, leg + Hh / 2], [0.05, Hh, W / 2 - 0.025, leg + Hh / 2]]) {
+      const f = this._rbox(w, h, 0.03, 0.008, wood)
+      f.position.set(x, y, D / 2 + 0.004)
+      grp.add(f)
+    }
+    this._drawCabinet()
     this._register('cabinet', grp, 'Films & séries')
     this.wallOf('left').attached.push(grp)
 
@@ -842,11 +859,53 @@ export class LivingRoomScene {
 
   /** Nos séries, sur l'écran de la télé. */
   setSeries(list) {
+    this.cabList = list
+    this._drawCabinet()
     this.series.setSeries(list)
     this._drawTv()
     this._emitSlide()
   }
   setTvBubble(on) { this.tvBubbleOn = on }
+
+  /** L'intérieur de la vitrine : un boîtier par film ou série, dans l'ordre d'ajout. */
+  _drawCabinet() {
+    const c = this.cabCanvas
+    if (!c) return
+    const g = c.getContext('2d'), W = c.width, Hc = c.height
+    const bg = g.createLinearGradient(0, 0, 0, Hc)
+    bg.addColorStop(0, '#120D09'); bg.addColorStop(0.25, '#2A1F16'); bg.addColorStop(1, '#3A2B1E')
+    g.fillStyle = bg; g.fillRect(0, 0, W, Hc)
+    const list = [...(this.cabList || [])].sort((a, b) => (a.added_at || '').localeCompare(b.added_at || ''))
+    const pad = 22, top = Hc * 0.1, h = Hc - top - 14
+    const sw = Math.min(h * 0.11, (W - 2 * pad) / Math.max(1, list.length) - 3)
+    list.forEach((s, i) => {
+      const x = pad + i * (sw + 3)
+      const [bgc, fg] = CASE_COLORS[hashName(s.name) % CASE_COLORS.length]
+      g.fillStyle = bgc; g.fillRect(x, top, sw, h)
+      g.fillStyle = s.media === 'movie' ? '#C23B33' : '#2A62C0'; g.fillRect(x, top, sw, h * 0.085)
+      const sh = g.createLinearGradient(x, 0, x + sw, 0)
+      sh.addColorStop(0, 'rgba(255,255,255,0.18)'); sh.addColorStop(0.45, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.3)')
+      g.fillStyle = sh; g.fillRect(x, top, sw, h)
+      g.save()
+      g.translate(x + sw / 2, top + h * 0.55); g.rotate(Math.PI / 2)
+      g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle'
+      g.font = `700 ${Math.round(sw * 0.48)}px "Inter Tight", system-ui, sans-serif`
+      let name = (s.name || '').toUpperCase()
+      while (name.length > 3 && g.measureText(name).width > h * 0.8) name = name.slice(0, -2) + '…'
+      g.fillText(name, 0, 0)
+      g.restore()
+    })
+    if (!list.length) {
+      g.fillStyle = 'rgba(244,239,227,0.55)'; g.textAlign = 'center'; g.textBaseline = 'middle'
+      g.font = `italic 400 ${Math.round(Hc * 0.13)}px "Newsreader", Georgia, serif`
+      g.fillText('Vos films et séries se rangeront ici', W / 2, Hc / 2)
+    }
+    // ombre portée de la tablette du haut
+    const sh = g.createLinearGradient(0, 0, 0, Hc * 0.3)
+    sh.addColorStop(0, 'rgba(0,0,0,0.55)'); sh.addColorStop(1, 'rgba(0,0,0,0)')
+    g.fillStyle = sh; g.fillRect(0, 0, W, Hc * 0.3)
+    this.cabTex.needsUpdate = true
+  }
 
   _emitSlide() {
     this.cb.onTvSlide?.({ i: this.series.i, count: this.series.count })
@@ -1320,8 +1379,9 @@ export class LivingRoomScene {
   // ---- Fenêtre -------------------------------------------------------------------------
   _buildWindow() {
     const grp = new THREE.Group()
-    grp.position.set(-R, WINDOW.y, WINDOW.z)
-    const lw = this.wallOf('left')
+    grp.position.set(R, WINDOW.y, WINDOW.z)
+    grp.rotation.y = Math.PI
+    const lw = this.wallOf('right')
     lw.grp.add(grp)
     lw.decor.push(grp)
     const sky = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(WINDOW.w, WINDOW.h)), new THREE.MeshBasicMaterial({ map: this._track(skyTexture(this.mode)), toneMapped: false }))
@@ -1382,6 +1442,7 @@ export class LivingRoomScene {
     this.curtainsClosed = closed
     this.curtainK.t = closed ? 1 : 0
     store('levana.salon.rideaux', closed ? '1' : '0')
+    this.cb.onCinema?.(closed)
     const it = this.items.get('window')
     if (it) it.label = closed ? 'Ouvrir les rideaux' : 'Fermer les rideaux'
   }
@@ -1401,7 +1462,7 @@ export class LivingRoomScene {
   // ---- Pouf --------------------------------------------------------------------------------
   _buildPouf() {
     const grp = new THREE.Group()
-    grp.position.set(0.12, 0, -1.0)
+    grp.position.set(POUF.x, 0, POUF.z)
     this.room.add(grp)
     const pr = [new THREE.Vector2(0, 0)]
     for (let k = 0; k <= 12; k++) {
@@ -1471,11 +1532,11 @@ export class LivingRoomScene {
     const totalH = lib.rowCount * (RH + PT) + PT
     // au plus 4 étagères dans le salon (celles du haut, là où l'on entre) : le reste est coupé sous le plancher
     const cutY = lib.rowCount > SALON_ROWS ? lib.rowBase(SALON_ROWS - 1) - PT : 0
-    const sc = Math.min(2.8 / (totalH - cutY + 0.1), 2.5 / (CW + 2 * ST + 0.06))
+    const sc = Math.min(2.8 / (totalH - cutY + 0.1), (2 * R - 1.3) / (CW + 2 * ST + 0.06))
     const hw = (CW / 2 + ST + 0.04) * sc     // demi-largeur (sur x)
     const g = new THREE.Group()
     // contre le mur du fond, entre le coin gauche et le meuble télé
-    g.position.set(clamp(-0.75, -1.92 + hw, 0.75 - hw), -cutY * sc, -R + 0.012 + (SD / 2 + 0.02) * sc)
+    g.position.set(clamp(-0.45, -R + 0.1 + hw, R - 1.0 - hw), -cutY * sc, -R + 0.012 + (SD / 2 + 0.02) * sc)
     g.scale.setScalar(sc)
     g.add(copy)
     this.room.add(g)
@@ -1854,9 +1915,10 @@ export class LivingRoomScene {
     const sal = 1 - this.mix
     // rideaux : on avance doucement, la pièce s'assombrit un peu
     if (this.curtainK && !this.curtainK.done) { for (let i = 0; i < sub; i++) this.curtainK.step(h); this._applyCurtains(); this.shadowDirty = Math.max(this.shadowDirty, 1) }
-    const dim = 1 - 0.28 * (this.dimK || 0)
+    // rideaux fermés : la pièce passe en « mode cinéma », la lumière baisse franchement
+    const dim = 1 - 0.5 * (this.dimK || 0)
     this.hemi.intensity = this.baseLights.hemi * sal * dim
-    this.key.intensity = this.baseLights.key * sal * (1 - 0.45 * (this.dimK || 0))
+    this.key.intensity = this.baseLights.key * sal * (1 - 0.7 * (this.dimK || 0))
     this.fill.intensity = this.baseLights.fill * sal
     this.libHemi.intensity = 1.35 * this.mix
     this.libKey.intensity = 1.55 * this.mix
@@ -2113,6 +2175,29 @@ function projGlowTexture() {
   const r = g.createRadialGradient(128, 80, 20, 128, 80, 128)
   r.addColorStop(0, 'rgba(255,246,226,0.55)'); r.addColorStop(0.55, 'rgba(255,240,215,0.22)'); r.addColorStop(1, 'rgba(255,240,215,0)')
   g.fillStyle = r; g.fillRect(0, 0, 256, 160)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
+}
+
+// ---- La vitrine du meuble télé -------------------------------------------------------------
+const CASE_COLORS = [
+  ['#1C1A17', '#EDE3CC'], ['#ECE2CB', '#1C1A17'], ['#6E1F1A', '#F1E4C8'], ['#1F3A2E', '#E9DFC9'],
+  ['#1E2B4A', '#EBDDB6'], ['#B5832E', '#1C1A17'], ['#5A3B26', '#EADCC0'], ['#3B3A37', '#E4D9C2'],
+  ['#C9BFAA', '#2A2620'], ['#8C2F22', '#F3E7CF'],
+]
+function hashName(n) { let h = 0; for (const c of n || '') h = (h * 31 + c.charCodeAt(0)) >>> 0; return h }
+
+/** Le verre des portes : presque transparent, un reflet en biais. */
+function glassTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64
+  const g = c.getContext('2d')
+  g.fillStyle = 'rgba(220,235,245,0.10)'; g.fillRect(0, 0, 256, 64)
+  const r = g.createLinearGradient(0, 0, 256, 64)
+  r.addColorStop(0, 'rgba(255,255,255,0)'); r.addColorStop(0.35, 'rgba(255,255,255,0)'); r.addColorStop(0.42, 'rgba(255,255,255,0.22)')
+  r.addColorStop(0.5, 'rgba(255,255,255,0.05)'); r.addColorStop(0.58, 'rgba(255,255,255,0.14)'); r.addColorStop(0.64, 'rgba(255,255,255,0)')
+  g.fillStyle = r; g.fillRect(0, 0, 256, 64)
+  g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 2; g.strokeRect(1, 1, 254, 62)
   const t = new THREE.CanvasTexture(c)
   t.colorSpace = THREE.SRGBColorSpace
   return t
