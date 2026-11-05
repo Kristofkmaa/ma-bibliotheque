@@ -458,7 +458,7 @@ export default function SeriesTV({ series, initialId = null, onAdd, onUpdate, on
       <div className="stv-bezel">
         <div className={'stv-screen sx-screen sx-v-' + view} onScroll={e => { e.currentTarget.scrollTop = 0 }}>
           <header className={'sx-top' + (scrolled || view !== 'home' ? ' solid' : '')}>
-            <p className="sx-logo">Levana<span>films & séries</span></p>
+            <p className="sx-logo">Maruchime<span>films & séries</span></p>
             <nav className="sx-tabs" aria-label="Rayons">
               {tabs.map(([k, l]) => <button key={k} type="button" className={view === 'home' && kind === k ? 'on' : ''} onClick={() => goKind(k)}>{l}</button>)}
             </nav>

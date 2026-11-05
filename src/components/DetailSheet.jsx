@@ -132,7 +132,7 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
 
   return (
     <div className="detail grain" ref={sheetRef} role="dialog" aria-modal="true">
-      <div className="detail-top-logo"><div className="logo"><div className="logo-name">Levana</div><div className="logo-sub">Bibliothèque</div></div></div>
+      <div className="detail-top-logo"><div className="logo"><div className="logo-name">Maruchime</div><div className="logo-sub">Bibliothèque</div></div></div>
       <div className="detail-scroll">
         <div className="detail-grid">
           <div className="detail-left">
@@ -140,7 +140,7 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
             <Line><h1 className="detail-title">{d.title}</h1></Line>
             {mode === 'edit' && reading === 'lu' && (
               <span className="read-stamp" key={stampKey} aria-label="Livre lu">
-                <span className="rs-top">Lu</span><span className="rs-bot">Bibliothèque Levana</span>
+                <span className="rs-top">Lu</span><span className="rs-bot">Bibliothèque Maruchime</span>
               </span>
             )}
             {meta && <Line className="detail-meta">{meta}</Line>}
@@ -247,7 +247,7 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
                   <image href={d.cover} x="0" y="0" width="600" height="900" preserveAspectRatio="xMidYMid slice" onError={() => setImgError(true)} />
                 ) : (
                   <g fill={ink} textAnchor="middle" fontFamily="Newsreader, Georgia, serif">
-                    <text x="300" y="120" fontSize="20" letterSpacing="6" fontFamily="Inter Tight, sans-serif" fontWeight="600">BIBLIOTHÈQUE LEVANA</text>
+                    <text x="300" y="120" fontSize="20" letterSpacing="6" fontFamily="Inter Tight, sans-serif" fontWeight="600">BIBLIOTHÈQUE MARUCHIME</text>
                     {d.title.split(' ').reduce((lines, w) => { const l = lines[lines.length - 1]; if (l && (l + ' ' + w).length < 16) lines[lines.length - 1] = l + ' ' + w; else lines.push(w); return lines }, []).slice(0, 5).map((line, i) => (
                       <text key={i} x="300" y={380 + i * 70} fontSize="64" fontWeight="500">{line.toUpperCase()}</text>
                     ))}

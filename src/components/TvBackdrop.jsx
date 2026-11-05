@@ -7,7 +7,7 @@ import { seriesVideos } from '../lib/tmdb'
  * exactement sur l'écran de la télé 3D (la scène le place à chaque image) ; il n'apparaît que
  * quand la vidéo tourne vraiment, sinon on voit l'écran des cassettes en dessous.
  */
-export default function TvBackdrop({ series, sound = false, onPlaying }) {
+export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying }) {
   const [queue, setQueue] = useState([])        // [{ key, name }]
   const [i, setI] = useState(0)
   const [shown, setShown] = useState(false)
@@ -37,6 +37,8 @@ export default function TvBackdrop({ series, sound = false, onPlaying }) {
 
   const v = queue.length ? queue[i % queue.length] : null
   const next = () => { playing.current = false; setShown(false); setI(k => k + 1) }
+  // le bouton « générique suivant » du salon
+  useEffect(() => { if (skip) next() }, [skip]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // fin de la vidéo, erreur, ou lecture qui ne démarre pas (lecture automatique bloquée) : la suivante
   useEffect(() => {

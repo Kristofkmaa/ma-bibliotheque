@@ -184,7 +184,7 @@ export default function SearchPanel({ open, onClosed, onPick, isInLibrary, onSca
 
   return (
     <div className="search-panel grain" ref={panel} role="dialog" aria-modal="true" aria-label="Ajouter un livre">
-      <div className="detail-top-logo"><div className="logo"><div className="logo-name">Levana</div><div className="logo-sub">Bibliothèque</div></div></div>
+      <div className="detail-top-logo"><div className="logo"><div className="logo-name">Maruchime</div><div className="logo-sub">Bibliothèque</div></div></div>
       <div className="search-inner">
         <div className="search-layout">
         <div className="search-main">

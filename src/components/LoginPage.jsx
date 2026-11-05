@@ -25,7 +25,7 @@ export default function LoginPage({ onSignIn }) {
         ))}
       </div>
       <div>
-        <h1 className="login-title">Bibliothèque<br /><em>Levana</em></h1>
+        <h1 className="login-title">Bibliothèque<br /><em>Maruchime</em></h1>
       </div>
       <p className="login-sub">Une étagère à feuilleter du bout des doigts : les livres lus, ceux qu'on possède, ceux qu'on attend encore.</p>
       <button type="button" className="lbl box cobalt" onClick={go} disabled={busy}>

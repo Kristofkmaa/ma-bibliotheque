@@ -37,6 +37,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   const tvVideo = useRef(null)
   const [sound, setSound] = useState(false)      // le son de la télé (coupé à l'arrivée)
   const [onAir, setOnAir] = useState(false)      // un générique passe
+  const [skip, setSkip] = useState(0)            // « générique suivant »
   // rideaux fermés : tout le salon passe en sombre (mode cinéma)
   const [cinema, setCinema] = useState(() => { try { return localStorage.getItem('levana.salon.rideaux') === '1' } catch { return false } })
   const mobile = useIsMobile()
@@ -143,19 +144,37 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       <div className="salon-stage" ref={hostRef} />
       {/* les génériques, en fond sur la télé (posés sur l'écran 3D par la scène) */}
       <div className="tv-video" ref={tvVideo} aria-hidden="true">
-        {!tv && !going && tvSeries.length > 0 && <TvBackdrop series={tvSeries} sound={sound} onPlaying={setOnAir} />}
+        {!tv && !going && tvSeries.length > 0 && <TvBackdrop series={tvSeries} sound={sound} skip={skip} onPlaying={setOnAir} />}
       </div>
-      {onAir && !tv && !going && (
-        <button type="button" className={'tv-sound' + (sound ? ' on' : '')} onClick={() => setSound(v => !v)}
-          aria-pressed={sound} aria-label={sound ? 'Couper le son de la télé' : 'Mettre le son de la télé'}>
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />
-            {sound
-              ? <path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              : <path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />}
-          </svg>
-          <span>{sound ? 'Son' : 'Muet'}</span>
-        </button>
+      {/* les commandes du salon : le son, le générique suivant, les rideaux */}
+      {!tv && !going && (
+        <div className="salon-ctrls" role="toolbar" aria-label="Le salon">
+          {onAir && (
+            <button type="button" className={'salon-ctrl' + (sound ? ' on' : '')} onClick={() => setSound(v => !v)}
+              aria-pressed={sound} aria-label={sound ? 'Couper le son' : 'Mettre le son'} title={sound ? 'Couper le son' : 'Mettre le son'}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 9h4l5-4v14l-5-4H4z" className="fill" />
+                {sound
+                  ? <path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" />
+                  : <path d="M16.5 9.5l5 5M21.5 9.5l-5 5" />}
+              </svg>
+            </button>
+          )}
+          {tvSeries.length > 1 && (
+            <button type="button" className="salon-ctrl" onClick={() => setSkip(n => n + 1)} aria-label="Générique suivant" title="Générique suivant">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6l8 6-8 6z" className="fill" /><path d="M13 6l6 6-6 6" /><path d="M20 6v12" /></svg>
+            </button>
+          )}
+          <button type="button" className={'salon-ctrl' + (cinema ? ' on' : '')} onClick={() => sceneRef.current?.setCurtains(!cinema)}
+            aria-pressed={cinema} aria-label={cinema ? 'Ouvrir les rideaux' : 'Fermer les rideaux'} title={cinema ? 'Ouvrir les rideaux' : 'Fermer les rideaux'}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 4h18" />
+              {cinema
+                ? <><path d="M5 4v16h7V4" className="fill" /><path d="M19 4v16h-7" className="fill" /></>
+                : <><path d="M5 4v16c2-3 3-7 3-16" className="fill" /><path d="M19 4v16c-2-3-3-7-3-16" className="fill" /></>}
+            </svg>
+          </button>
+        </div>
       )}
 
       {/* on a zoomé à bloc sur la télé : nos séries, il ne reste que le contour de l'écran */}
@@ -175,7 +194,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
 
       <div className="salon-top" ref={topRef}>
         <div className="logo">
-          <div className="logo-name">Levana</div>
+          <div className="logo-name">Maruchime</div>
           <div className="logo-sub">Bibliothèque</div>
         </div>
         <p className="salon-hello"><span>{greeting(hour)}.</span></p>

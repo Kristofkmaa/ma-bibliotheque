@@ -75,10 +75,10 @@ export class TvSeries {
     const s = this.show
     // en-tête : le nom et les rayons
     const header = () => {
-      g.fillStyle = GOLD; g.font = `500 40px ${SERIF}`; g.fillText('Levana', 70, 82)
-      g.fillStyle = MUTED; g.font = `600 15px ${SANS}`; g.fillText(spaced('Films & séries'), 212, 80)
+      g.fillStyle = GOLD; g.font = `500 40px ${SERIF}`; g.fillText('Maruchime', 70, 82)
+      g.fillStyle = MUTED; g.font = `600 15px ${SANS}`; g.fillText(spaced('Films & séries'), 270, 80)
       g.font = `600 22px ${SANS}`
-      ;[['Accueil', FG], ['Séries', MUTED], ['Films', MUTED]].forEach(([t, c], k) => { g.fillStyle = c; g.fillText(t, 470 + k * 120, 80) })
+      ;[['Notre liste', FG], ['Séries', MUTED], ['Films', MUTED]].forEach(([t, c], k) => { g.fillStyle = c; g.fillText(t, 540 + [0, 170, 300][k], 80) })
     }
     if (!s) {
       header()

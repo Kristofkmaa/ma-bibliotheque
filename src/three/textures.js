@@ -83,7 +83,7 @@ export function fallbackCover(book) {
     ctx.globalAlpha = 1
     ctx.fillStyle = ink; ctx.textAlign = 'center'
     ctx.font = `600 22px ${SANS}`
-    ctx.fillText('BIBLIOTHÈQUE LEVANA', w / 2, 92)
+    ctx.fillText('BIBLIOTHÈQUE MARUCHIME', w / 2, 92)
     // titre sur plusieurs lignes
     const words = d.title.toUpperCase().split(/\s+/)
     const lines = []

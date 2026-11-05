@@ -46,7 +46,7 @@ function writePref(key, value) {
 function Logo({ sub = 'Bibliothèque' }) {
   return (
     <div className="logo">
-      <div className="logo-name">Levana</div>
+      <div className="logo-name">Maruchime</div>
       <div className="logo-sub">{sub}</div>
     </div>
   )
@@ -324,7 +324,7 @@ function Library({ user, onSignOut }) {
 
       <footer className="footer-bar">
         <div className="lbl footer-copy">
-          © Bibliothèque Levana{isDemoMode ? ' · Mode démo' : ''}
+          © Bibliothèque Maruchime{isDemoMode ? ' · Mode démo' : ''}
           {!isDemoMode && storage === 'local' && shelves.length > 0 && <span className="footer-note"> · Rangement gardé sur cet appareil</span>}
         </div>
         <div className="lbl footer-links">
