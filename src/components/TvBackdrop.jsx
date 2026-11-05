@@ -74,7 +74,11 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying,
       let d
       try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data } catch { return }
       const state = d?.event === 'onStateChange' ? d.info : d?.event === 'infoDelivery' ? d.info?.playerState : undefined
-      if (state === 1) { fails.current = 0; if (!playing.current) applySound(); playing.current = true; setShown(true) }
+      if (state === 1) {
+        fails.current = 0
+        if (!playing.current) { applySound(); command('unloadModule', ['captions']); command('unloadModule', ['cc']) }   // au mur, sans sous-titres
+        playing.current = true; setShown(true)
+      }
       else if (state === 0 || d?.event === 'onError') next()
     }
     window.addEventListener('message', onMsg)
@@ -98,7 +102,7 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying,
 
   // trois vidéos de suite qui ne démarrent pas : la lecture automatique est bloquée, on laisse tomber
   if (!v || fails.current >= 3) return null
-  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(firstKey.current)}?autoplay=1&mute=1&playsinline=1&controls=0&disablekb=1&fs=0&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`
+  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(firstKey.current)}?autoplay=1&mute=1&playsinline=1&controls=0&disablekb=1&fs=0&rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`
   return (
     <>
       <iframe ref={frame} src={src} title={`Générique de ${v.name}`} onLoad={listen} tabIndex={-1}

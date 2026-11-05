@@ -2392,3 +2392,5 @@ body.immersive .scene { padding: 0 !important; }
 .sx-pub-votes { font-family: var(--sans); font-size: 12px; color: var(--sx-muted); }
 .sx-pub-none { margin-top: 6px; font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--sx-muted); }
 .sx-li-pub { flex: none; margin-left: 4px; padding: 1px 6px; border-radius: 3px; background: rgba(232, 176, 75, 0.14); color: var(--sx-gold); font-size: 11px; font-weight: 800; }
+.stv-cc { margin-left: auto; margin-right: 10px; height: 30px; padding: 0 10px; border-radius: 6px; border: 1.5px solid rgba(239, 233, 221, 0.6); background: transparent; color: #EFE9DD; font-family: var(--sans); font-size: 12px; font-weight: 800; letter-spacing: 0.06em; }
+.stv-cc.on { background: #EFE9DD; color: #111; border-color: #EFE9DD; }

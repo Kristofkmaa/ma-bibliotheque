@@ -121,11 +121,28 @@ const isOpening = v => v?.type === 'Opening Credits'
  */
 function Player({ show, videos, onDone }) {
   const [i, setI] = useState(0)
+  const [subs, setSubs] = useState(() => (videos[0]?.lang || '') !== 'fr')   // sous-titres français
+  useEffect(() => { setSubs((videos[i]?.lang || '') !== 'fr') }, [i]) // eslint-disable-line react-hooks/exhaustive-deps
   const [started, setStarted] = useState(false)
   const [late, setLate] = useState(false)
   useEffect(() => { setStarted(false); setLate(false); const t = setTimeout(() => setLate(true), 2500); return () => clearTimeout(t) }, [i])
   const frame = useRef(null)
+  const startedRef = useRef(false)
+  const subsRef = useRef(subs); subsRef.current = subs
   const v = videos[i]
+  // les sous-titres : en français (y compris la traduction automatique de YouTube), ou aucun
+  const cmd = (func, args = []) => frame.current?.contentWindow?.postMessage(JSON.stringify({ id: 'stv', channel: 'widget', event: 'command', func, args }), '*')
+  const applySubs = () => {
+    if (subsRef.current) {
+      cmd('loadModule', ['captions'])
+      cmd('setOption', ['captions', 'track', { languageCode: 'fr' }])
+      if (videos[i]?.lang && videos[i].lang !== 'fr') cmd('setOption', ['captions', 'track', { languageCode: videos[i].lang, translationLanguage: { languageCode: 'fr' } }])
+    } else {
+      cmd('unloadModule', ['captions']); cmd('unloadModule', ['cc'])
+    }
+  }
+  useEffect(() => { if (startedRef.current) applySubs() }, [subs]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { startedRef.current = false }, [i])
   useEffect(() => {
     const onMsg = e => {
       let host = ''
@@ -133,7 +150,7 @@ function Player({ show, videos, onDone }) {
       if (!/(^|\.)youtube(-nocookie)?\.com$/.test(host)) return
       let d
       try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data } catch { return }
-      if ((d?.event === 'onStateChange' && d.info === 1) || (d?.event === 'infoDelivery' && d.info?.playerState === 1)) setStarted(true)
+      if ((d?.event === 'onStateChange' && d.info === 1) || (d?.event === 'infoDelivery' && d.info?.playerState === 1)) { if (!startedRef.current) applySubs(); startedRef.current = true; setStarted(true) }
       if (d?.event === 'onError') { if (i + 1 < videos.length) setI(i + 1); else onDone() }
       else if ((d?.event === 'onStateChange' && d.info === 0) || (d?.event === 'infoDelivery' && d.info?.playerState === 0)) onDone()
     }
@@ -150,11 +167,14 @@ function Player({ show, videos, onDone }) {
     send({ event: 'command', func: 'addEventListener', args: ['onError'] })
   }
   if (!v) return null
-  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.key)}?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1&hl=fr&origin=${encodeURIComponent(location.origin)}`
+  const foreign = (v.lang || '') !== 'fr'
+  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.key)}?autoplay=1&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1&hl=fr&cc_lang_pref=fr&cc_load_policy=${foreign ? 1 : 0}&origin=${encodeURIComponent(location.origin)}`
   return (
     <div className="stv-player">
       <div className="stv-player-top">
         <p className="stv-kicker">{isOpening(v) ? 'Le générique' : 'La bande-annonce'} · <span>{show.name}</span></p>
+        <button type="button" className={'stv-cc' + (subs ? ' on' : '')} onClick={() => setSubs(x => !x)} aria-pressed={subs}
+          aria-label={subs ? 'Cacher les sous-titres' : 'Sous-titres en français'} title={subs ? 'Cacher les sous-titres' : 'Sous-titres en français'}>CC</button>
         <button type="button" className="stv-x light" onClick={onDone} aria-label="Arrêter la vidéo">×</button>
       </div>
       <div className="stv-player-frame">
@@ -187,8 +207,12 @@ function HeroVideo({ videoKey }) {
       let d
       try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data } catch { return }
       const st = d?.event === 'onStateChange' ? d.info : d?.event === 'infoDelivery' ? d.info?.playerState : undefined
-      if (st === 1) setOn(true)
-      else if (st === 0 || d?.event === 'onError') setOn(false)
+      if (st === 1) {
+        setOn(true)
+        // sans le son, pas de sous-titres (YouTube les ajoute parfois d'office)
+        const w = frame.current?.contentWindow
+        for (const m of ['captions', 'cc']) w?.postMessage(JSON.stringify({ id: 'hero', channel: 'widget', event: 'command', func: 'unloadModule', args: [m] }), '*')
+      } else if (st === 0 || d?.event === 'onError') setOn(false)
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
@@ -202,7 +226,7 @@ function HeroVideo({ videoKey }) {
     send({ event: 'command', func: 'addEventListener', args: ['onError'] })
     send({ event: 'command', func: 'mute' })
   }
-  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoKey)}?autoplay=1&mute=1&playsinline=1&controls=0&disablekb=1&fs=0&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`
+  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoKey)}?autoplay=1&mute=1&playsinline=1&controls=0&disablekb=1&fs=0&rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`
   return (
     <div className={'sx-hero-video' + (on ? ' on' : '')} aria-hidden="true">
       <iframe ref={frame} src={src} title="" tabIndex={-1} onLoad={listen} allow="autoplay; encrypted-media" referrerPolicy="strict-origin-when-cross-origin" />
