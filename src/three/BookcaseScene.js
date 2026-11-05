@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { spineSize, spineColors } from '../lib/bookUtils'
-import { spineTexture, withCover, pagesTexture, grainTexture, doorTexture, setAnisotropy, bookmarkTexture } from './textures'
+import { spineTexture, withCover, pagesTexture, grainTexture, doorTexture, setAnisotropy, bookmarkTexture, plaqueTexture } from './textures'
 import { getBookStatuses } from '../hooks/useLibrary'
 import { noTouchSelect } from './webgl'
 
@@ -276,12 +276,18 @@ export class BookcaseScene {
     const yNow = big ? this.totalH / 2 + (yc - this.totalH / 2) * z : this.totalH / 2
     this.viewNow = { yc: yNow, h }
     // la lumière suit la vue (ombres nettes sur toute la hauteur du mur)
-    this.key.position.copy(target).add(this.lightOffset)
-    this.key.target.position.copy(target)
     const sc = this.key.shadow.camera
     const { CW } = this.layout
     sc.left = -CW / 2 - 1.5; sc.right = CW / 2 + 1.5; sc.top = h / 2 + 2; sc.bottom = -h / 2 - 2; sc.near = 0.5; sc.far = 40
     sc.updateProjectionMatrix()
+    // la lumière suit la vue par pas d'un texel de la carte d'ombres : les ombres ne scintillent plus
+    const L = this.lightOffset
+    const up = Math.sqrt(1 - (L.y * L.y) / L.lengthSq())
+    const stepY = (sc.top - sc.bottom) / this.key.shadow.mapSize.y / Math.max(0.25, up)
+    const stepX = (sc.right - sc.left) / this.key.shadow.mapSize.x
+    const lt = new THREE.Vector3(Math.round(target.x / stepX) * stepX, Math.round(target.y / stepY) * stepY, target.z)
+    this.key.position.copy(lt).add(this.lightOffset)
+    this.key.target.position.copy(lt)
     this._ppu = null
     const T = this.totalH
     this.cb.onView?.({ top: clamp(1 - (yNow + h / 2) / T, 0, 1), bottom: clamp(1 - (yNow - h / 2) / T, 0, 1), zoom: z })
@@ -426,6 +432,13 @@ export class BookcaseScene {
       sideL.castShadow = sideR.castShadow = true
       sideL.receiveShadow = sideR.receiveShadow = true
       this.caseGroup.add(plank, back, sideL, sideR)
+      // joint fin entre deux modules (devant et sur les côtés) : chaque étagère est un bloc à part
+      if (r > 0) {
+        const seam = new THREE.Mesh(this.seamGeo ||= new THREE.BoxGeometry(1, 1, 1), this.seamMat ||= new THREE.MeshBasicMaterial({ color: 0x1c140c, transparent: true, opacity: 0.55 }))
+        seam.scale.set(CW + 2 * ST + 0.004, 0.009, SD + 0.044)
+        seam.position.set(0, y0 + RH + PT / 2, 0.02)      // limite entre ce module et celui du dessus
+        this.caseGroup.add(seam)
+      }
       part.plank = plank
       const doorMatL = new THREE.MeshStandardMaterial({ color: '#E2D6BC', map: doorTexture('panneau'), roughness: 0.7, clippingPlanes: [clipL, clipR], clipShadows: true })
       const doorMatR = doorMatL.clone()
@@ -452,11 +465,48 @@ export class BookcaseScene {
     this.rowSkins = []
   }
 
+  /** Plaques nominatives en laiton, vissées sur la planche de chaque étagère (en 3D : elles ne flottent pas). */
+  _syncPlaques() {
+    if (!this.caseParts || !this.layout) return
+    const { CW } = this.layout
+    this.caseParts.forEach((part, r) => {
+      const label = this.rowsData?.[r]?.label || ''
+      if (part.plaqueText === label && part.plaque?.parent) return
+      if (part.plaque) { this.caseGroup.remove(part.plaque); part.plaque.geometry.dispose(); part.plaque = null }
+      part.plaqueText = label
+      if (!label) return
+      const { tex, aspect } = plaqueTexture(label)
+      const h = this.layout.mobile ? 0.23 : 0.16
+      const w = Math.min(CW * 0.62, h * aspect)
+      this.brassMat ||= new THREE.MeshStandardMaterial({ color: '#B8914A', metalness: 0.55, roughness: 0.4 })
+      part.plaqueMat?.dispose()
+      part.plaqueMat = new THREE.MeshStandardMaterial({ map: tex, metalness: 0.35, roughness: 0.45 })
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.014), [this.brassMat, this.brassMat, this.brassMat, this.brassMat, part.plaqueMat, this.brassMat])
+      // vissée sur la planche, elle déborde un peu dessous (au-dessus des livres du rayon inférieur)
+      m.position.set(-CW / 2 + 0.1 + w / 2, this.rowBase(r) - PT / 2 - (h - PT) * 0.35, SD / 2 + 0.04 + 0.008)
+      m.userData.plaque = r
+      m.castShadow = true
+      this.caseGroup.add(m)
+      part.plaque = m
+    })
+  }
+
+  _pickPlaque(e) {
+    const plaques = this.caseParts?.map(p => p.plaque).filter(Boolean) || []
+    if (!plaques.length) return null
+    const rc = this.renderer.domElement.getBoundingClientRect()
+    this.ndc.set(((e.clientX - rc.left) / rc.width) * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1)
+    this.raycaster.setFromCamera(this.ndc, this.camera)
+    const hit = this.raycaster.intersectObjects(plaques, false)[0]
+    return hit ? hit.object.userData.plaque : null
+  }
+
   /** Reconstruit le meuble (nombre de rayons ou largeur changés) et replace tout. */
   _rebuild() {
     this.rowCount = Math.max(1, this.rowsData.length)
     this._buildCase()
     this.rowsData.forEach((row, r) => { this._applySkin(r, row.palette, true); this.rowSkins[r] = row.palette })
+    this._syncPlaques()
     this._computeBases()
     this._fitCamera()
     this._updateVisible(true)
@@ -580,6 +630,7 @@ export class BookcaseScene {
     rowsData.forEach((row, r) => {
       if (row.born && this.caseParts[r]) { this.caseParts[r].born.snap(0); this.caseParts[r].born.t = 1 }
     })
+    this._syncPlaques()
     // livres arrivés depuis la dernière fois (ils se poseront) ; au tout premier affichage, tous se posent
     const ids = new Set()
     rowsData.forEach(row => row.books.forEach(b => { if (!b.placeholder) ids.add(b.id) }))
@@ -635,13 +686,16 @@ export class BookcaseScene {
   _updateVisible(force = false) {
     if (!this.viewNow || !this.rowsData || !this.caseParts) return
     const { yc, h } = this.viewNow
-    const m = RH + PT
+    // livres créés deux rayons à l'avance ; portes ouvertes avant d'entrer à l'écran et refermées
+    // seulement bien après en être sorties : en défilant, rien n'apparaît ni ne bouge sous les yeux
+    const m = 2 * (RH + PT)
     const live = new Set(), inView = new Set()
     let center = 0, best = Infinity
     for (let r = 0; r < this.rowCount; r++) {
       const lo = this.rowBase(r) - PT, hi = this.rowBase(r) + RH
-      if (hi > yc - h / 2 - m && lo < yc + h / 2 + m) live.add(r)
-      if (hi > yc - h / 2 + 0.3 * RH && lo < yc + h / 2 - 0.3 * RH) inView.add(r)
+      const near = k => hi > yc - h / 2 - k && lo < yc + h / 2 + k
+      if (near(m)) live.add(r)
+      if (near(0.6 * RH) || (this.inView?.has(r) && near(1.6 * (RH + PT)))) inView.add(r)
       const c = this.rowBase(r) + RH / 2
       if (Math.abs(c - yc) < best) { best = Math.abs(c - yc); center = r }
     }
@@ -813,6 +867,8 @@ export class BookcaseScene {
       }
       if (press.moved) return
       if (press.overview) { this._zoomAt(e); return }
+      const pl = this._pickPlaque(e)
+      if (pl != null) { this.cb.onPlaque?.(pl); return }
       const hit = this._pick(e)
       if (hit && hit === press.id) this._open(hit)
     }

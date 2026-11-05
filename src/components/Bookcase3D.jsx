@@ -149,7 +149,7 @@ export default function Bookcase3D({
 
   // ---- Scène 3D -------------------------------------------------------------------------------
   const dataRef = useRef(null)
-  dataRef.current = { displayRows, eff, manual, canEdit, onOpen }
+  dataRef.current = { displayRows, eff, manual, canEdit, onOpen, onShelfClick }
   const commitRef = useRef(commitShelves)
   commitRef.current = commitShelves
   const pendingNew = useRef(null)
@@ -197,7 +197,11 @@ export default function Bookcase3D({
         const el = thumbRef.current
         if (el) { el.style.top = `${(v.top * 100).toFixed(2)}%`; el.style.height = `${Math.max(4, (v.bottom - v.top) * 100).toFixed(2)}%` }
       },
-      labelEl: r => labelEls.current[r],
+      // la plaque d'une étagère ouvre ses réglages
+      onPlaque: r => {
+        const meta = dataRef.current.displayRows[r]
+        if (meta?.shelf && !meta.shelf.pseudo && !meta.shelf.preview && dataRef.current.manual) dataRef.current.onShelfClick?.(meta.shelf.id)
+      },
     })
     sceneRef.current = scene
     if (location.search.includes('debug')) window.__bookcase = scene // tests automatisés
@@ -259,9 +263,11 @@ export default function Bookcase3D({
   const fallbackSkin = resolveSkin(realShelves[realShelves.length - 1] || shelves[0] || DEFAULT_SKIN)
   const rowsForScene = useMemo(() => displayRows.map(meta => ({
     books: meta.books,
+    // nom gravé sur la plaque de l'étagère
+    label: manual ? (meta.shelf ? (meta.cont ? `${meta.shelf.name} · suite` : meta.shelf.name) : '') : (meta.free ? '' : autoLabel(meta.books, meta.auto, sort)),
     palette: meta.shelf ? resolveSkin(meta.shelf) : manual ? fallbackSkin : resolveSkin(shelves[0] || DEFAULT_SKIN),
     born: !!meta.shelf && meta.shelf.id === bornId && !meta.cont,
-  })), [displayRows, manual, fallbackSkin, shelves, bornId])
+  })), [displayRows, manual, fallbackSkin, shelves, bornId, sort])
 
   useEffect(() => { sceneRef.current?.setRows(rowsForScene) }, [rowsForScene])
   useEffect(() => { sceneRef.current?.setDoors(doorsOpen) }, [doorsOpen])
@@ -392,34 +398,7 @@ export default function Bookcase3D({
     <>
       <div className="case-row">
       <div className={'case3d webgl' + (manual && canEdit ? ' editable' : '') + (zoomedOut ? ' overview' : '')} ref={caseRef}>
-        {displayRows.map((meta, r) => {
-          const shelf = meta.shelf
-          let label = ''
-          if (manual) {
-            if (shelf) label = meta.cont ? `${shelf.name} · suite` : shelf.name
-          } else {
-            label = meta.free ? '' : autoLabel(meta.books, meta.auto, sort)
-          }
-          const editable = manual && canEdit && !!shelf && !meta.cont && !shelf.preview
-          if (!label) { labelEls.current[r] = null; return null }
-          return editable ? (
-            <button
-              key={meta.key} type="button"
-              ref={el => { labelEls.current[r] = el; if (shelf) shelfLabelRefs.current[shelf.id] = el }}
-              className={'plank-label editable over' + (shelf.id === bornId ? ' born' : '')}
-              style={{ visibility: 'hidden' }}
-              onClick={e => {
-                if (onShelfClick && !shelf.pseudo) { onShelfClick(shelf.id); return }
-                setEditing({ shelfId: shelf.id, rect: e.currentTarget.getBoundingClientRect(), selectName: false, openId: performance.now() })
-              }}
-              title="Modifier cette étagère"
-            >
-              <span className="pl-name">{label}</span><span className="pl-pen" aria-hidden="true">✎</span>
-            </button>
-          ) : (
-            <span key={meta.key} ref={el => { labelEls.current[r] = el }} className="plank-label over" style={{ visibility: 'hidden' }}>{label}</span>
-          )
-        })}
+        {/* les noms des étagères sont gravés sur des plaques, dans la scène 3D */}
 
         {/* réglette : où l'on est dans le mur ; un clic sur un repère y amène */}
         {sections.length > 1 && (
