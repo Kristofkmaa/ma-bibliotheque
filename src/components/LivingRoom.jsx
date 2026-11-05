@@ -22,7 +22,7 @@ function greeting(hour) {
  * la télé passe nos séries (on la touche : on entre dedans) ; le panier sur la table basse
  * ouvre la recherche, ou, s'il reste des livres dedans, le rangement guidé.
  */
-export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
+export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
   const rootRef = useRef(null)
   const hostRef = useRef(null)
   const topRef = useRef(null)
@@ -159,7 +159,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
 
       {/* on a zoomé à bloc sur la télé : nos séries, il ne reste que le contour de l'écran */}
       {inside && (
-        <SeriesTV series={series || []} onAdd={onAddSeries} onUpdate={onUpdateSeries} onRemove={onRemoveSeries}
+        <SeriesTV series={series || []} onAdd={onAddSeries} onUpdate={onUpdateSeries} onRemove={onRemoveSeries} onRenameCategory={onRenameCategory}
           onClose={() => sceneRef.current?.unzoomTv()} />
       )}
 

@@ -95,7 +95,7 @@ export class TvSeries {
     const t = this.t, n = this.list.length
     const k = out(t / 0.8)            // la cassette du milieu se retourne
     // l'étagère courbe : les cassettes de tranche rapetissent en s'éloignant du milieu
-    const FH = 520, FW = FH * 0.62, SH = FH * 0.84, SW = FH * 0.15, GAP = FH * 0.028, CX = LW / 2, CY = 390
+    const FH = 520, FW = FH * 0.7, SH = FH * 0.97, SW = FH * 0.072, GAP = FH * 0.012, CX = LW / 2, CY = 390
     const R = 950, near = FW / 2 + SW / 2 + GAP, step = SW + GAP
     const items = []
     for (let i = Math.max(0, this.i - 12); i <= Math.min(n - 1, this.i + 12); i++) {
@@ -118,6 +118,7 @@ export class TvSeries {
       g.shadowColor = 'rgba(30,20,8,0.3)'; g.shadowBlur = 16; g.shadowOffsetY = 10
       g.fillStyle = bg; g.fillRect(x, y, w, h)
       g.restore()
+      g.fillStyle = '#2A62C0'; g.fillRect(x, y, w, h * 0.09)
       const sg = g.createLinearGradient(x, 0, x + w, 0)
       sg.addColorStop(0, 'rgba(255,255,255,0.14)'); sg.addColorStop(0.4, 'rgba(255,255,255,0)'); sg.addColorStop(1, 'rgba(0,0,0,0.2)')
       g.fillStyle = sg; g.fillRect(x, y, w, h)
@@ -135,17 +136,21 @@ export class TvSeries {
     const fx = CX - fw / 2, fy = CY - fh / 2
     g.save()
     g.shadowColor = 'rgba(40,28,12,0.4)'; g.shadowBlur = 40; g.shadowOffsetY = 24
-    g.fillStyle = '#15120F'; g.fillRect(fx, fy, fw, fh)
+    g.fillStyle = '#1D4F9C'; g.fillRect(fx, fy, fw, fh)
     g.restore()
+    const band = fh * 0.09
+    const bg2 = g.createLinearGradient(0, fy, 0, fy + band)
+    bg2.addColorStop(0, '#3D7BD8'); bg2.addColorStop(1, '#1F56B0')
+    g.fillStyle = bg2; g.fillRect(fx + 4, fy + 4, fw - 8, band)
+    g.fillStyle = '#fff'; g.font = `800 ${Math.round(band * 0.42)}px ${SANS}`; g.textBaseline = 'middle'; g.textAlign = 'left'
+    g.fillText(spaced('Série'), fx + fw * 0.07, fy + 4 + band / 2)
+    g.textAlign = 'right'; g.fillText(year(s) || '', fx + fw * 0.93, fy + 4 + band / 2)
     const p = this.imgs.get('p' + s.id)
-    if (p) { g.globalAlpha = k; cover(g, p, fx + 7, fy + 7, fw - 14, fh - 14); g.globalAlpha = 1 }
+    g.fillStyle = '#15120F'; g.fillRect(fx + 4, fy + 4 + band, fw - 8, fh - 8 - band)
+    if (p) { g.globalAlpha = k; cover(g, p, fx + 4, fy + 4 + band, fw - 8, fh - 8 - band); g.globalAlpha = 1 }
     const sheen = g.createLinearGradient(fx, fy, fx + fw, fy + fh)
     sheen.addColorStop(0, 'rgba(255,255,255,0.18)'); sheen.addColorStop(0.3, 'rgba(255,255,255,0)')
     g.fillStyle = sheen; g.fillRect(fx, fy, fw, fh)
-    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3
-    g.strokeRect(fx + fw - 74, fy + fh - 44, 52, 26)
-    g.fillStyle = '#fff'; g.font = `800 17px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'
-    g.fillText('VHS', fx + fw - 48, fy + fh - 30)
 
     // le titre, en bleu, sous l'étagère
     g.globalAlpha = out((t - 0.2) / 0.6)
@@ -166,7 +171,7 @@ export class TvSeries {
     g.textAlign = 'left'; g.fillStyle = INK; g.font = `600 18px ${SANS}`
     g.fillText(spaced('Nos séries'), 70, 70)
     g.fillRect(250, 63, 90, 2)
-    g.fillText(spaced('Archive VHS'), 360, 70)
+    g.fillText(spaced('Vidéothèque'), 360, 70)
     g.textAlign = 'right'; g.fillStyle = MUTED
     g.fillText(spaced(`N° ${String(this.i + 1).padStart(2, '0')} / ${String(n).padStart(2, '0')}`), LW - 70, 70)
     g.restore()
