@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useIsMobile } from '../hooks/useIsMobile'
-import { searchCatalog, featuredCatalog, catalogGame, catalogSource, STATUSES, statusLabel } from '../lib/games'
+import { searchCatalog, featuredCatalog, catalogGame, catalogSource, STATUSES, statusLabel, PLATFORM_GROUPS, onPlatform } from '../lib/games'
 
 /**
  * Le PC du bureau gamer : notre ludothèque, dans l'esprit d'un logiciel de jeux. Une barre en
@@ -128,6 +128,27 @@ function Trailer({ t, onClose }) {
 /* Découvrir : le catalogue                                                   */
 /* -------------------------------------------------------------------------- */
 
+// la famille de plateformes choisie (gardée d'une visite à l'autre)
+const PF_KEY = 'levana.jeux.plateforme'
+const readPf = () => { try { return localStorage.getItem(PF_KEY) || 'all' } catch { return 'all' } }
+const savePf = v => { try { localStorage.setItem(PF_KEY, v) } catch { /* ignore */ } }
+
+/** Trier par plateforme : Toutes, PlayStation, Xbox, Switch, PC, Autres (avec, s'il y a lieu, combien). */
+function PlatformChips({ value, onChange, counts, small }) {
+  return (
+    <div className={'pf-chips' + (small ? ' small' : '')} role="radiogroup" aria-label="Plateforme">
+      {PLATFORM_GROUPS.map(([k, t]) => {
+        const n = counts?.[k]
+        return (
+          <button type="button" key={k} role="radio" aria-checked={value === k} className={'pf-' + k + (value === k ? ' on' : '')} onClick={() => onChange(k)} disabled={counts && !n && k !== 'all' && value !== k}>
+            {t}{counts ? <b>{n || 0}</b> : null}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function CatalogCard({ g, mine, onOpen }) {
   return (
     <button type="button" className="ct-card" onClick={() => onOpen(g)}>
@@ -149,12 +170,17 @@ function CatalogRow({ title, list, mine, onOpen }) {
   )
 }
 
-function Discover({ mine, onOpen, onSearch }) {
+function Discover({ mine, onOpen, onSearch, pf, setPf }) {
   const [feat, setFeat] = useState(null)
   const [err, setErr] = useState(null)
   const [q, setQ] = useState('')
-  const load = () => { setErr(null); featuredCatalog().then(setFeat, e => setErr(e.message)) }
-  useEffect(load, [])
+  const load = () => {
+    let live = true
+    setErr(null); setFeat(null)
+    featuredCatalog(pf).then(d => { if (live) setFeat(d) }, e => { if (live) setErr(e.message) })
+    return () => { live = false }
+  }
+  useEffect(load, [pf]) // eslint-disable-line react-hooks/exhaustive-deps
   const igdb = catalogSource() === 'igdb'
   const lead = feat?.hot?.[0]
   return (
@@ -164,6 +190,7 @@ function Discover({ mine, onOpen, onSearch }) {
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Chercher un jeu, sur toutes les plateformes…" enterKeyHint="search" aria-label="Chercher un jeu" />
         {q && <button type="button" onClick={() => setQ('')} aria-label="Effacer">×</button>}
       </form>
+      <PlatformChips value={pf} onChange={setPf} />
       {err ? <div className="st-empty"><p>{err}</p><button type="button" className="st-btn ghost" onClick={load}>Réessayer</button></div>
         : !feat ? <div className="st-loading"><span /></div>
           : <>
@@ -180,23 +207,25 @@ function Discover({ mine, onOpen, onSearch }) {
             <CatalogRow title={igdb ? 'Populaires en ce moment' : 'Les plus joués'} list={feat.hot?.slice(lead ? 1 : 0)} mine={mine} onOpen={onOpen} />
             <CatalogRow title={igdb ? 'Les mieux notés de tous les temps' : 'En vedette'} list={feat.best} mine={mine} onOpen={onOpen} />
             <CatalogRow title={igdb ? 'Bientôt' : 'Nouveautés'} list={feat.soon} mine={mine} onOpen={onOpen} />
+            {!feat.hot?.length && !feat.best?.length && !feat.soon?.length && <div className="st-empty"><p>{igdb ? 'Rien à montrer pour cette plateforme.' : 'Le catalogue Steam n’a que des jeux PC.'}</p></div>}
             {!igdb && <p className="ct-note">Catalogue Steam (PC) pour l’instant : avec les clés IGDB dans Vercel, toutes les plateformes arrivent.</p>}
           </>}
     </div>
   )
 }
 
-function CatalogSearch({ q, mine, onOpen }) {
+function CatalogSearch({ q, mine, onOpen, pf, setPf }) {
   const [res, setRes] = useState(null)
   useEffect(() => {
     let live = true
     setRes(null)
-    searchCatalog(q).then(r => { if (live) setRes(r) }, () => { if (live) setRes([]) })
+    searchCatalog(q, pf).then(r => { if (live) setRes(r) }, () => { if (live) setRes([]) })
     return () => { live = false }
-  }, [q])
+  }, [q, pf])
   return (
     <section className="ct">
       <h3 className="cs-h3">Résultats pour « {q} »</h3>
+      <PlatformChips value={pf} onChange={setPf} />
       {!res ? <div className="st-loading"><span /></div>
         : !res.length ? <div className="st-empty"><p>Aucun jeu trouvé.</p></div>
           : <div className="ld-grid ct-grid">{res.map(g => <CatalogCard key={g.key} g={g} mine={mine(g)} onOpen={onOpen} />)}</div>}
@@ -525,7 +554,7 @@ function CoverCard({ g, rank, onOpen, onPlay, onFav }) {
 
 const FILTERS = [['all', 'Tous'], ...STATUSES]
 
-function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filter, setFilter }) {
+function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filter, setFilter, pf, setPf }) {
   const [sort, setSort] = useState('top')
   const [ranking, setRanking] = useState(false)
   const playingNow = useMemo(() => games.filter(g => g.status === 'en_cours'), [games])
@@ -536,8 +565,9 @@ function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filt
       name: (a, b) => a.name.localeCompare(b.name, 'fr'),
       rating: (a, b) => (b.rating || 0) - (a.rating || 0) || a.name.localeCompare(b.name, 'fr'),
     }[sort]
-    return games.filter(g => filter === 'all' || g.status === filter).sort(by)
-  }, [games, sort, filter])
+    return games.filter(g => (filter === 'all' || g.status === filter) && onPlatform(g, pf)).sort(by)
+  }, [games, sort, filter, pf])
+  const pfCounts = useMemo(() => Object.fromEntries(PLATFORM_GROUPS.map(([k]) => [k, games.filter(g => onPlatform(g, k)).length])), [games])
   if (!games.length) {
     return (
       <div className="gm-empty ld-empty">
@@ -588,9 +618,11 @@ function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filt
             {[['top', 'Top d’abord'], ['recent', 'Récents'], ['name', 'Nom'], ['rating', 'Ma note']].map(([k, t]) => <button type="button" key={k} className={sort === k ? 'on' : ''} onClick={() => setSort(k)}>{t}</button>)}
           </div>
         </div>
+        <PlatformChips value={pf} onChange={setPf} counts={pfCounts} />
         <div className="ld-filters" role="group" aria-label="Où j’en suis">
           {FILTERS.map(([k, t]) => {
-            const n = k === 'all' ? games.length : games.filter(g => g.status === k).length
+            const inPf = games.filter(g => onPlatform(g, pf))
+            const n = k === 'all' ? inPf.length : inPf.filter(g => g.status === k).length
             return <button type="button" key={k} className={'s-' + k + (filter === k ? ' on' : '')} onClick={() => setFilter(k)} disabled={!n && k !== 'all'}>{t} <b>{n}</b></button>
           })}
         </div>
@@ -660,19 +692,19 @@ function LudoGame({ g, onPlay, fav, updateGame, removeGame, onWallpaper, onCatal
   )
 }
 
-function Ludo({ games, top, selId, onSelect, onHome, mobile, setFavorite, reorderTop, updateGame, removeGame, onPlay, onWallpaper, onCatalog, quickWall, openStore, notify }) {
+function Ludo({ games, top, selId, onSelect, onHome, mobile, setFavorite, reorderTop, updateGame, removeGame, onPlay, onWallpaper, onCatalog, quickWall, openStore, notify, pf, setPf }) {
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
   const mainRef = useRef(null)
   useEffect(() => { mainRef.current?.scrollTo?.(0, 0) }, [selId])
   const fav = (g, on) => { const r = setFavorite(g.id, on); notify(on ? `${g.name} entre dans ton top · n°${r}` : `${g.name} sort de ton top`) }
   const t = q.trim().toLowerCase()
-  const match = g => !t || g.name.toLowerCase().includes(t)
+  const match = g => (!t || g.name.toLowerCase().includes(t)) && onPlatform(g, pf)
   const rest = useMemo(() => [...games].sort((a, b) => a.name.localeCompare(b.name, 'fr')), [games])
   const sel = selId ? games.find(g => g.id === selId) : null
   const main = sel || selId
     ? <LudoGame g={sel} onPlay={onPlay} fav={fav} updateGame={updateGame} removeGame={id => { removeGame(id); notify(`${sel?.name} retiré de ta bibliothèque`) }} onWallpaper={onWallpaper} onCatalog={onCatalog} onGone={onHome} quickWall={quickWall} />
-    : <LudoHome games={games} top={top} onOpen={onSelect} onPlay={onPlay} fav={fav} reorderTop={reorderTop} openStore={openStore} filter={filter} setFilter={setFilter} />
+    : <LudoHome games={games} top={top} onOpen={onSelect} onPlay={onPlay} fav={fav} reorderTop={reorderTop} openStore={openStore} filter={filter} setFilter={setFilter} pf={pf} setPf={setPf} />
   if (mobile) return <div className="ld ld-mobile">{main}</div>
   const row = (g, rank) => (
     <button type="button" key={g.id} className={'ld-item' + (g.id === selId ? ' on' : '')} onClick={() => onSelect(g.id)}>
@@ -690,10 +722,13 @@ function Ludo({ games, top, selId, onSelect, onHome, mobile, setFavorite, reorde
           <SearchGlyph />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Retrouver un jeu…" aria-label="Retrouver un jeu" />
         </label>
+        <select className="ld-select ld-pf" value={pf} onChange={e => setPf(e.target.value)} aria-label="Plateforme">
+          {PLATFORM_GROUPS.map(([k, t]) => <option key={k} value={k}>{k === 'all' ? 'Toutes les plateformes' : t}</option>)}
+        </select>
         <div className="ld-list">
           {topShown.length > 0 && <><h4>Mon top <em>{top.length}</em></h4>{topShown.map(g => row(g, g.fav_rank))}</>}
           {nowShown.length > 0 && <><h4>En cours <em>{nowShown.length}</em></h4>{nowShown.map(g => row(g, null))}</>}
-          <h4>Tous mes jeux <em>{games.length}</em></h4>
+          <h4>{pf === 'all' ? 'Tous mes jeux' : PLATFORM_GROUPS.find(x => x[0] === pf)[1]} <em>{allShown.length}</em></h4>
           {allShown.map(g => row(g, null))}
           {!allShown.length && <p className="st-muted ld-none">{games.length ? 'Aucun jeu ne correspond.' : 'Aucun jeu pour l’instant.'}</p>}
         </div>
@@ -880,6 +915,14 @@ export default function PcOS({ games, addGame, findGame, updateGame, removeGame,
   const [toast, setToast] = useState(null)
   const [customTab, setCustomTab] = useState('wall')
   const [wallFor, setWallFor] = useState(null)
+  // l'arrivée, comme sur un vrai PC : le bureau, on « double-clique » l'icône, la fenêtre s'ouvre
+  const [phase, setPhase] = useState('desk')        // desk → click → open (chargement) → app ; shut en partant
+  useEffect(() => {
+    const ts = [setTimeout(() => setPhase('click'), 800), setTimeout(() => setPhase('open'), 1250), setTimeout(() => setPhase('app'), 2300)]
+    return () => ts.forEach(clearTimeout)
+  }, [])
+  const [pf, setPfState] = useState(readPf)
+  const setPf = v => { setPfState(v); savePf(v) }
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t) }, [toast])
 
   // l'écran s'agrandit depuis le moniteur 3D (et s'y range en partant)
@@ -936,10 +979,16 @@ export default function PcOS({ games, addGame, findGame, updateGame, removeGame,
   const chooseWall = g => { setWallFor(g ? { name: g.name, ...refOf(g) } : null); setCustomTab('wall'); navigate('custom', { v: 'main', k: Date.now() }) }
   const quickWall = w => { setWallpaper(w); setToast(`Nouveau fond d’écran : ${w.name}`) }
 
+  const shutDown = () => {
+    if (phase === 'shut' || closing) return
+    setTrailer(null)
+    setPhase('shut')
+    setTimeout(close, 900)
+  }
   useEffect(() => {
     const k = e => {
       if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'SELECT') return
-      if (e.key === 'Escape') { if (!back()) close() }
+      if (e.key === 'Escape') { if (!back()) shutDown() }
       else if (e.altKey && e.key === 'ArrowLeft') back()
       else if (e.altKey && e.key === 'ArrowRight') forward()
     }
@@ -960,24 +1009,41 @@ export default function PcOS({ games, addGame, findGame, updateGame, removeGame,
   const ld = tab === 'games' && !mobile
   let body = null
   if (tab === 'stim') {
-    if (cur.v === 'store') body = <Discover mine={mine} onOpen={openItem} onSearch={q => navigate('stim', { v: 'search', q })} />
-    else if (cur.v === 'search') body = <CatalogSearch q={cur.q} mine={mine} onOpen={openItem} />
+    if (cur.v === 'store') body = <Discover mine={mine} onOpen={openItem} onSearch={q => navigate('stim', { v: 'search', q })} pf={pf} setPf={setPf} />
+    else if (cur.v === 'search') body = <CatalogSearch q={cur.q} mine={mine} onOpen={openItem} pf={pf} setPf={setPf} />
     else body = <CatalogPage item={cur.item} games={games} findGame={findGame} addGame={addGame} updateGame={updateGame} setFavorite={setFavorite}
       onTrailer={setTrailer} quickWall={quickWall} openMine={openGame} notify={setToast} />
   } else if (tab === 'games') {
     body = <Ludo games={games} top={top} selId={cur.v === 'game' ? cur.id : null} onSelect={openGame} onHome={() => navigate('games', ROOT.games, 'back')} mobile={mobile}
-      setFavorite={setFavorite} reorderTop={reorderTop} updateGame={updateGame} removeGame={removeGame} onPlay={playTrailer} onWallpaper={chooseWall} onCatalog={toCatalog} quickWall={quickWall} openStore={() => goTab('stim')} notify={setToast} />
+      setFavorite={setFavorite} reorderTop={reorderTop} updateGame={updateGame} removeGame={removeGame} onPlay={playTrailer} onWallpaper={chooseWall} onCatalog={toCatalog} quickWall={quickWall} openStore={() => goTab('stim')} notify={setToast} pf={pf} setPf={setPf} />
   } else {
     body = <Custom tab={customTab} setTab={setCustomTab} games={games} wallpaper={wallpaper} setWallpaper={setWallpaper} request={wallFor} setup={setup} setSetup={setSetup} />
   }
 
   return (
-    <div ref={rootRef} className={'pcos cs cl in-app' + (closing ? ' closing' : '') + (mobile ? ' mobile' : '')} role="application" aria-label="Le PC"
+    <div ref={rootRef} className={'pcos cs cl' + (closing ? ' closing' : '') + (mobile ? ' mobile' : '') + ' ph-' + phase} role="application" aria-label="Le PC"
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-      <div className="cs-bg" aria-hidden="true">
-        {wallpaper?.url ? <img key={wallpaper.url} src={wallpaper.url} alt="" /> : <div className="pc-wall"><i /><i /><i /></div>}
+      {/* le bureau du PC : notre fond d'écran, des icônes, la barre des tâches (on ne s'en sert pas) */}
+      <div className="pd-desk" aria-hidden="true">
+        {wallpaper?.url ? <img className="pd-wall" key={wallpaper.url} src={wallpaper.url} alt="" /> : <div className="pc-wall pd-wall"><i /><i /><i /></div>}
+        <div className="pd-icons">
+          <span className={'pd-icon app' + (phase === 'click' ? ' pressed' : '')}><span className="pd-icon-tile"><span className="pc-orb" /></span><em>Maruchime</em></span>
+          <span className="pd-icon"><span className="pd-icon-tile folder" /><em>Documents</em></span>
+          <span className="pd-icon"><span className="pd-icon-tile shots"><PictureGlyph /></span><em>Captures</em></span>
+        </div>
       </div>
+      <footer className="pd-task" aria-hidden="true">
+        <span className="pd-start"><span className="pc-orb" /></span>
+        <span className={'pd-task-app' + (phase !== 'desk' && phase !== 'click' ? ' on' : '')}><span className="pc-orb" /></span>
+        <span className="pd-task-folder"><span className="pd-icon-tile folder" /></span>
+        <span className="pd-task-r"><Clock /></span>
+      </footer>
 
+      {phase !== 'desk' && phase !== 'click' && (
+      <section className="pd-win">
+      {phase === 'open' && (
+        <div className="pd-splash" aria-hidden="true"><span className="pc-orb" /><b>Maruchime</b><i><span /></i></div>
+      )}
       <header className="cl-top">
         <div className="cl-arrows">
           <button type="button" onClick={back} disabled={!nav.past.length && !trailer} aria-label="Retour" title="Retour"><Back /></button>
@@ -991,13 +1057,15 @@ export default function PcOS({ games, addGame, findGame, updateGame, removeGame,
         <div className="cl-right">
           {!mobile && <Clock />}
           {!mobile && holder && <span className="cl-user"><span className="pc-orb" />{holder.split(' ')[0]}</span>}
-          <button type="button" className="cl-power" onClick={close} aria-label="Éteindre et revenir au salon" title="Éteindre et revenir au salon"><PowerGlyph /></button>
+          <button type="button" className="cl-power" onClick={shutDown} aria-label="Éteindre et revenir au salon" title="Éteindre et revenir au salon"><PowerGlyph /></button>
         </div>
       </header>
 
       <main className="cl-main">
         <div className={'cs-body st-body ' + (ld ? 'ld-body enter-tab' : 'enter-' + dir)} key={ld ? 'games' : tab + ':' + entryKey(cur)}>{body}</div>
       </main>
+      </section>
+      )}
 
       {trailer && <Trailer t={trailer} onClose={() => setTrailer(null)} />}
       {toast && <div className="pc-toast cs-toast" role="status">{toast}</div>}

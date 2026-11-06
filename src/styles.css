@@ -3481,3 +3481,82 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
   .tr-back { padding: 0; }
   .tr-box { border-radius: 0; }
 }
+
+/* trier par plateforme */
+.pf-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.pf-chips button { height: 36px; padding: 0 14px; border-radius: 18px; display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 800;
+  background: rgba(255, 255, 255, 0.06); color: rgba(242, 240, 250, 0.72); border: 1.5px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.pf-chips button b { font-size: 11px; opacity: 0.6; }
+.pf-chips button:hover:not(:disabled) { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.pf-chips button:disabled { opacity: 0.32; cursor: default; }
+.pf-chips button.on { color: #fff; background: rgba(255, 255, 255, 0.16); }
+.pf-chips button.pf-ps.on { background: #1F4FB8; border-color: #4B86FF; }
+.pf-chips button.pf-xbox.on { background: #1E7A2E; border-color: #3FBF55; }
+.pf-chips button.pf-switch.on { background: #B8222E; border-color: #FF4D5B; }
+.pf-chips button.pf-pc.on { background: #3A3F4C; border-color: #9AA3B5; }
+.pf-chips button.pf-other.on { background: #5B3A8C; border-color: #9C7AE0; }
+.ld-sec .pf-chips { margin: -2px 0 10px; }
+.ld-pf { width: 100%; height: 36px; flex: none; }
+@media (max-width: 767px) {
+  .pf-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -2px; padding-left: 2px; }
+  .pf-chips button { flex: none; height: 34px; padding: 0 12px; font-size: 13px; }
+}
+
+/* =============================================================================
+   Le PC comme un vrai : le bureau (notre fond d'écran), la barre des tâches, la fenêtre de
+   l'appli qui s'ouvre depuis son icône, et se range dans la barre en éteignant
+   ========================================================================== */
+.pcos.cl { --tb: calc(46px + env(safe-area-inset-bottom)); background: #0b0a12; }
+.pd-desk { position: absolute; inset: 0; overflow: hidden; }
+.pd-wall { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.pd-desk::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0, 0, 0, 0.28), transparent 30%); pointer-events: none; }
+.pd-icons { position: absolute; left: 14px; top: calc(16px + env(safe-area-inset-top)); z-index: 1; display: flex; flex-direction: column; gap: 14px; }
+.pd-icon { width: 92px; padding: 8px 4px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; gap: 7px; color: #fff; }
+.pd-icon em { font-style: normal; font-size: 12.5px; font-weight: 600; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8); }
+.pd-icon-tile { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; background: rgba(16, 14, 30, 0.75); box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+.pd-icon.app .pd-icon-tile { background: linear-gradient(160deg, #2A2450, #12101f); }
+.pd-icon.app .pc-orb { width: 30px; height: 30px; }
+.pd-icon.app .pc-orb::after { inset: 8px; }
+.pd-icon-tile.folder { background: linear-gradient(170deg, #FFD36B, #E8A93A); position: relative; }
+.pd-icon-tile.folder::before { content: ''; position: absolute; left: 8px; top: 10px; width: 20px; height: 8px; border-radius: 4px 4px 0 0; background: #F2BC4B; }
+.pd-icon-tile.shots { background: linear-gradient(160deg, #FF8FB8, #C2407A); color: #fff; }
+.pd-icon-tile.shots svg { width: 32px; height: 32px; }
+/* le « double-clic » sur l'icône de l'appli */
+.pd-icon.pressed { background: rgba(120, 140, 255, 0.28); box-shadow: inset 0 0 0 1px rgba(160, 180, 255, 0.55); }
+.pd-icon.pressed .pd-icon-tile { animation: pdPress 0.36s ease 2; }
+@keyframes pdPress { 50% { transform: scale(0.86); } }
+.pd-task { position: absolute; left: 0; right: 0; bottom: 0; z-index: 20; height: var(--tb); padding: 0 10px env(safe-area-inset-bottom); display: flex; align-items: center; gap: 6px;
+  background: rgba(12, 11, 24, 0.86); border-top: 1px solid rgba(255, 255, 255, 0.08); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); color: #F2F0FA; }
+.pd-start, .pd-task-app, .pd-task-folder { position: relative; width: 40px; height: 36px; border-radius: 8px; display: grid; place-items: center; }
+.pd-start .pc-orb, .pd-task-app .pc-orb { width: 20px; height: 20px; }
+.pd-start .pc-orb::after, .pd-task-app .pc-orb::after { inset: 5px; }
+.pd-task-folder .pd-icon-tile { width: 22px; height: 18px; border-radius: 4px; box-shadow: none; }
+.pd-task-folder .pd-icon-tile.folder::before { left: 2px; top: -3px; width: 9px; height: 4px; }
+.pd-task-app.on { background: rgba(255, 255, 255, 0.1); }
+.pd-task-app::after { content: ''; position: absolute; left: 50%; bottom: 2px; width: 0; height: 3px; border-radius: 2px; background: #7A5CFF; transform: translateX(-50%); transition: width 0.3s; }
+.pd-task-app.on::after { width: 16px; }
+.pd-task-r { margin-left: auto; }
+.pd-task .pc-clock b { font-size: 12px; }
+.pd-task .pc-clock em { font-size: 10.5px; }
+/* la fenêtre de l'appli, au-dessus de la barre des tâches */
+.pd-win { position: absolute; left: 0; right: 0; top: 0; bottom: var(--tb); z-index: 10; overflow: hidden; background: #100f18;
+  transform-origin: 60px calc(52px + env(safe-area-inset-top)); animation: pdOpen 0.55s cubic-bezier(.2, .8, .2, 1) both; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06); }
+@keyframes pdOpen { from { transform: scale(0.04); opacity: 0.2; border-radius: 60px; } to { transform: none; opacity: 1; border-radius: 0; } }
+.ph-shut .pd-win { transform-origin: 70px calc(100% + 22px); animation: pdShut 0.45s cubic-bezier(.5, 0, .8, .4) both; }
+@keyframes pdShut { to { transform: scale(0.04); opacity: 0; border-radius: 60px; } }
+.pcos.cl .cl-main { background: #100f18; }
+/* l'écran de chargement */
+.pd-splash { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  background: radial-gradient(60% 50% at 50% 45%, #241d44, #0d0c16); color: #fff; animation: pdSplash 1.05s ease both; }
+.pd-splash .pc-orb { width: 64px; height: 64px; animation: pdSpin 1.4s linear infinite; }
+.pd-splash .pc-orb::after { inset: 16px; }
+.pd-splash b { font-size: 24px; font-weight: 800; letter-spacing: 0.02em; }
+.pd-splash i { width: 160px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.pd-splash i span { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #7A5CFF, #4B86FF); transform-origin: 0 50%; animation: pdLoad 0.9s ease-out both; }
+@keyframes pdSplash { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes pdSpin { to { transform: rotate(360deg); } }
+@keyframes pdLoad { from { transform: scaleX(0); } }
+@media (max-width: 767px) {
+  .pd-icon { width: 80px; }
+  .pd-icon-tile { width: 50px; height: 50px; }
+}

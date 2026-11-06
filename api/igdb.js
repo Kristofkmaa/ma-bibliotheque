@@ -5,7 +5,12 @@
  *   /api/igdb?q=zelda       → recherche
  *   /api/igdb?id=1942       → fiche d'un jeu (résumé, images, vidéos, studio, plateformes…)
  *   /api/igdb?featured=1    → les rayons : populaires en ce moment, les mieux notés, bientôt
+ * Avec &pf=ps|xbox|switch|pc|other : seulement les jeux de ces plateformes (other : ni l'une ni l'autre).
  */
+// les familles de plateformes (identifiants IGDB) : PS5, PS4 · Xbox Series, One · Switch, Switch 2 · PC
+const PF = { ps: [167, 48], xbox: [169, 49], switch: [130, 508], pc: [6] }
+const MAIN = Object.values(PF).flat()
+const pfWhere = pf => (PF[pf] ? ` & platforms = (${PF[pf].join(',')})` : pf === 'other' ? ` & platforms != (${MAIN.join(',')})` : '')
 let token = null, tokenExp = 0
 
 const LIST = 'name,cover.image_id,first_release_date,platforms.abbreviation,platforms.name,genres.name,total_rating,artworks.image_id,screenshots.image_id,websites.url'
@@ -62,9 +67,10 @@ export default async function handler(req, res) {
     const q = String(req.query.q || '').trim().replace(/["\\;]/g, ' ').slice(0, 80)
     const gid = parseInt(req.query.id, 10)
     const now = Math.floor(Date.now() / 1000)
+    const pw = pfWhere(String(req.query.pf || ''))
     let out
     if (q) {
-      const list = await games(`search "${q}"; fields ${LIST}; where version_parent = null; limit 30;`)
+      const list = await games(`search "${q}"; fields ${LIST}; where version_parent = null${pw}; limit 30;`)
       out = { results: list.map(pick) }
     } else if (gid > 0) {
       const [g] = await games(`fields ${FULL}; where id = ${gid};`)
@@ -80,9 +86,9 @@ export default async function handler(req, res) {
       }
     } else if (req.query.featured) {
       const [hot, best, soon] = await Promise.all([
-        games(`fields ${LIST}; where first_release_date > ${now - 150 * 86400} & first_release_date < ${now} & cover != null & total_rating_count > 2; sort total_rating_count desc; limit 18;`),
-        games(`fields ${LIST}; where total_rating_count > 400 & cover != null; sort total_rating desc; limit 18;`),
-        games(`fields ${LIST}; where first_release_date > ${now} & cover != null & hypes > 3; sort hypes desc; limit 18;`),
+        games(`fields ${LIST}; where first_release_date > ${now - 150 * 86400} & first_release_date < ${now} & cover != null & total_rating_count > 2${pw}; sort total_rating_count desc; limit 18;`),
+        games(`fields ${LIST}; where total_rating_count > ${pw ? 60 : 400} & cover != null${pw}; sort total_rating desc; limit 18;`),
+        games(`fields ${LIST}; where first_release_date > ${now} & cover != null & hypes > ${pw ? 0 : 3}${pw}; sort hypes desc; limit 18;`),
       ])
       out = { hot: hot.map(pick), best: best.map(pick), soon: soon.map(pick) }
     } else { res.status(400).json({ error: 'q, id ou featured attendu' }); return }

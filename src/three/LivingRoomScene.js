@@ -1032,8 +1032,10 @@ export class LivingRoomScene {
 
   /** Le fond d'écran du PC (adresse d'une image de jeu, ou null) : l'écran 3D le montre aussi. */
   setPcWallpaper(url) {
+    clearInterval(this.pcClock)
+    this.pcClock = setInterval(() => { if (this.pcCanvas) { drawPcDesktop(this.pcCanvas, this.pcWallImg || null); this.pcTex.needsUpdate = true } }, 60000)
     this.pcWallUrl = url
-    const draw = img => { if (!this.pcCanvas || this.pcWallUrl !== url) return; drawPcDesktop(this.pcCanvas, img); this.pcTex.needsUpdate = true; this.shadowDirty = 2 }
+    const draw = img => { if (!this.pcCanvas || this.pcWallUrl !== url) return; this.pcWallImg = img; drawPcDesktop(this.pcCanvas, img); this.pcTex.needsUpdate = true; this.shadowDirty = 2 }
     if (!url) { draw(null); return }
     loadImage(relayUrl(url)).then(img => draw(img))
   }
@@ -2313,6 +2315,7 @@ export class LivingRoomScene {
   }
 
   dispose() {
+    clearInterval(this.pcClock)
     cancelAnimationFrame(this.raf)
     this._ro?.disconnect()
     document.removeEventListener('visibilitychange', this._onVis)
@@ -2461,47 +2464,33 @@ function drawPcDesktop(c, img = null) {
       g.fillStyle = gr; g.fillRect(0, 0, W, H)
     }
   }
-  const shade = g.createLinearGradient(0, 0, 0, H)
-  shade.addColorStop(0, 'rgba(8,7,14,0.5)'); shade.addColorStop(0.25, 'rgba(8,7,14,0)'); shade.addColorStop(0.6, 'rgba(8,7,14,0.05)'); shade.addColorStop(1, 'rgba(8,7,14,0.7)')
-  g.fillStyle = shade; g.fillRect(0, 0, W, H)
+  // le bureau du PC (quand on n'est pas devant) : notre fond d'écran, trois icônes, la barre des tâches
   const SANS = '"Inter Tight", system-ui, sans-serif'
-  // le logiciel : la barre du haut (← →, Magasin, Bibliothèque, Personnaliser)
-  g.fillStyle = 'rgba(14,13,24,0.84)'; g.fillRect(0, 0, W, H)
-  g.fillStyle = 'rgba(10,9,18,0.9)'; g.fillRect(0, 0, W, 64)
-  g.fillStyle = 'rgba(242,240,250,0.8)'; g.font = `700 26px ${SANS}`; g.textAlign = 'left'; g.textBaseline = 'middle'
-  g.fillText('‹   ›', 24, 33)
-  ;[['DÉCOUVRIR', 0.55], ['BIBLIOTHÈQUE', 1], ['PERSONNALISER', 0.55]].reduce((x, [t, a]) => {
-    g.globalAlpha = a; g.fillStyle = '#fff'; g.font = `800 20px ${SANS}`; g.fillText(t, x, 33)
-    const w = g.measureText(t).width
-    if (a === 1) { g.globalAlpha = 1; g.fillStyle = '#6A6CFF'; rr(x, 58, w, 5, 2); g.fill() }
-    return x + w + 30
-  }, 120)
-  g.globalAlpha = 1
-  g.fillStyle = 'rgba(255,255,255,0.08)'; rr(W - 150, 15, 90, 36, 18); g.fill()
-  // la liste à gauche
-  g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, 64, 250, H - 64)
-  g.fillStyle = 'rgba(232,176,75,0.2)'; rr(14, 80, 222, 40, 10); g.fill()
-  g.fillStyle = '#F6E3B8'; g.font = `800 17px ${SANS}`; g.fillText('Ma ludothèque', 30, 101)
-  for (let k = 0; k < 11; k++) {
-    const y = 150 + k * 44
-    g.fillStyle = ['#7A4BD0', '#3C8A5A', '#B5683A', '#2F6BFF', '#9A3B5C'][k % 5]; rr(18, y, 48, 26, 4); g.fill()
-    g.fillStyle = 'rgba(242,240,250,0.75)'; rr(78, y + 8, 90 + (k * 37) % 70, 10, 5); g.fill()
+  const side = g.createLinearGradient(0, 0, W * 0.3, 0)
+  side.addColorStop(0, 'rgba(0,0,0,0.3)'); side.addColorStop(1, 'rgba(0,0,0,0)')
+  g.fillStyle = side; g.fillRect(0, 0, W, H)
+  const orb = (x, y, r) => {
+    const cols = ['#7A5CFF', '#2F6BFF', '#33C2C2', '#E8B04B', '#FF5FA8']
+    cols.forEach((c, k) => { g.fillStyle = c; g.beginPath(); g.moveTo(x, y); g.arc(x, y, r, (k / 5) * Math.PI * 2, ((k + 1) / 5) * Math.PI * 2); g.closePath(); g.fill() })
+    g.fillStyle = '#14122a'; g.beginPath(); g.arc(x, y, r * 0.48, 0, Math.PI * 2); g.fill()
   }
-  // à droite : notre top en grand, puis les jaquettes
-  const hero = g.createLinearGradient(270, 0, W - 20, 0)
-  hero.addColorStop(0, 'rgba(60,30,90,0.95)'); hero.addColorStop(1, 'rgba(30,50,110,0.6)')
-  g.fillStyle = hero; rr(270, 84, W - 290, 250, 22); g.fill()
-  g.fillStyle = '#F6C766'; g.font = `800 15px ${SANS}`; g.fillText('T O N   N ° 1', 300, 230)
-  g.fillStyle = '#fff'; g.font = `800 42px ${SANS}`; g.fillText('Mon top', 300, 272)
-  g.fillStyle = '#33C27F'; rr(300, 296, 120, 20, 10); g.fill()
-  const cw = 132, ch = 198
-  ;['#B5683A', '#3C8A5A', '#7A4BD0', '#2F6BFF', '#9A3B5C', '#C9A33A', '#3A7F9A'].forEach((col, k) => {
-    const x = 270 + k * (cw + 14)
-    if (x + cw > W - 10) return
-    g.fillStyle = col; rr(x, 380, cw, ch, 10); g.fill()
-    g.fillStyle = 'rgba(255,255,255,0.14)'; rr(x, 380, cw, ch * 0.4, 10); g.fill()
-  })
-  g.fillStyle = 'rgba(242,240,250,0.6)'; g.font = `800 14px ${SANS}`; g.fillText('M O N   T O P', 270, 360)
+  const icon = (y, label, draw) => {
+    g.fillStyle = 'rgba(16,14,30,0.75)'; rr(42, y, 92, 92, 22); g.fill()
+    draw(88, y + 46)
+    g.fillStyle = '#fff'; g.font = `600 21px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'
+    g.shadowColor = 'rgba(0,0,0,0.8)'; g.shadowBlur = 6; g.fillText(label, 88, y + 124); g.shadowBlur = 0
+  }
+  icon(28, 'Maruchime', (x, y) => orb(x, y, 26))
+  icon(178, 'Documents', (x, y) => { g.fillStyle = '#F2BC4B'; rr(x - 30, y - 22, 26, 12, 4); g.fill(); g.fillStyle = '#FFD36B'; rr(x - 30, y - 14, 60, 40, 6); g.fill() })
+  icon(328, 'Captures', (x, y) => { g.fillStyle = '#E2689A'; rr(x - 30, y - 24, 60, 48, 8); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(x - 22, y + 16); g.lineTo(x - 4, y - 4); g.lineTo(x + 8, y + 8); g.lineTo(x + 16, y); g.lineTo(x + 24, y + 16); g.closePath(); g.fill() })
+  // la barre des tâches
+  g.fillStyle = 'rgba(12,11,24,0.88)'; g.fillRect(0, H - 64, W, 64)
+  orb(40, H - 32, 15)
+  g.fillStyle = 'rgba(255,255,255,0.1)'; rr(74, H - 56, 52, 48, 10); g.fill()
+  orb(100, H - 32, 14)
+  const d = new Date()
+  g.fillStyle = '#fff'; g.font = `600 20px ${SANS}`; g.textAlign = 'right'; g.textBaseline = 'middle'
+  g.fillText(d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }), W - 28, H - 32)
 }
 
 function towerGlassTexture() {

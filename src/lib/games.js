@@ -54,15 +54,38 @@ const fromSteam = g => ({
   year: null, date: '', platforms: ['PC'], genres: g.genres || [], rating: g.metascore || g.metacritic || null,
 })
 
-export const searchCatalog = q => viaIgdb(
-  () => get('igdb', { q }).then(d => d.results.map(fromIgdb)),
-  () => get('steam', { q }).then(d => (d.results || []).map(fromSteam)),
+// Steam n'a que des jeux PC : pour une autre famille de plateformes, rien
+const steamOnly = (pf, fn) => (pf && pf !== 'all' && pf !== 'pc' ? Promise.resolve(null) : fn())
+const pfParam = pf => (pf && pf !== 'all' ? { pf } : {})
+
+export const searchCatalog = (q, pf = 'all') => viaIgdb(
+  () => get('igdb', { q, ...pfParam(pf) }).then(d => d.results.map(fromIgdb)),
+  () => steamOnly(pf, () => get('steam', { q }).then(d => (d.results || []).map(fromSteam))).then(r => r || []),
 )
 
-export const featuredCatalog = () => viaIgdb(
-  () => get('igdb', { featured: '1' }).then(d => ({ hot: d.hot.map(fromIgdb), best: d.best.map(fromIgdb), soon: d.soon.map(fromIgdb) })),
-  () => get('steam', { featured: '1' }).then(d => ({ hot: (d.top || []).map(fromSteam), best: (d.specials || []).map(fromSteam), soon: (d.news || []).map(fromSteam) })),
+export const featuredCatalog = (pf = 'all') => viaIgdb(
+  () => get('igdb', { featured: '1', ...pfParam(pf) }).then(d => ({ hot: d.hot.map(fromIgdb), best: d.best.map(fromIgdb), soon: d.soon.map(fromIgdb) })),
+  () => steamOnly(pf, () => get('steam', { featured: '1' }).then(d => ({ hot: (d.top || []).map(fromSteam), best: (d.specials || []).map(fromSteam), soon: (d.news || []).map(fromSteam) })))
+    .then(r => r || { hot: [], best: [], soon: [] }),
 )
+
+/** Les familles de plateformes, pour trier le catalogue et notre bibliothèque. */
+export const PLATFORM_GROUPS = [['all', 'Toutes'], ['ps', 'PlayStation'], ['xbox', 'Xbox'], ['switch', 'Switch'], ['pc', 'PC'], ['other', 'Autres']]
+export function platformGroup(name) {
+  const n = String(name || '')
+  if (/^PS[45]\b|PlayStation [45]/i.test(n)) return 'ps'
+  if (/xbox|^XONE$|^XSX|Series X/i.test(n)) return 'xbox'
+  if (/switch|^NS2?$/i.test(n)) return 'switch'
+  if (/^PC$|windows/i.test(n)) return 'pc'
+  return 'other'
+}
+/** Ce jeu est-il de cette famille ? (la plateforme où l'on y joue d'abord, sinon toutes les siennes) */
+export const onPlatform = (g, pf) => {
+  if (!pf || pf === 'all') return true
+  const list = g.platform ? [g.platform] : g.platforms || []
+  if (!list.length) return pf === 'other'
+  return list.some(p => platformGroup(p) === pf)
+}
 
 const plain = html => { try { return new DOMParser().parseFromString(html, 'text/html').body.textContent || '' } catch { return html } }
 
