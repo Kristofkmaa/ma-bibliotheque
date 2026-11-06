@@ -10,7 +10,7 @@ import { BOOK_STATES, toggleState, isOwned, isWish, isReading, isRead, isLoved, 
 const SECTIONS = [
   { id: 'defi', label: 'Mon défi', icon: 'trophy' },
   { id: 'lis', label: 'Je lis', icon: 'bookmark', test: isReading },
-  { id: 'pal', label: 'Ma PAL', icon: 'stack', test: inPal, hint: 'pile à lire' },
+  { id: 'pal', label: 'Ma pile', icon: 'stack', test: inPal, hint: 'pile à lire' },
   { id: 'lu', label: 'J’ai lu', icon: 'check', test: isRead },
   { id: 'wish', label: 'Wishlist', icon: 'star', test: isWish },
   { id: 'aime', label: 'J’aime', icon: 'heart', test: isLoved },
@@ -276,7 +276,7 @@ function List({ sec, books, reading, onOpen }) {
 }
 const EMPTY = {
   lis: 'Aucun livre en cours. Ouvre un livre et touche « Je lis » : la date de début est notée.',
-  pal: 'Ta pile à lire est vide : tous les livres que tu as sont lus ou en cours.',
+  pal: 'Ta pile est vide : tous les livres que tu as sont lus ou en cours.',
   lu: 'Aucun livre lu pour l’instant.',
   wish: 'Ta wishlist est vide. Ajoute un livre et touche « Wishlist ».',
   aime: 'Les livres que tu aimes (le cœur) arrivent ici.',
