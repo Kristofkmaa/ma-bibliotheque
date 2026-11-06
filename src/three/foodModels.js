@@ -1,13 +1,16 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { norm } from '../lib/ingredients'
 
 /**
  * Les ingrédients en 3D, rangés dans le frigo et les placards : chaque produit emballé a son
  * emballage (brique, pot, bocal, bouteille, conserve, paquet, sachet, pot d'épices, barquette,
- * boîte d'œufs, part de fromage…) avec une étiquette à son nom. Les fruits, légumes et le pain
- * restent des pictogrammes pour l'instant (des modèles viendront).
- *   makeFood(item) → THREE.Group (posé sur y = 0, étiquette tournée vers +z) ou null (pictogramme)
+ * boîte d'œufs, part de fromage…) avec une étiquette à son nom. Les produits frais (fruits, légumes,
+ * pain, fromages) et quelques flacons reconnaissables sont des modèles 3D du « Food Kit » de Kenney
+ * (CC0, public/models/food). Ce qui n'a ni l'un ni l'autre reste un pictogramme.
+ *   makeFood(item, onReady) → THREE.Group (posé sur y = 0, étiquette tournée vers +z) ou null (pictogramme)
+ *   (un modèle arrive un instant après : onReady() est appelé quand il est en place)
  * Chaque groupe a userData.dispose() pour libérer ses étiquettes et matières.
  */
 
@@ -37,6 +40,52 @@ const BY_AISLE = { cremerie: 'pot', viande: 'barquette', frais: 'bocal', feculen
 // les produits frais restent des pictogrammes (pour l'instant)
 const FRESH = new Set(['legumes', 'fruits', 'garde'])
 const FRESH_NAMES = new Set(['pain'])
+
+// les modèles de Kenney : [fichier, taille (m, la plus grande dimension), couché dans la profondeur]
+const MODELS = {
+  'tomates': ['tomato', 0.075], 'tomates cerises': ['tomato', 0.045], 'carottes': ['carrot', 0.14], 'poivron': ['paprika', 0.085],
+  'aubergine': ['eggplant', 0.14], 'brocoli': ['broccoli', 0.11], 'chou fleur': ['cauliflower', 0.12], 'salade': ['cabbage', 0.11], 'chou': ['cabbage', 0.12],
+  'champignons': ['mushroom', 0.06], 'poireaux': ['leek', 0.22, true], 'celeri': ['celery-stick', 0.17], 'avocat': ['avocado', 0.075], 'mais': ['corn', 0.15],
+  'radis': ['radish', 0.07], 'betterave': ['beet', 0.08], 'citron': ['lemon', 0.065], 'pommes': ['apple', 0.075], 'bananes': ['banana', 0.15],
+  'fraises': ['strawberry', 0.05], 'oranges': ['orange', 0.075], 'poires': ['pear', 0.09], 'raisin': ['grapes', 0.1], 'cerises': ['cherries', 0.07],
+  'ananas': ['pineapple', 0.18], 'oignons': ['onion', 0.07], 'echalotes': ['onion', 0.045], 'courge': ['pumpkin', 0.14],
+  'pain': ['loaf-baguette', 0.22, true], 'pain de mie': ['loaf', 0.13],
+  'emmental': ['cheese-cut', 0.09], 'reblochon': ['cheese', 0.09], 'chevre': ['cheese', 0.07],
+  'ketchup': ['bottle-ketchup', 0.15], 'moutarde': ['bottle-musterd', 0.13], 'huile': ['bottle-oil', 0.2], 'huile d olive': ['bottle-oil', 0.2],
+  'miel': ['honey', 0.09], 'beurre de cacahuete': ['peanut-butter', 0.09], 'vin rouge': ['wine-red', 0.27], 'vin blanc': ['wine-white', 0.27],
+  'sel': ['shaker-salt', 0.08], 'poivre': ['pepper-mill', 0.12],
+}
+const loader = new GLTFLoader()
+const models = new Map()      // fichier → Promise de la scène chargée (une fois pour toutes)
+const loadModel = file => {
+  if (!models.has(file)) {
+    models.set(file, new Promise((ok, ko) => loader.load(`/models/food/${file}.glb`, g => {
+      g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
+      ok(g.scene)
+    }, undefined, ko)).catch(e => { models.delete(file); throw e }))
+  }
+  return models.get(file)
+}
+/** Un produit frais (ou un flacon) en 3D : posé sur y = 0, centré, à sa taille. */
+function modelFood(spec, onReady) {
+  const [file, size, lie] = spec
+  const G = new THREE.Group()
+  G.userData.dispose = () => {}        // (formes et matières partagées par tous les exemplaires)
+  loadModel(file).then(src => {
+    const m = src.clone()
+    const box = new THREE.Box3().setFromObject(m)
+    const dim = box.getSize(new THREE.Vector3())
+    const k = size / Math.max(dim.x, dim.y, dim.z, 1e-6)
+    m.scale.setScalar(k)
+    const c = box.getCenter(new THREE.Vector3())
+    m.position.set(-c.x * k, -box.min.y * k, -c.z * k)
+    const holder = new THREE.Group(); holder.add(m)
+    if (lie) holder.rotation.y = Math.PI / 2      // (une baguette, un poireau : couchés dans la profondeur)
+    G.add(holder)
+    onReady?.()
+  }, () => {})
+  return G
+}
 
 export function packOf(it) {
   const k = norm(it.fr)
@@ -82,7 +131,9 @@ function labelTexture(it, color, { w = 256, h = 160, light = false } = {}) {
   return t
 }
 
-export function makeFood(it) {
+export function makeFood(it, onReady) {
+  const spec = MODELS[norm(it.fr)]
+  if (spec) return modelFood(spec, onReady)
   const type = packOf(it)
   if (!type) return null
   const key = norm(it.fr)

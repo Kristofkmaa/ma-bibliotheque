@@ -602,7 +602,7 @@ export default class KitchenScene {
     const plane = this.plane
     const put = (group, it, x, y, z, s, k) => {
       // un produit emballé : son emballage en 3D, avec son étiquette
-      const food = makeFood(it)
+      const food = makeFood(it, () => { this.renderer.shadowMap.needsUpdate = true; this.kick() })
       if (food) {
         food.position.set(x, y, z)
         food.scale.setScalar(1.25 * s / 0.095)   // un peu plus grands que nature : on les reconnaît de loin
