@@ -18,6 +18,7 @@ const H = 3.0          // hauteur des murs (la pièce occupe la hauteur d'un té
 const T = 0.12         // épaisseur des murs
 const FT = 0.2         // épaisseur du plancher
 const FOV = 30
+const PC_A = 0.42   // part du trajet vers le PC passée à rejoindre la chaise
 const AZ_MIN = 0.18, AZ_MAX = 1.2, AZ0 = 0.62
 const EL_MIN = 0.3, EL_MAX = 0.82, EL0 = 0.58
 const TARGET0 = new THREE.Vector3(0, 0.95, 0)
@@ -26,6 +27,12 @@ const TARGET0 = new THREE.Vector3(0, 0.95, 0)
 const BOOKCASE = { x: -1.05, z: -R + 0.2, w: 1.62, h: 2.18, d: 0.38 }   // mur du fond, à gauche (face à la caméra)
 const PC = { x: 0, w: 1.7 }                 // le bureau gamer, centré sur le mur de devant (à la place de la cheminée)
 const MON = { w: 0.8, h: 0.45, y: 1.2 }     // l'écran principal du PC (16:9)
+// la chaise du PC (dans le repère du bureau, qui regarde le mur) : au repos, tirée pour s'asseoir, approchée de l'écran
+const CHAIR = { x: -0.1, rest: 1.05, out: 1.5, near: 0.98, turn: 0.22, eye: 1.2, stand: 1.74, behind: 0.95 }
+/** Un point du repère du bureau (tourné d'un demi-tour, contre le mur de devant) dans la pièce. */
+const deskToWorld = (lz, y, lx = CHAIR.x) => new THREE.Vector3(PC.x - lx, y, R - lz)
+/** Où l'on regarde quand on est debout derrière la chaise : entre elle et le bureau. */
+const chairLook = cz => deskToWorld(cz - 0.32, 0.9)
 // le mur de gauche est tout entier pour le vidéoprojecteur ; celui du fond pour la bibliothèque
 const TV = { z: 0 }                         // mur de gauche, en face du canapé : l'image projetée
 const SCR = { w: 3.0, h: 1.69, y: 1.68 }    // l'image projetée (16:9), presque tout le mur
@@ -703,8 +710,8 @@ export class LivingRoomScene {
     }
     // la chaise de gamer, tournée vers le bureau
     const chair = new THREE.Group()
-    chair.position.set(-0.1, 0, 1.15)
-    chair.rotation.y = Math.PI + 0.25
+    chair.position.set(CHAIR.x, 0, CHAIR.rest)
+    chair.rotation.y = CHAIR.turn          // le dossier côté pièce : on s'y assied face aux écrans
     grp.add(chair)
     this.pcChair = chair
     const seatMat = this._mat('#1B1B22', { roughness: 0.7 }), accent = this._mat('#2B47B0', { roughness: 0.6 })
@@ -956,10 +963,11 @@ export class LivingRoomScene {
   _tvView() {
     const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
     if (this.tvZoom?.kind === 'pc') {
-      // face à l'écran du PC, à sa hauteur : il tient entier à l'écran (le bureau s'ouvrira depuis lui)
-      const target = this.pcScreen.getWorldPosition(new THREE.Vector3())
-      const dist = Math.max(MON.w / 2 / (t * this.camera.aspect), MON.h / 2 / t) / 0.9
-      return { target, az: Math.PI, el: 0.02, dist: Math.min(dist, 2 * R - 0.6) }
+      // debout derrière la chaise tirée, les yeux sur elle et le bureau : la suite (s'asseoir, rouler) est dans _chairPath
+      const target = chairLook(CHAIR.out)
+      const v = deskToWorld(CHAIR.out + 0.05 + CHAIR.behind, CHAIR.stand).sub(target)
+      const dist = v.length()
+      return { target, az: Math.atan2(v.x, v.z), el: Math.asin(v.y / dist), dist }
     }
     if (this.tvZoom?.kind === 'cab') {
       // devant le meuble, un peu au-dessus : la vitrine occupe le bas de l'écran
@@ -1051,22 +1059,17 @@ export class LivingRoomScene {
 
   _stepTvZoom(dt) {
     const z = this.tvZoom
-    z.k = clamp(z.k + (z.dir * dt) / (z.fromSeat ? 1.2 : z.kind === 'tv' ? 1.6 : 1.1), 0, 1)
-    const e = ease(z.k), a = z.from, b = this._tvView()
+    z.k = clamp(z.k + (z.dir * dt) / (z.fromSeat ? 1.2 : z.kind === 'tv' ? 1.6 : z.kind === 'pc' ? 3.2 : 1.1), 0, 1)
+    // le PC : on rejoint la chaise en 40 % du trajet, le reste (s'asseoir, rouler) suit
+    const e = ease(z.kind === 'pc' ? clamp(z.k / PC_A, 0, 1) : z.k), a = z.from, b = this._tvView()
     // la caméra garde son objectif (rien ne se déforme) ; elle tourne vers la télé, puis descend
     // à sa hauteur seulement à la fin (elle passe au-dessus de la lampe et du canapé)
-    const eEl = ease(clamp((z.k - 0.3) / 0.7, 0, 1))
+    const eEl = z.kind === 'pc' ? e : ease(clamp((z.k - 0.3) / 0.7, 0, 1))
     const tgt = a.target.clone().lerp(b.target, e)
     const dist = Math.exp(Math.log(a.dist) + (Math.log(b.dist) - Math.log(a.dist)) * e)
     if (z.dir > 0 && z.k >= 1 && !z.inside) { z.inside = true; this.cb.onTvInside?.(z.kind) }
     if (z.dir < 0 && z.inside) { z.inside = false; this.cb.onTvInside?.(false) }
     if (this.cabGlass) this.cabGlass.opacity = z.kind === 'cab' ? 1 - clamp(e * 1.4, 0, 1) : 1
-    if (this.pcChair && z.kind === 'pc') {
-      // la chaise roule de côté : on vient s'installer devant l'écran sans passer à travers son dossier
-      const c = ease(clamp(z.k / 0.7, 0, 1))
-      this.pcChair.position.set(-0.1 - 0.85 * c, 0, 1.15 + 0.15 * c)
-      this.pcChair.rotation.y = Math.PI + 0.25 + 0.9 * c
-    }
     if (this.lensHalo) {
       // le projecteur s'allume quand on passe derrière lui, le faisceau s'éclaire pendant qu'on le suit
       const L = z.kind === 'tv' ? Math.sin(Math.PI * clamp(z.k / 0.75, 0, 1)) : 0
@@ -1076,6 +1079,7 @@ export class LivingRoomScene {
       if (this.beam) this.beam.material.opacity = 0.07 * (z.kind === 'tv' ? 1 - clamp(z.k * 1.6, 0, 1) : 1)
     }
     if (z.kind === 'tv') this._beamPath(z, a)
+    else if (z.kind === 'pc') this._chairPath(z, a, b, e, dist, tgt)
     else this._placeCamera(a.az + shortAngle(a.az, b.az) * e, a.el + (b.el - a.el) * eEl, dist, tgt)
     if (z.dir < 0 && z.k <= 0 && z.fromSeat) {
       // retour au canapé, à la même place
@@ -1122,6 +1126,49 @@ export class LivingRoomScene {
     cam.lookAt(P.look0.clone().lerp(P.screen, ease(clamp(k * 1.25, 0, 1))))
     // l'objectif s'élargit sur la fin, face au mur (rien ne se déforme sur une image plate)
     const fov = FOV + (P.endFov - FOV) * ease(clamp((k - 0.45) / 0.55, 0, 1))
+    if (Math.abs(cam.fov - fov) > 1e-3) { cam.fov = fov; cam.updateProjectionMatrix() }
+  }
+
+  /**
+   * Aller au PC, comme quelqu'un qui s'y installe : on arrive debout derrière la chaise, qu'on
+   * tire vers soi (elle recule et pivote face au bureau) ; on s'assied (le regard passe par-dessus
+   * le dossier et descend à hauteur d'écran) ; puis on roule avec elle jusqu'au bureau.
+   * Sur la fin l'objectif s'élargit si besoin pour voir l'écran entier (le bureau s'ouvre depuis lui).
+   * Au retour, tout à l'envers : on recule, on se lève, la chaise reprend sa place.
+   */
+  _chairPath(z, a, b, e, dist, tgt) {
+    const cam = this.camera, k = z.k
+    const chair = this.pcChair
+    // la chaise : tirée vers nous pendant qu'on arrive (0,22 → 0,42), puis roulée vers le bureau (0,6 → 1)
+    const pull = ease(clamp((k - 0.22) / (PC_A - 0.22), 0, 1)), roll = ease(clamp((k - 0.6) / 0.4, 0, 1))
+    const cz = CHAIR.rest + (CHAIR.out - CHAIR.rest) * pull + (CHAIR.near - CHAIR.out) * roll
+    const sit = clamp((k - PC_A) / (0.6 - PC_A), 0, 1)
+    chair.position.set(CHAIR.x, -0.035 * Math.sin(Math.PI * clamp((sit - 0.55) / 0.45, 0, 1)), cz)   // elle s'enfonce un peu quand on s'assied
+    chair.rotation.y = CHAIR.turn * (1 - pull)
+    const screen = this.pcScreen.getWorldPosition(new THREE.Vector3())
+    // dans la pièce, un objectif « d'œil », plus large : on voit la chaise, puis le bureau qui approche
+    // (sur téléphone, en hauteur, il s'élargit encore pour voir la chaise entière)
+    const tan0 = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
+    const roomFov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.max(Math.tan(THREE.MathUtils.degToRad(24)), 0.4 / cam.aspect)))
+    let fov
+    if (k <= PC_A) {
+      // l'arrivée : comme les autres zooms, la caméra tourne autour de la pièce jusque derrière la chaise
+      this._placeCamera(a.az + shortAngle(a.az, b.az) * e, a.el + (b.el - a.el) * e, dist, tgt)
+      fov = FOV + (roomFov - FOV) * ease(clamp((k - 0.12) / (PC_A - 0.12), 0, 1))
+    } else {
+      // s'asseoir : d'abord en avant (par-dessus le dossier), puis on descend à hauteur d'écran
+      const fwd = ease(sit), down = ease(clamp((sit - 0.4) / 0.6, 0, 1))
+      cam.position.copy(deskToWorld(cz + 0.05 + CHAIR.behind * (1 - fwd), CHAIR.stand + (CHAIR.eye - CHAIR.stand) * down + chair.position.y))
+      // assis, le regard un peu bas (le bureau arrive), puis il se lève sur l'écran à l'arrivée
+      const low = new THREE.Vector3(screen.x, 0.98, screen.z)
+      cam.lookAt(chairLook(cz).lerp(low, ease(clamp(sit / 0.85, 0, 1))).lerp(screen, ease(clamp((k - 0.74) / 0.26, 0, 1))))
+      // devant le bureau : l'écran entier dans l'image (le bureau du PC s'ouvre depuis lui)
+      // (l'objectif suit le roulement de la chaise : l'écran grandit sans jamais sembler reculer)
+      const D = deskToWorld(CHAIR.near + 0.05, CHAIR.eye).distanceTo(screen)
+      const need = Math.max(MON.h / 2 / 0.9 / D, MON.w / 2 / 0.9 / D / cam.aspect, tan0)
+      const endFov = Math.min(112, THREE.MathUtils.radToDeg(2 * Math.atan(need)))
+      fov = roomFov + (endFov - roomFov) * roll
+    }
     if (Math.abs(cam.fov - fov) > 1e-3) { cam.fov = fov; cam.updateProjectionMatrix() }
   }
 
