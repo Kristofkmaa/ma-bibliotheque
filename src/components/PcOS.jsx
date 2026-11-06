@@ -132,7 +132,7 @@ function Trailer({ t, onClose }) {
 
 // la famille de plateformes choisie (gardée d'une visite à l'autre)
 const PF_KEY = 'levana.jeux.plateforme'
-const readPf = () => { try { const v = localStorage.getItem(PF_KEY) || 'all'; return v === 'other' ? 'retro' : v } catch { return 'all' } }
+const readPf = () => { try { const v = localStorage.getItem(PF_KEY) || 'all'; return v === 'other' || v === 'retro' ? 'all' : v } catch { return 'all' } }
 const savePf = v => { try { localStorage.setItem(PF_KEY, v) } catch { /* ignore */ } }
 
 /**

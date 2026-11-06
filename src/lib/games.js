@@ -71,7 +71,7 @@ export const featuredCatalog = (pf = 'all') => viaIgdb(
 )
 
 /** Les familles de plateformes, pour trier le catalogue et notre bibliothèque. */
-export const PLATFORM_GROUPS = [['all', 'Toutes'], ['ps', 'PlayStation'], ['xbox', 'Xbox'], ['switch', 'Switch'], ['pc', 'PC'], ['mobile', 'Mobile'], ['retro', 'Rétro & autres']]
+export const PLATFORM_GROUPS = [['all', 'Toutes'], ['ps', 'PlayStation'], ['xbox', 'Xbox'], ['switch', 'Switch'], ['pc', 'PC'], ['mobile', 'Mobile']]
 /** Les boutiques du PC (le jeu y est vendu, ou on y joue). */
 export const PC_STORES = [['steam', 'Steam'], ['epic', 'Epic Games'], ['gog', 'GOG'], ['battlenet', 'Battle.net'], ['ea', 'EA app'], ['ubisoft', 'Ubisoft Connect'], ['itch', 'itch.io']]
 export const storeLabel = k => PC_STORES.find(x => x[0] === k)?.[1] || ''
