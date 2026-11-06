@@ -20,6 +20,7 @@ const H = 3.0          // hauteur des murs (la pièce occupe la hauteur d'un té
 const T = 0.12         // épaisseur des murs
 const FT = 0.2         // épaisseur du plancher
 const FOV = 30
+const SEAT_PC_YAW = -0.92   // assis : tourner la tête vers le bureau du PC
 const PC_A = 0.42   // part du trajet vers le PC passée à rejoindre la chaise
 const AZ_MIN = 0.18, AZ_MAX = 1.2, AZ0 = 0.62
 const EL_MIN = 0.3, EL_MAX = 0.82, EL0 = 0.58
@@ -1040,7 +1041,7 @@ export class LivingRoomScene {
     this._setHover(null)
     this._drawTv()
     this.tvZoom = { kind, k: 0, dir: 1, from: { target: this.target.clone(), az: this.az.v + (this.lastDrift || 0), el: this.el.v, dist: this.dist } }
-    if (kind === 'tv' && this.seat.on && this.seat.k.v > 0.95) {
+    if ((kind === 'tv' || kind === 'pc') && this.seat.on && this.seat.k.v > 0.95) {
       // depuis le canapé : on part de là où l'on est assis, du regard qu'on a
       const { eye, look } = this._seatPose()
       Object.assign(this.tvZoom, { fromSeat: true, startPos: eye, startLook: look, seatFov: this.camera.fov })
@@ -1122,7 +1123,7 @@ export class LivingRoomScene {
 
   _stepTvZoom(dt) {
     const z = this.tvZoom
-    z.k = clamp(z.k + (z.dir * dt) / (z.fromSeat ? 1.2 : z.kind === 'tv' ? 1.6 : z.kind === 'pc' ? 3.2 : 1.1), 0, 1)
+    z.k = clamp(z.k + (z.dir * dt) / (z.kind === 'pc' ? (z.fromSeat ? 3.9 : 3.2) : z.fromSeat ? 1.2 : z.kind === 'tv' ? 1.6 : 1.1), 0, 1)
     // le PC : on rejoint la chaise en 40 % du trajet, le reste (s'asseoir, rouler) suit
     const e = ease(z.kind === 'pc' ? clamp(z.k / PC_A, 0, 1) : z.k), a = z.from, b = this._tvView()
     // la caméra garde son objectif (rien ne se déforme) ; elle tourne vers la télé, puis descend
@@ -1149,6 +1150,9 @@ export class LivingRoomScene {
       this.tvZoom = null
       this.az.snap(a.az); this.el.snap(a.el); this.target.copy(a.target)
       this.seat.on = true; this.seat.k.snap(1); this.cb.onSeat?.(true)
+      this.camera.fov = z.seatFov; this.camera.updateProjectionMatrix()
+      // revenu du PC : on se rassied, puis on tourne la tête vers l'image
+      if (z.kind === 'pc') this.seat.turn = { to: 0.12, keep: true, then: () => {} }
       this.idleAt = this.time
       return
     }
@@ -1214,7 +1218,10 @@ export class LivingRoomScene {
     const tan0 = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
     const roomFov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.max(Math.tan(THREE.MathUtils.degToRad(24)), 0.4 / cam.aspect)))
     let fov
-    if (k <= PC_A) {
+    if (k <= PC_A && z.fromSeat) {
+      // depuis le canapé : on se lève et on marche jusque derrière la chaise
+      fov = this._seatToChair(z, k / PC_A, roomFov)
+    } else if (k <= PC_A) {
       // l'arrivée : comme les autres zooms, la caméra tourne autour de la pièce jusque derrière la chaise
       this._placeCamera(a.az + shortAngle(a.az, b.az) * e, a.el + (b.el - a.el) * e, dist, tgt)
       fov = FOV + (roomFov - FOV) * ease(clamp((k - 0.12) / (PC_A - 0.12), 0, 1))
@@ -1253,6 +1260,31 @@ export class LivingRoomScene {
     const look = z.startLook.clone().lerp(z.path.screen, ease(clamp(z.k / 0.55, 0, 1)))
     cam.position.copy(z.startPos).lerp(z.path.end, ease(clamp((z.k - 0.2) / 0.8, 0, 1)))
     cam.lookAt(look)
+  }
+
+  /**
+   * Du canapé au PC, à pied : on se lève (le regard monte à hauteur d'homme), on fait quelques pas
+   * (la tête balance un peu) en contournant la table basse, et on arrive debout derrière la chaise,
+   * là où commence la suite (tirer la chaise, s'asseoir, rouler jusqu'au bureau). Rend l'objectif.
+   */
+  _seatToChair(z, u, roomFov) {
+    const cam = this.camera
+    if (!z.walk) {
+      const s = z.startPos
+      const end = deskToWorld(CHAIR.out + 0.05 + CHAIR.behind, CHAIR.stand)
+      const up = new THREE.Vector3(s.x - 0.22, CHAIR.stand - 0.04, s.z + 0.32)        // debout, un pas vers le bureau
+      const mid = new THREE.Vector3((up.x + end.x) / 2 + 0.15, CHAIR.stand, Math.max(up.z, end.z) + 0.45)   // côté bureau de la table basse
+      z.walk = { curve: new THREE.CatmullRomCurve3([s, up, mid, end], false, 'centripetal'), look1: chairLook(CHAIR.out) }
+    }
+    const W = z.walk
+    // se lever un peu plus vite que marcher : le premier quart du trajet, c'est se redresser
+    const t = u < 0.28 ? 0.18 * ease(u / 0.28) : 0.18 + 0.82 * ease((u - 0.28) / 0.72)
+    const pos = W.curve.getPointAt(clamp(t, 0, 1))
+    const walking = Math.sin(Math.PI * clamp((u - 0.28) / 0.72, 0, 1))
+    pos.y += 0.018 * walking * Math.sin(u * Math.PI * 9)
+    cam.position.copy(pos)
+    cam.lookAt(z.startLook.clone().lerp(W.look1, ease(clamp(u / 0.75, 0, 1))))
+    return z.seatFov + (roomFov - z.seatFov) * ease(u)
   }
 
   /** Le vidéoprojecteur s'efface (0 : là, 1 : disparu), le temps d'aller dans la bibliothèque. */
@@ -2174,7 +2206,9 @@ export class LivingRoomScene {
     if (this.seat?.on) {
       if (['tv', 'projector', 'tvbubble'].includes(kind)) { if (!this.tvZoom) this.zoomTv('tv'); return }   // droit vers l'image
       if (kind === 'bookcase') { this.seat.turn = { to: 0.85, then: () => this.cb.onEnter?.() }; return }  // on tourne la tête, puis on y va
-      if (kind === 'cabinet' || kind === 'pc') { this.stand(() => this.tap(kind)); return }
+      // le PC : on tourne la tête vers le bureau, puis on se lève et on y va à pied
+      if (kind === 'pc') { if (!this.tvZoom && !this.seat.turn) this.seat.turn = { to: SEAT_PC_YAW, keep: true, then: () => this.zoomTv('pc') }; return }
+      if (kind === 'cabinet') { this.stand(() => this.tap(kind)); return }
     }
     const it = this.items.get(kind)
     if (it) it.bounce.vel += kind === 'bookcase' ? 0.6 : 1.4
@@ -2232,8 +2266,7 @@ export class LivingRoomScene {
       if (this.seat.turn) {
         const st = this.seat.turn
         // on part vers la bibliothèque : le projecteur commence déjà à s'effacer
-        st.fade = Math.min(0.5, (st.fade || 0) + dt * 1.2)
-        this._fadeProjector(st.fade)
+        if (!st.keep) { st.fade = Math.min(0.5, (st.fade || 0) + dt * 1.2); this._fadeProjector(st.fade) }
         this.seat.yaw += (st.to - this.seat.yaw) * (1 - Math.exp(-dt * 7))
         this.seat.pitch += (0.05 - this.seat.pitch) * (1 - Math.exp(-dt * 7))
         if (Math.abs(st.to - this.seat.yaw) < 0.02) { this.seat.turn = null; st.then() }
