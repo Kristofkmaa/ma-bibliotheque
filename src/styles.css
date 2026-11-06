@@ -4259,4 +4259,34 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
 .room-turning { position: absolute; inset: 0; z-index: 70; }
 .salon .salon-top, .salon .salon-ctrls, .salon .salon-bottom, .salon .salon-tabs, .salon .salon-stand { transition: opacity 0.45s ease; }
 .salon.room-away .salon-top, .salon.room-away .salon-ctrls, .salon.room-away .salon-bottom,
-.salon.room-away .salon-tabs, .salon.room-away .salon-stand, .salon.room-away .salon-chip { opacity: 0; pointer-events: none; }
+.salon.room-away .salon-tabs, .salon.room-away .salon-stand, .salon.room-away > .salon-chip { opacity: 0; pointer-events: none; }
+
+/* les pièces du fond : une étiquette, on la touche pour y aller */
+.room-pick { position: absolute; z-index: 6; transform: translate(-50%, -50%); border-radius: 24px; display: flex; align-items: flex-end; justify-content: center; -webkit-tap-highlight-color: transparent; }
+.room-pick span { transform: translateY(70%); padding: 5px 12px; border-radius: 14px; white-space: nowrap; font: 700 10.5px var(--sans); letter-spacing: 0.14em; text-transform: uppercase;
+  color: #2B2620; background: rgba(251, 247, 240, 0.86); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); box-shadow: 0 6px 16px -10px rgba(40, 30, 20, 0.6); transition: transform 0.2s, background 0.2s, color 0.2s; }
+.room-pick:hover span { background: #2B2620; color: #FBF7F0; transform: translateY(70%) scale(1.04); }
+.salon.cinema .room-pick span { background: rgba(28, 26, 23, 0.85); color: #F1ECE3; }
+/* quand la pièce de devant est occupée (la télé, le frigo, l'appli…), les autres s'effacent */
+.salon-rooms > .salon-stage { transition: opacity 0.5s ease; }
+.salon.tv-mode .salon-stage.bg, .salon.going .salon-stage.bg, .salon:has(.kitchen.focused) .salon-stage.bg, .salon:has(.kitchen.app-open) .salon-stage.bg { opacity: 0; }
+.salon:has(.kitchen.focused) .room-pick, .salon:has(.kitchen.app-open) .room-pick { display: none; }
+/* le garage et la chambre (pour l'instant) : ce qui arrivera bientôt */
+.room-soon .rs-card { position: absolute; z-index: 3; right: 22px; bottom: calc(26px + env(safe-area-inset-bottom)); width: min(340px, calc(100% - 44px)); padding: 18px 20px; border-radius: 18px;
+  background: rgba(251, 247, 240, 0.9); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 1px 0 #fff inset, 0 20px 46px -26px rgba(60, 40, 20, 0.7); pointer-events: auto; animation: ktIn 0.45s cubic-bezier(.2,.9,.25,1) both; }
+.room-soon .rs-card ul { list-style: none; margin-top: 10px; }
+.room-soon .rs-card li { position: relative; padding: 7px 0 7px 18px; font: 400 16px/1.35 var(--serif); color: var(--k-ink); border-top: 1px solid var(--k-line); }
+.room-soon .rs-card li:first-child { border-top: 0; }
+.room-soon .rs-card li::before { content: ''; position: absolute; left: 2px; top: 15px; width: 6px; height: 6px; border-radius: 50%; background: var(--k-terra); }
+.room-soon .rs-hint { bottom: calc(30px + env(safe-area-inset-bottom)); }
+@media (max-width: 767px) {
+  .room-pick span { font-size: 9px; padding: 4px 9px; letter-spacing: 0.1em; }
+  .room-soon .rs-card { left: 12px; right: 12px; width: auto; bottom: calc(12px + env(safe-area-inset-bottom)); padding: 14px 16px; }
+  .room-soon .rs-card li { font-size: 15px; padding: 5px 0 5px 16px; }
+  .room-soon .rs-card li::before { top: 12px; }
+  .room-soon .rs-hint { display: none; }
+}
+@media (min-width: 768px) { .room-soon .rs-hint { right: 380px; } }
+.room-pick.above { align-items: flex-start; }
+.room-pick.above span { transform: translateY(-80%); }
+.room-pick.above:hover span { transform: translateY(-80%) scale(1.04); }

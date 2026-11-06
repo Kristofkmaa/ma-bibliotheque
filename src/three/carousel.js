@@ -13,14 +13,20 @@ const TURN_MS = 2100
 const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 const TAU = Math.PI * 2
 
-/** Où se trouve une pièce à l'écran, pour un angle α autour du carrousel (0 : devant, π : au fond). */
+/**
+ * Où se trouve une pièce à l'écran, pour un angle α autour du carrousel (0 : devant, π : au fond).
+ * Le cercle est vu d'en haut et de biais : les pièces du fond sont plus haut et plus petites,
+ * celles des côtés s'écartent à gauche et à droite.
+ */
 export function poseAt(alpha, w, h) {
   const mobile = w < 768
   const u = (1 - Math.cos(alpha)) / 2      // 0 devant → 1 au fond
-  const v = Math.sin(alpha)                // sur le côté pendant le tour
-  const back = mobile ? { x: 0.27 * w, y: -0.3 * h, s: 0.34 } : { x: 0.31 * w, y: -0.24 * h, s: 0.34 }
-  const swing = (mobile ? 0.3 : 0.24) * w
-  return { ox: back.x * u + v * swing, oy: back.y * u, scale: 1 + (back.s - 1) * u, depth: u }
+  const v = Math.sin(alpha)                // -1 à gauche, 1 à droite
+  const ring = mobile ? { x: 0.34 * w, y: 0.35 * h, s: 0.25, side: 0.3 } : { x: 0.37 * w, y: 0.33 * h, s: 0.24, side: 0.32 }
+  // la taille fond vite en quittant le devant (les pièces des côtés sont déjà petites)
+  const k = Math.min(1, u * 2)
+  const scale = 1 - (1 - ring.side) * Math.pow(k, 0.8) - (ring.side - ring.s) * Math.max(0, u * 2 - 1)
+  return { ox: v * ring.x, oy: -ring.y * Math.pow(u, 0.6), scale, depth: u }
 }
 
 export class RoomCarousel {
@@ -48,6 +54,7 @@ export class RoomCarousel {
   /** Au repos : la pièce de devant est à nous, les autres tournent lentement au fond. */
   idle() {
     this.rooms.forEach((r, i) => {
+      r.host.classList.toggle('bg', i !== this.front)
       if (i === this.front) {
         r.scene.setCarousel(null)
         r.host.style.zIndex = '10'
@@ -55,7 +62,17 @@ export class RoomCarousel {
       } else this._apply(i, this.alphaOf(i), r.lastAz ?? r.az0 + this.alphaOf(i), SPIN)
     })
   }
-  resize() { if (!this.turning) this.idle() }
+  resize() { if (!this.turning) this.idle(); this.onLayout?.() }
+  /** Les pièces du fond, à l'écran (pour poser leur étiquette et y aller d'un toucher). */
+  spots() {
+    if (this.turning) return []
+    const { w, h } = this.size()
+    return this.rooms.map((r, i) => ({ r, i })).filter(x => x.i !== this.front).map(({ r, i }) => {
+      const p = poseAt(this.alphaOf(i), w, h)
+      // (la pièce juste derrière dépasse au-dessus de celle de devant : son étiquette va en haut)
+      return { id: r.id, x: w / 2 + p.ox, y: h / 2 + p.oy, size: p.scale * Math.min(w, h) * 0.9, above: p.depth > 0.9 && w >= 768 }
+    })
+  }
 
   /** La pièce qui vient devant reprend la main : on oublie l'angle où elle tournait au fond. */
   _release(i) { this.rooms[i].lastAz = undefined }
@@ -63,7 +80,8 @@ export class RoomCarousel {
   turnTo(id, done) {
     const to = this.rooms.findIndex(r => r.id === id)
     if (to < 0 || to === this.front || this.turning) { done?.(); return }
-    const steps = ((to - this.front) % this.n + this.n) % this.n
+    let steps = ((to - this.front) % this.n + this.n) % this.n
+    if (steps > this.n / 2) steps -= this.n      // par le plus court chemin
     const delta = -steps * (TAU / this.n)      // le carrousel tourne : la pièce choisie vient devant
     const start = this.rooms.map((r, i) => {
       const a0 = this.alphaOf(i)
@@ -81,12 +99,15 @@ export class RoomCarousel {
         // la pièce qui arrive finit dans sa vue habituelle (tour complet arrondi), les autres suivent le cercle
         let az
         if (i === T.to) {
-          const end = r.az0 + Math.ceil((s.az - r.az0 + T.delta) / TAU - 1e-6) * TAU
+          // finir dans sa vue habituelle, en tournant dans le même sens que le carrousel
+          const turns = (s.az - r.az0) / TAU
+          const end = r.az0 + (T.delta < 0 ? Math.floor(turns + 1e-6) : Math.ceil(turns - 1e-6)) * TAU
           az = s.az + (end - s.az) * e
         } else az = s.az + T.delta * e
         this._apply(i, alpha, az)
       })
       if (k < 1) { this.raf = requestAnimationFrame(step); return }
+      this.rooms.forEach(r => r.host.classList.remove('bg'))
       this.front = T.to
       this.turning = null
       this._release(T.to)
