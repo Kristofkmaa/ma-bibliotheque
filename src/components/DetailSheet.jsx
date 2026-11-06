@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { toDisplay, spineColors } from '../lib/bookUtils'
+import { toggleState } from '../lib/reading'
 
 const EASE = 'cubic-bezier(.2, .8, .2, 1)'
 const EASE_SHEET = 'cubic-bezier(.76, 0, .18, 1)'
@@ -64,7 +65,7 @@ function Line({ children, className = '' }) {
  * l'encre qui s'étale sur la couverture, chaque ligne de texte qui monte de son masque.
  * mode = 'edit' (livre de la bibliothèque) ou 'add' (résultat de recherche).
  */
-export default function DetailSheet({ book, mode, originRect, open, onClosed, onSave, onRemove, onAdd, inLibrary, shelfOptions = [], defaultShelf = null, top = null }) {
+export default function DetailSheet({ book, mode, originRect, open, onClosed, onSave, onRemove, onAdd, inLibrary, shelfOptions = [], defaultShelf = null, top = null, readingApi = null }) {
   const d = toDisplay(book)
   const [bg, ink] = spineColors(d)
   const sheetRef = useRef(null)
@@ -79,6 +80,13 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
     const value = reading === next ? null : next
     setReading(value)
     if (value === 'lu') setStampKey(k => k + 1)
+    // les dates de lecture suivent (début avec « En cours », fin avec « Lu » : le défi de l'année)
+    if (readingApi && book.id) {
+      const r = toggleState({ statuses: d.statuses }, next, readingApi.datesOf(book.id))
+      if (r.dates) readingApi.setDates(book.id, r.dates)
+      try { await onSave({ statuses: r.statuses }) } catch (e) { setFeedback('Erreur : ' + (e.message || e)) }
+      return
+    }
     const others = (d.statuses || []).filter(s => s !== 'lu' && s !== 'en_cours')
     try { await onSave({ statuses: value ? [value, ...others] : (others.length ? others : ['possede']) }) }
     catch (e) { setFeedback('Erreur : ' + (e.message || e)) }

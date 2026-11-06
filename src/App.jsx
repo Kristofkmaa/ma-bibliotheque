@@ -24,6 +24,8 @@ import { webglAvailable } from './three/webgl'
 import DetailSheet from './components/DetailSheet'
 import SearchPanel from './components/SearchPanel'
 import LoginPage from './components/LoginPage'
+import ReadingTablet, { ReadingDock } from './components/ReadingTablet'
+import { useReading } from './hooks/useReading'
 
 const Scanner = lazy(() => import('./components/Scanner'))
 // La bibliothèque en vraie 3D (Three.js) est chargée à part ; sans WebGL, étagère dessinée à plat
@@ -64,6 +66,8 @@ function Library({ user, onSignOut }) {
   // notre top 5 de livres : de face sur l'étagère d'honneur, en haut de la bibliothèque
   const bookTop = useBookTop(user.id)
   const showcase = useShowcase(user.id)   // nos médias préférés, sur le meuble télé du salon
+  const reading = useReading(user.id)     // nos dates de lecture et le défi de l'année (la tablette)
+  const [tablet, setTablet] = useState(null)   // la tablette de lecture ouverte : { from }
   const [topPanel, setTopPanel] = useState(false)
   const topBooks = useMemo(() => { const m = new Map(books.map(b => [b.id, b])); return bookTop.ids.map(id => m.get(id)).filter(Boolean) }, [bookTop.ids, books])
   // la télé du salon : allumée pendant toute la visite (salon, bibliothèque, PC…) ; le salon la
@@ -125,7 +129,7 @@ function Library({ user, onSignOut }) {
     return sortBooks(books, sort)
   }, [books, sort])
 
-  const overlay = !!detail || search || scanner || !!shelvesOpen || !!salon
+  const overlay = !!detail || search || scanner || !!shelvesOpen || !!salon || !!tablet
   const effShelves = useMemo(() => effectiveShelves(shelves, books), [shelves, books])
 
   const openBook = useCallback((book, el) => {
@@ -391,6 +395,7 @@ function Library({ user, onSignOut }) {
             onClosed={onDetailClosed}
             inLibrary={detail.mode === 'add' && isInLibrary(detail.book.googleId)}
             onSave={async updates => { await updateBook(detail.book.id, updates); setDetail(dt => dt && { ...dt, book: { ...dt.book, ...updates } }) }}
+            readingApi={reading}
             top={detail.mode === 'edit' ? { rank: topBooks.findIndex(b => b.id === detail.book.id) + 1, list: topBooks, max: TOP_MAX, add: rep => bookTop.add(detail.book.id, rep), remove: () => bookTop.remove(detail.book.id), arrange: () => setTopPanel(true) } : null}
             onRemove={async () => { await removeBook(detail.book.id); closeDetail() }}
             onAdd={async shelfId => {
@@ -407,6 +412,10 @@ function Library({ user, onSignOut }) {
           </button>
         </>
       )}
+
+      {/* la tablette de lecture, posée à côté de la bibliothèque */}
+      {!salon && !detail && !search && <ReadingDock books={books} reading={reading} mobile={mobile} onOpen={from => setTablet({ from })} />}
+      {tablet && <ReadingTablet books={books} reading={reading} updateBook={updateBook} from={tablet.from} mobile={mobile} onShow={id => setFocusId(id)} onClose={() => setTablet(null)} />}
 
       {topPanel && <TopBooksPanel list={topBooks} max={TOP_MAX} onMove={bookTop.move} onRemove={bookTop.remove} onOpen={b => { setTopPanel(false); openBook(b, null) }} onClose={() => setTopPanel(false)} />}
 

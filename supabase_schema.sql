@@ -226,3 +226,17 @@ alter table public.user_kitchen enable row level security;
 drop policy if exists "user_kitchen_own" on public.user_kitchen;
 create policy "user_kitchen_own" on public.user_kitchen
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ============================================================================
+-- La tablette de lecture : les dates de lecture de chaque livre et l'objectif du
+-- défi de chaque année (une ligne par personne, tout dans `data`)
+-- ============================================================================
+create table if not exists public.user_reading (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.user_reading enable row level security;
+drop policy if exists "user_reading_own" on public.user_reading;
+create policy "user_reading_own" on public.user_reading
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

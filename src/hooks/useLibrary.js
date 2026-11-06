@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { demoLoad, demoSave, demoNewId } from '../lib/demoStore'
 
+// la colonne « status » n'accepte que ces valeurs (statuses, elle, accepte aussi « aime »)
+const LEGACY_STATUS = ['lu', 'possede', 'souhaite', 'en_cours']
+
 export const STATUSES = [
   { id: 'en_cours', label: 'En cours' },
   { id: 'lu',       label: 'Lus' },
@@ -32,7 +35,7 @@ function toRow(userId, bookData, statusesArr) {
     page_count: bookData.pageCount,
     categories: bookData.categories,
     isbn: bookData.isbn,
-    status: statusesArr[0] || 'souhaite',
+    status: statusesArr.find(x => LEGACY_STATUS.includes(x)) || 'souhaite',
     statuses: statusesArr,
   }
 }
@@ -84,7 +87,7 @@ export function useLibrary(userId) {
 
   const updateBook = async (id, updates) => {
     const payload = { ...updates }
-    if (updates.statuses) payload.status = updates.statuses[0] || 'souhaite'
+    if (updates.statuses) payload.status = updates.statuses.find(x => LEGACY_STATUS.includes(x)) || 'souhaite'
 
     if (isDemoMode) {
       const next = demoLoad().map(b => (b.id === id ? { ...b, ...payload } : b))
