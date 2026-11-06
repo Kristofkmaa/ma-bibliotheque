@@ -1066,7 +1066,8 @@ export class LivingRoomScene {
     if (!el) return
     // caché : garé en tout petit, presque transparent (l'iPhone met en pause une vidéo tout à fait invisible)
     const hide = () => { if (!el.hasAttribute('data-off')) el.setAttribute('data-off', '') }
-    if (this.fly || this.tvZoom || (this.wallOf('left').f ?? 1) < 0.97) return hide()
+    // (sur le carrousel, le salon est loin, voire caché derrière une autre pièce : le lecteur se range)
+    if (this.carousel || this.fly || this.tvZoom || (this.wallOf('left').f ?? 1) < 0.97) return hide()
     const scr = this.tvScreen
     // la caméra vient de bouger : ses matrices ne sont recalculées qu'au rendu, on le fait ici
     // tout de suite, sinon le lecteur aurait une image de retard et glisserait à côté de l'écran
