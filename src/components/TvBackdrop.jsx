@@ -12,6 +12,8 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying,
   const [i, setI] = useState(0)
   const [shown, setShown] = useState(false)
   const fails = useRef(0)
+  const dur = useRef(0)      // la durée de la vidéo en cours et où l'on en est (envoyées par le lecteur)
+  const pos = useRef(0)
   const playing = useRef(false)
   const frame = useRef(null)
   // un seul lecteur pour toute la soirée : on lui fait charger la vidéo suivante (l'iPhone le
@@ -52,7 +54,15 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying,
   const v = queue.length ? queue[i % queue.length] : null
   if (v && !firstKey.current) firstKey.current = v.key
   useEffect(() => { if (v) onNow?.(v.id) }, [v?.id, i]) // eslint-disable-line react-hooks/exhaustive-deps
-  const next = () => { playing.current = false; setShown(false); setI(k => k + 1) }
+  // passer à la vidéo suivante (une seule fois par vidéo : la fin peut être signalée plusieurs fois)
+  const advanced = useRef(-1)
+  const iRef = useRef(0)
+  iRef.current = i
+  const next = () => {
+    if (advanced.current === iRef.current) return
+    advanced.current = iRef.current
+    playing.current = false; setShown(false); setI(k => k + 1)
+  }
   const command = (func, args = []) => frame.current?.contentWindow?.postMessage(JSON.stringify({ id: 'tvbg', channel: 'widget', event: 'command', func, args }), '*')
   // la vidéo change : le même lecteur la charge
   useEffect(() => {
@@ -74,6 +84,12 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying,
       let d
       try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data } catch { return }
       const state = d?.event === 'onStateChange' ? d.info : d?.event === 'infoDelivery' ? d.info?.playerState : undefined
+      // la fin approche : on enchaîne avant l'écran de fin de YouTube (et ses suggestions)
+      if (d?.event === 'infoDelivery' && d.info) {
+        if (typeof d.info.duration === 'number' && d.info.duration > 0) dur.current = d.info.duration
+        if (typeof d.info.currentTime === 'number') pos.current = d.info.currentTime
+        if (playing.current && dur.current > 5 && pos.current > dur.current - 0.9) { next(); return }
+      }
       if (state === 1) {
         fails.current = 0
         if (!playing.current) { applySound(); command('unloadModule', ['captions']); command('unloadModule', ['cc']) }   // au mur, sans sous-titres
@@ -81,9 +97,13 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying,
       }
       else if (state === 0 || d?.event === 'onError') next()
     }
+    dur.current = 0; pos.current = 0
     window.addEventListener('message', onMsg)
-    const t = setTimeout(() => { if (!playing.current) { fails.current++; next() } }, 12000)
-    return () => { window.removeEventListener('message', onMsg); clearTimeout(t) }
+    const t = setTimeout(() => { if (!playing.current) { fails.current++; next() } }, 15000)
+    // filet de sécurité : si la fin n'est jamais signalée, on passe quand même à la suivante
+    const guard = setInterval(() => { if (playing.current && dur.current > 5 && pos.current > dur.current - 0.9) next() }, 1000)
+    const hard = setTimeout(() => next(), 6 * 60 * 1000)
+    return () => { window.removeEventListener('message', onMsg); clearTimeout(t); clearInterval(guard); clearTimeout(hard) }
   }, [v?.key, i]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const listen = () => {
@@ -100,8 +120,8 @@ export default function TvBackdrop({ series, sound = false, skip = 0, onPlaying,
     if (v && v.key !== curKey.current) { command('loadVideoById', [v.key]); curKey.current = v.key }
   }
 
-  // trois vidéos de suite qui ne démarrent pas : la lecture automatique est bloquée, on laisse tomber
-  if (!v || fails.current >= 3) return null
+  // aucune vidéo de la liste ne démarre (un tour complet) : la lecture automatique est bloquée, on laisse tomber
+  if (!v || fails.current >= Math.max(3, queue.length)) return null
   const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(firstKey.current)}?autoplay=1&mute=1&playsinline=1&controls=0&disablekb=1&fs=0&rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`
   return (
     <>
