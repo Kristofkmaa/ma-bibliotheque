@@ -66,6 +66,24 @@ function Library({ user, onSignOut }) {
   const [tvNow, setTvNow] = useState(null)
   const [tvSkip, setTvSkip] = useState(0)
   const [tvWall, setTvWall] = useState(false)
+  // le son suit nos allées et venues : il baisse petit à petit pendant qu'on part (PC,
+  // bibliothèque…), remonte pendant qu'on revient ; la vidéo, elle, ne s'arrête jamais
+  const [tvGain, setTvGain] = useState(0)
+  const gainRef = useRef(0)
+  useEffect(() => {
+    const target = tvWall ? 1 : 0
+    let raf, last = performance.now()
+    const step = now => {
+      const dt = Math.min(0.1, (now - last) / 1000); last = now
+      let g = gainRef.current
+      g = target > g ? Math.min(target, g + dt / 1.4) : Math.max(target, g - dt / 1.2)
+      gainRef.current = g
+      setTvGain(Math.round(g * 40) / 40)
+      if (g !== target) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [tvWall])
   const tvSeries = useMemo(() => [...(series || [])].sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.added_at || '').localeCompare(a.added_at || '')), [series])
   const tvBus = { el: tvEl, volume: tvVol, setVolume: setTvVol, onAir: tvOnAir, nowId: tvNow, setSkip: setTvSkip, setWall: setTvWall }
   const [sort, setSortState] = useState(() => readPref('levana.sort2', 'manual'))
@@ -387,7 +405,7 @@ function Library({ user, onSignOut }) {
       <div className="salon-layer">
       {/* la télé : son lecteur ne s'arrête jamais (seulement caché quand on n'est pas devant) */}
       <div className="tv-video" ref={tvEl} aria-hidden="true" data-off="">
-        {HAS_WEBGL && tvSeries.length > 0 && <TvBackdrop series={tvSeries} volume={tvWall ? tvVol : 0} skip={tvSkip} onPlaying={setTvOnAir} onNow={setTvNow} />}
+        {HAS_WEBGL && tvSeries.length > 0 && <TvBackdrop series={tvSeries} volume={Math.round(tvVol * tvGain)} skip={tvSkip} onPlaying={setTvOnAir} onNow={setTvNow} />}
       </div>
       {salon && (
         <Suspense fallback={<div className="salon" />}>

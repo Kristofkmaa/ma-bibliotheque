@@ -114,6 +114,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
     if (!s || cb.current.going) return
     cb.current.going = true
     setGoing(true)
+    setLeaving(true)
     setHover(null)
     s.enter(() => {
       const el = rootRef.current
@@ -175,7 +176,10 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   // ce qui passe à la télé : l'image projetée suit, et le lecteur n'a le son que si on voit le mur
   useEffect(() => { sceneRef.current?.setVideoOn(onAir) }, [onAir])
   useEffect(() => { if (nowId) sceneRef.current?.showWork(nowId) }, [nowId])
-  useEffect(() => { setWall(!tv && !going) }, [tv, going]) // eslint-disable-line react-hooks/exhaustive-deps
+  // le son de la télé : on le baisse dès qu'on part (vers la bibliothèque, le PC, les films…) et on
+  // le remonte dès qu'on revient (pendant l'animation du retour)
+  const [leaving, setLeaving] = useState(false)
+  useEffect(() => { setWall(!tv && !leaving) }, [tv, leaving]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { setWall(false); tvVideo.current?.setAttribute('data-off', '') }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Échap pendant le zoom : on ressort (une fois dans la télé, c'est le module qui s'en charge)
