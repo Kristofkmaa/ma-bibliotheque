@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { loadImage } from '../lib/tmdb'
+import { relayUrl } from '../lib/covers'
 import { searchCatalog, featuredCatalog, catalogGame, catalogSource, STATUSES, statusLabel, PLATFORM_GROUPS, PC_STORES, storeLabel, pfLabel, pfFamily, onPlatform, playOptions, platformFor } from '../lib/games'
 
 /**
@@ -572,6 +574,115 @@ function CoverCard({ g, rank, onOpen, onPlay, onFav }) {
 
 const FILTERS = [['all', 'Tous'], ...STATUSES]
 
+/* -------------------------------------------------------------------------- */
+/* Le Panthéon : notre top, mis en scène                                       */
+/* -------------------------------------------------------------------------- */
+
+const ambientCache = new Map()
+/** La couleur dominante d'une jaquette (pour teinter la lumière de la scène), ou null. */
+function useAmbient(g) {
+  const src = g ? (g.app_id ? steamArt(g.app_id, 'library_600x900.jpg') : g.img) : null
+  const [c, setC] = useState(() => (src && ambientCache.get(src)) || null)
+  useEffect(() => {
+    if (!src) return
+    if (ambientCache.has(src)) { setC(ambientCache.get(src)); return }
+    let live = true
+    loadImage(relayUrl(src)).then(img => {
+      if (!img || !live) return
+      try {
+        const cv = document.createElement('canvas'); cv.width = cv.height = 24
+        const x = cv.getContext('2d', { willReadFrequently: true })
+        x.drawImage(img, 0, 0, 24, 24)
+        const d = x.getImageData(0, 0, 24, 24).data
+        // la moyenne des pixels les plus colorés (pas le gris des bords)
+        let r = 0, gg = 0, b = 0, w = 0
+        for (let i = 0; i < d.length; i += 4) {
+          const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2])
+          const k = (mx - mn) / 255 + 0.05
+          r += d[i] * k; gg += d[i + 1] * k; b += d[i + 2] * k; w += k
+        }
+        const col = `rgb(${Math.round(r / w)}, ${Math.round(gg / w)}, ${Math.round(b / w)})`
+        ambientCache.set(src, col)
+        setC(col)
+      } catch { /* image refusée : pas de teinte */ }
+    })
+    return () => { live = false }
+  }, [src])
+  return c
+}
+
+const ROMAN = ['I', 'II', 'III', 'IV', 'V']
+
+function HallOfFame({ items, fullTop, onOpen, onPlay, ranking, setRanking, reorderTop, onRemove }) {
+  const [active, setActive] = useState(items[0]?.id)
+  const cur = items.find(g => g.id === active) || items[0]
+  const amb = useAmbient(cur)
+  const coverRef = useRef(null)
+  // la jaquette s'incline un peu vers la souris
+  const tilt = e => {
+    const el = coverRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5
+    el.style.setProperty('--rx', `${(-y * 10).toFixed(2)}deg`)
+    el.style.setProperty('--ry', `${(x * 14).toFixed(2)}deg`)
+    el.style.setProperty('--gx', `${((x + 0.5) * 100).toFixed(1)}%`)
+  }
+  const untilt = () => { const el = coverRef.current; if (el) { el.style.setProperty('--rx', '0deg'); el.style.setProperty('--ry', '0deg') } }
+  if (!cur) return null
+  const rank = cur.fav_rank || items.indexOf(cur) + 1
+  return (
+    <section className={'hof' + (rank <= 3 ? ' m' + rank : '')} style={amb ? { '--amb': amb } : null}>
+      <div className="hof-bg" aria-hidden="true">
+        {items.map(g => <Art key={g.id} g={g} className={'hof-bg-img' + (g.id === cur.id ? ' on' : '')} />)}
+      </div>
+      <header className="hof-head">
+        <span className="hof-kicker">Mon panthéon</span>
+        <span className="hof-rule" />
+        <button type="button" className={'hof-arrange' + (ranking ? ' on' : '')} onClick={() => setRanking(r => !r)}>{ranking ? 'Terminé' : 'Ranger mon top'}</button>
+      </header>
+      {ranking ? (
+        <div className="hof-ranking"><TopList top={fullTop || items} onOpen={onOpen} onPlay={onPlay} onRemove={onRemove} reorder={reorderTop} /></div>
+      ) : (
+        <div className="hof-body">
+          <div className="hof-stage" onMouseMove={tilt} onMouseLeave={untilt}>
+            <span className="hof-numeral" key={'n' + cur.id} aria-hidden="true">{rank}</span>
+            <button type="button" className="hof-cover" ref={coverRef} onClick={() => onOpen(cur.id)} aria-label={`Voir ${cur.name}`} key={'c' + cur.id}>
+              <Cover g={cur} />
+              <span className="hof-sheen" aria-hidden="true" />
+            </button>
+            <div className="hof-meta" key={'m' + cur.id}>
+              <span className="hof-rank">N° {rank} <i>·</i> {ROMAN[rank - 1] ? <em>{ROMAN[rank - 1]}</em> : null}</span>
+              <h2 className="hof-title">{cur.name}</h2>
+              <p className="hof-sub">{[cur.platform || cur.platforms?.[0], statusLabel(cur.status), cur.genres?.[0]].filter(Boolean).join('   ·   ')}</p>
+              {cur.rating ? <span className="hof-stars" aria-label={`Ma note : ${cur.rating} sur 5`}>{'★'.repeat(cur.rating)}<i>{'★'.repeat(5 - cur.rating)}</i></span> : null}
+              <span className="hof-act">
+                <button type="button" className="hof-btn" onClick={() => onOpen(cur.id)}>Ouvrir la fiche</button>
+                <button type="button" className="hof-link" onClick={() => onPlay(cur)}><PlayGlyph /> Bande-annonce</button>
+              </span>
+            </div>
+          </div>
+          <ol className="hof-list">
+            {items.map(g => {
+              const n = g.fav_rank || items.indexOf(g) + 1
+              return (
+                <li key={g.id}>
+                  <button type="button" className={'hof-row' + (g.id === cur.id ? ' on' : '') + (n <= 3 ? ' m' + n : '')}
+                    onMouseEnter={() => setActive(g.id)} onFocus={() => setActive(g.id)} onClick={() => (g.id === cur.id ? onOpen(g.id) : setActive(g.id))}>
+                    <span className="hof-row-n">{n}</span>
+                    <span className="hof-row-cover"><Cover g={g} /></span>
+                    <span className="hof-row-txt"><b>{g.name}</b><em>{[g.platform || g.platforms?.[0], statusLabel(g.status)].filter(Boolean).join(' · ')}</em></span>
+                  </button>
+                </li>
+              )
+            })}
+          </ol>
+        </div>
+      )}
+    </section>
+  )
+}
+
 function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filter, setFilter, pf, setPf }) {
   const [sort, setSort] = useState('top')
   const [ranking, setRanking] = useState(false)
@@ -601,7 +712,7 @@ function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filt
   return (
     <div className="ld-home">
       {topHere.length > 0 ? (
-        <TopCarousel items={topHere} onPlay={onPlay} onGame={onOpen} key={pf} />
+        <HallOfFame items={topHere} fullTop={top} onOpen={onOpen} onPlay={onPlay} ranking={ranking} setRanking={setRanking} reorderTop={reorderTop} onRemove={id => fav(games.find(g => g.id === id), false)} key={pf} />
       ) : (
         <section className="ld-banner empty">
           <div className="ld-banner-txt">
@@ -609,18 +720,6 @@ function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filt
             <h2 className="ld-logo-txt">Classe tes jeux préférés</h2>
             <p>Touche l’étoile <Star on={false} /> d’un jeu : il entre dans ton top, que tu ranges ensuite comme tu veux.</p>
           </div>
-        </section>
-      )}
-
-      {topHere.length > 0 && (
-        <section className="ld-sec">
-          <div className="ld-sec-head">
-            <h3 className="cs-h3">Mon top{pf !== 'all' ? ' · ' + pfLabel(pf) : ''} <em>{topHere.length}</em></h3>
-            <button type="button" className={'st-btn ghost ld-rank-btn' + (ranking ? ' on' : '')} onClick={() => setRanking(r => !r)}>{ranking ? 'Terminé' : 'Ranger mon top'}</button>
-          </div>
-          {ranking
-            ? <TopList top={top} onOpen={onOpen} onPlay={onPlay} onRemove={id => fav(games.find(g => g.id === id), false)} reorder={reorderTop} />
-            : <div className="ld-row">{topHere.map(g => <CoverCard key={g.id} g={g} rank={g.fav_rank} onOpen={onOpen} onPlay={onPlay} onFav={fav} />)}</div>}
         </section>
       )}
 
