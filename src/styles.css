@@ -3390,3 +3390,94 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
   .cl-nav button.on::after { left: 18%; right: 18%; }
   .cl-main { top: calc(98px + env(safe-area-inset-top)); }
 }
+
+/* =============================================================================
+   Jeux : le catalogue (toutes les plateformes), les statuts, la bande-annonce
+   ========================================================================== */
+.art-none { display: block; background: linear-gradient(135deg, #2A1E4A, #15121f); }
+.pf-list { display: inline-flex; flex-wrap: wrap; gap: 5px; }
+.pf-list i { font-style: normal; font-size: 11.5px; font-weight: 800; letter-spacing: 0.02em; padding: 3px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.12); color: #fff; }
+.pf-score { display: inline-grid; place-items: center; min-width: 30px; height: 24px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; font-weight: 900; background: #8A8F9C; color: #111; }
+.pf-score.mid { background: #F2C230; }
+.pf-score.hi { background: #4BD99A; color: #05210f; }
+.ct { display: flex; flex-direction: column; gap: 24px; max-width: 1240px; margin: 0 auto; }
+.ct-search { max-width: 640px; margin-bottom: 0; }
+.ct-note, .ct-en { font-size: 12.5px; color: rgba(233, 237, 245, 0.5); }
+.ct-lead { position: relative; display: block; width: 100%; height: clamp(220px, 36vh, 360px); border-radius: 18px; overflow: hidden; text-align: left; background: #15121f; box-shadow: 0 24px 40px -24px rgba(0, 0, 0, 0.9); }
+.ct-lead-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.8s ease; }
+.ct-lead:hover .ct-lead-art { transform: scale(1.03); }
+.ct-lead::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10, 8, 18, 0.85), rgba(10, 8, 18, 0.2) 60%, transparent), linear-gradient(0deg, rgba(10, 8, 18, 0.6), transparent 55%); }
+.ct-lead-txt { position: absolute; left: 26px; right: 26px; bottom: 22px; z-index: 1; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.ct-lead-txt b { font-size: clamp(26px, 3.6vw, 44px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.02; text-shadow: 0 4px 18px rgba(0, 0, 0, 0.5); }
+.ct-lead-meta { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ct-sec .cs-h3 { margin-bottom: 12px; }
+.ct-row .ct-card { width: 150px; flex: none; scroll-snap-align: start; }
+.ct-card { position: relative; display: flex; flex-direction: column; gap: 6px; text-align: left; min-width: 0; }
+.ct-card .ld-cover { border-radius: 10px; box-shadow: 0 14px 26px -16px rgba(0, 0, 0, 0.9); transition: transform 0.2s cubic-bezier(.2, .9, .3, 1), box-shadow 0.2s; }
+.ct-card:hover .ld-cover { transform: translateY(-4px) scale(1.02); box-shadow: 0 22px 34px -16px rgba(0, 0, 0, 0.95), 0 0 0 2px rgba(255, 255, 255, 0.5); }
+.ct-mine { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #33C27F; color: #05210f; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); }
+.ct-mine svg { width: 16px; height: 16px; }
+.ct-name { font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-meta { font-size: 11.5px; color: rgba(233, 237, 245, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -3px; }
+.ct-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.ct-page { margin: -16px -20px -40px; }
+.ct-hero { height: clamp(260px, 44vh, 420px); }
+.ct-hero-in { position: absolute; left: 28px; right: 28px; bottom: 22px; z-index: 1; display: flex; align-items: flex-end; gap: 22px; }
+.ct-hero-cover { width: 150px; flex: none; border-radius: 10px; box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.15); }
+.ct-hero-txt { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ct-hero-txt p { color: rgba(233, 237, 245, 0.8); font-size: 14px; }
+.ct-bar .ld-play { gap: 8px; }
+.ct-bar .ld-play svg, .ct-owned svg { width: 20px; height: 20px; }
+.ct-owned { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; color: #8FF0C0; }
+.ct-vids { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.ct-vid { position: relative; border-radius: 8px; overflow: hidden; aspect-ratio: 16 / 9; background: #000; text-align: left; }
+.ct-vid img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.85; transition: opacity 0.2s; }
+.ct-vid:hover img { opacity: 1; }
+.ct-vid span { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, 0.6); color: #fff; }
+.ct-vid span svg { width: 22px; height: 22px; }
+.ct-vid em { position: absolute; left: 8px; right: 8px; bottom: 6px; font-style: normal; font-size: 12px; font-weight: 700; text-shadow: 0 1px 4px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ld-status { display: inline-flex; padding: 3px; border-radius: 12px; background: rgba(255, 255, 255, 0.07); flex-wrap: wrap; }
+.ld-status button { height: 38px; padding: 0 14px; border-radius: 9px; font-size: 13.5px; font-weight: 700; color: rgba(242, 240, 250, 0.6); }
+.ld-status button:hover { color: #fff; }
+.ld-status button.on { color: #fff; background: rgba(255, 255, 255, 0.14); }
+.ld-status button.s-en_cours.on { background: #2F6BFF; }
+.ld-status button.s-termine.on { background: #1FA866; }
+.ld-status button.s-abandonne.on { background: #8A4A55; }
+.ld-select { height: 30px; padding: 0 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid rgba(255, 255, 255, 0.12); font-size: 13.5px; font-weight: 700; }
+.ld-select option { color: #111; }
+.ld-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 14px; }
+.ld-filters button { height: 32px; padding: 0 12px; border-radius: 16px; font-size: 12.5px; font-weight: 700; background: rgba(255, 255, 255, 0.06); color: rgba(242, 240, 250, 0.7); display: inline-flex; align-items: center; gap: 6px; }
+.ld-filters button b { font-size: 11px; opacity: 0.6; }
+.ld-filters button.on { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.ld-filters button:disabled { opacity: 0.35; cursor: default; }
+.ld-card-status { position: absolute; left: 6px; right: 6px; top: calc((100% - 28px) * 0.92); z-index: 2; width: max-content; max-width: calc(100% - 12px); padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; background: rgba(10, 8, 18, 0.8); color: #fff; pointer-events: none; }
+.ld-card-status.s-en_cours { background: #2F6BFF; }
+.ld-card-status.s-termine { background: #1FA866; }
+.ld-card-status.s-abandonne { background: #8A4A55; }
+.ld-card-play svg { width: 18px; height: 18px; }
+.ld-item-name { display: flex; flex-direction: column; line-height: 1.2; }
+.ld-item-name em { font-style: normal; font-size: 10.5px; font-weight: 700; color: rgba(242, 240, 250, 0.45); }
+.ld-item-dot { width: 8px; height: 8px; border-radius: 50%; background: #4B86FF; box-shadow: 0 0 8px #4B86FF; flex: none; margin-right: 4px; }
+.ld-item-img img { object-position: 50% 30%; }
+.cs-hero-act .st-btn svg { width: 18px; height: 18px; }
+.wp-fake-bar.top { top: 0; bottom: auto; height: 9%; }
+/* la bande-annonce */
+.tr-back { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; background: rgba(4, 4, 10, 0.82); animation: stFade 0.2s ease both; }
+.tr-box { width: min(1100px, 100%); border-radius: 16px; overflow: hidden; background: #000; box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.9); animation: pcWin 0.25s ease both; }
+.tr-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 48px; padding: 0 8px 0 16px; background: #13111f; color: #fff; }
+.tr-head b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr-head button { width: 36px; height: 36px; border-radius: 50%; font-size: 24px; line-height: 1; }
+.tr-head button:hover { background: rgba(255, 255, 255, 0.12); }
+.tr-frame { aspect-ratio: 16 / 9; }
+.tr-frame iframe, .tr-frame video { width: 100%; height: 100%; border: 0; display: block; background: #000; }
+@media (max-width: 767px) {
+  .ct-page { margin: -12px -12px -30px; }
+  .ct-hero-in { left: 14px; right: 14px; bottom: 14px; gap: 12px; }
+  .ct-hero-cover { width: 96px; }
+  .ct-row .ct-card { width: 120px; }
+  .ct-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 10px; }
+  .ld-status { width: 100%; }
+  .ld-status button { flex: 1; padding: 0 6px; font-size: 12.5px; }
+  .tr-back { padding: 0; }
+  .tr-box { border-radius: 0; }
+}

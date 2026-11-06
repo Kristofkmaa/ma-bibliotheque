@@ -181,3 +181,13 @@ create policy "Son porte-monnaie" on user_wallet for all using (auth.uid() = use
 -- Le PC : l'ordre de « Mon top », le fond d'écran et les couleurs des lumières
 alter table user_games add column if not exists fav_rank integer;
 alter table user_wallet add column if not exists pc_setup jsonb;
+
+-- Les jeux deviennent une bibliothèque (plus d'argent) : toutes les plateformes (IGDB), un statut
+alter table user_games alter column app_id drop not null;
+alter table user_games add column if not exists igdb_id integer;
+alter table user_games add column if not exists hero text;
+alter table user_games add column if not exists platforms text[] default '{}';
+alter table user_games add column if not exists platform text;
+alter table user_games add column if not exists status text default 'a_jouer';
+create unique index if not exists user_games_igdb on user_games(user_id, igdb_id);
+alter table user_wallet alter column balance drop not null;

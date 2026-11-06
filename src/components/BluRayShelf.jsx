@@ -271,14 +271,27 @@ class ShelfGL {
     const tl = this.tilt
     tl.x += (tl.tx - tl.x) * (1 - Math.exp(-dt * 6)); tl.y += (tl.ty - tl.y) * (1 - Math.exp(-dt * 6))
     const n = this.list.length
-    const near = CW / 2 + CD / 2 + GAP * 3, step = CD + GAP
     const active = Math.round(this.disp)
     const span = 26
     const keep = new Set()
-    for (let i = Math.max(0, active - span); i <= Math.min(n - 1, active + span); i++) {
+    // la place que prend chaque boîtier le long de l'étagère, selon qu'il est de face, de tranche ou
+    // entre les deux (tourné, il est plus large que sa tranche) : les centres sont espacés d'autant,
+    // jamais un boîtier ne traverse son voisin, même pendant qu'on fait défiler
+    const lo = Math.max(0, active - span - 1), hi = Math.min(n - 1, active + span + 1)
+    const foot = i => {
+      const w = ease(clamp(1 - Math.abs(i - this.disp), 0, 1))
+      const th = (1 - w) * Math.PI / 2
+      return CW * Math.cos(th) + CD * Math.sin(th) + GAP * (1 + 2 * w)
+    }
+    const S = new Map()                                  // position le long de l'arc (cumulée)
+    let acc = 0
+    for (let i = lo; i <= hi; i++) { if (i > lo) acc += (foot(i - 1) + foot(i)) / 2; S.set(i, acc) }
+    const a0 = Math.floor(clamp(this.disp, lo, hi)), t0 = clamp(this.disp, lo, hi) - a0
+    const origin = (S.get(a0) ?? 0) + ((S.get(Math.min(hi, a0 + 1)) ?? 0) - (S.get(a0) ?? 0)) * t0
+    for (let i = lo; i <= hi; i++) {
       const s = this.list[i]
       const d = i - this.disp, ad = Math.abs(d)
-      const arc = ad < 1 ? d * near : Math.sign(d) * (near + (ad - 1) * step)
+      const arc = S.get(i) - origin
       const a = arc / ARC
       if (Math.abs(a) > 1.5) continue
       const it = this.item(s)

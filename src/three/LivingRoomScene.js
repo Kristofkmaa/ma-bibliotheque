@@ -2470,15 +2470,14 @@ function drawPcDesktop(c, img = null) {
   g.fillStyle = 'rgba(10,9,18,0.9)'; g.fillRect(0, 0, W, 64)
   g.fillStyle = 'rgba(242,240,250,0.8)'; g.font = `700 26px ${SANS}`; g.textAlign = 'left'; g.textBaseline = 'middle'
   g.fillText('‹   ›', 24, 33)
-  ;[['MAGASIN', 0.55], ['BIBLIOTHÈQUE', 1], ['PERSONNALISER', 0.55]].reduce((x, [t, a]) => {
+  ;[['DÉCOUVRIR', 0.55], ['BIBLIOTHÈQUE', 1], ['PERSONNALISER', 0.55]].reduce((x, [t, a]) => {
     g.globalAlpha = a; g.fillStyle = '#fff'; g.font = `800 20px ${SANS}`; g.fillText(t, x, 33)
     const w = g.measureText(t).width
     if (a === 1) { g.globalAlpha = 1; g.fillStyle = '#6A6CFF'; rr(x, 58, w, 5, 2); g.fill() }
     return x + w + 30
   }, 120)
   g.globalAlpha = 1
-  g.fillStyle = 'rgba(10,30,20,0.8)'; rr(W - 170, 15, 110, 36, 18); g.fill()
-  g.fillStyle = '#8FF0C0'; g.font = `700 17px ${SANS}`; g.fillText('Stim', W - 140, 34)
+  g.fillStyle = 'rgba(255,255,255,0.08)'; rr(W - 150, 15, 90, 36, 18); g.fill()
   // la liste à gauche
   g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, 64, 250, H - 64)
   g.fillStyle = 'rgba(232,176,75,0.2)'; rr(14, 80, 222, 40, 10); g.fill()

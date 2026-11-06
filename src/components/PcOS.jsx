@@ -1,21 +1,18 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useIsMobile } from '../hooks/useIsMobile'
-import { featuredGames, searchGames, gameDetails, fmtPrice } from '../lib/steam'
+import { searchCatalog, featuredCatalog, catalogGame, catalogSource, STATUSES, statusLabel } from '../lib/games'
 
 /**
- * Le PC du bureau gamer : « Maruchime OS », pensé comme une console de salon — la même
- * interface au doigt et à la souris. Un écran d'accueil (notre n°1, de grosses tuiles, les
- * derniers jeux), des applis en plein écran avec un seul bouton « Retour », une barre
- * d'onglets en bas (Accueil, Magasin, Mes jeux, Personnaliser). Le porte-monnaie et la
- * banque montent du bas, en panneaux.
- * L'argent est pour de faux : la « Banque Maruchime » a un solde illimité, on vire ce qu'on
- * veut vers son porte-monnaie Stim en faisant glisser un curseur (aucune vraie carte).
+ * Le PC du bureau gamer : notre ludothèque, dans l'esprit d'un logiciel de jeux. Une barre en
+ * haut (← →, Découvrir, Bibliothèque, Personnaliser) ; la bibliothèque : la liste de nos jeux à
+ * gauche, à droite notre top ou la fiche du jeu choisi. Le catalogue vient d'IGDB (toutes les
+ * plateformes ; Steam en attendant ses clés). Pas d'argent : on ajoute un jeu à sa
+ * bibliothèque comme un livre ou un film, avec où on en est (à jouer, en cours, terminé…).
  */
 
-const plain = html => { try { return new DOMParser().parseFromString(html, 'text/html').body.textContent || '' } catch { return html } }
-/** Un solde : « 0,00 € » (jamais « Gratuit »). */
-const money = v => `${(v || 0).toFixed(2).replace('.', ',')} €`
 const fmtDate = iso => { try { return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) } catch { return '' } }
+const steamArt = (id, f) => `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/${f}`
+const refOf = g => ({ igdb_id: g.igdb_id || null, app_id: g.app_id || null })
 
 /* -------------------------------------------------------------------------- */
 /* Icônes                                                                     */
@@ -39,19 +36,8 @@ function StimGlyph() {
     </svg>
   )
 }
-function BankGlyph() {
-  return (
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <rect x="7" y="13" width="34" height="23" rx="4" fill="currentColor" />
-      <rect x="7" y="18" width="34" height="4.5" fill="#132018" />
-      <rect x="12" y="27" width="9" height="4" rx="1" fill="#132018" opacity="0.6" />
-    </svg>
-  )
-}
 const Star = ({ on }) => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.7 6.6 19.7l1.2-6L3.3 9.5l6.1-.7z" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
 const Back = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-const Wallet = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" fill="none" stroke="currentColor" strokeWidth="1.8" /><rect x="4" y="8" width="16.5" height="11" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.8" /><circle cx="16.5" cy="13.5" r="1.3" fill="currentColor" /></svg>
-
 function PictureGlyph() {
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true">
@@ -73,410 +59,275 @@ function LightGlyph() {
 
 
 
-/* -------------------------------------------------------------------------- */
-/* Stim : les pages de jeux                                                   */
-/* -------------------------------------------------------------------------- */
+const PowerGlyph = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8M7 6.5a7.5 7.5 0 1 0 10 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+const SearchGlyph = () => <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20" /></svg>
+const PlayGlyph = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" /></svg>
+const PlusGlyph = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" /></svg>
+const CheckGlyph = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+const coarse = () => typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
 
-function PriceTag({ price, original, discount }) {
-  if (price == null) return <span className="st-price none">—</span>
-  const d = discount || (original && original > price ? Math.round((1 - price / original) * 100) : 0)
+/** La grande image d'un jeu : celle de Steam s'il y est, sinon celle du catalogue, sinon sa jaquette. */
+function Art({ g, className }) {
+  const srcs = useMemo(() => [...new Set([g.app_id ? steamArt(g.app_id, 'library_hero.jpg') : null, g.hero, g.heroFallback, g.img || g.cover].filter(Boolean))], [g.app_id, g.hero, g.heroFallback, g.img, g.cover])
+  const [k, setK] = useState(0)
+  useEffect(() => setK(0), [srcs.join()])  // eslint-disable-line react-hooks/exhaustive-deps
+  if (!srcs[k]) return <span className={className + ' art-none'} />
+  return <img className={className} key={srcs[k]} src={srcs[k]} alt="" onError={() => setK(v => v + 1)} />
+}
+
+/** La jaquette verticale (celle de Steam, plus grande, sinon celle du catalogue). */
+function Cover({ g, className = '' }) {
+  const srcs = [...new Set([g.app_id ? steamArt(g.app_id, 'library_600x900.jpg') : null, g.img || g.cover, g.coverFallback].filter(Boolean))]
+  const [k, setK] = useState(0)
+  const src = srcs[k]
   return (
-    <span className="st-price">
-      {d > 0 && <b className="st-disc">−{d}%</b>}
-      {d > 0 && original ? <s>{fmtPrice(original)}</s> : null}
-      <span>{fmtPrice(price)}</span>
+    <span className={'ld-cover ' + className + (!src || (g.app_id && k > 0 && !g.igdb_id) ? ' flat' : '')}>
+      {src && <img src={src} alt="" loading="lazy" draggable="false" onError={() => setK(v => v + 1)} />}
+      {(!src || (g.app_id && k > 0 && !g.igdb_id)) && <b>{g.name}</b>}
     </span>
   )
 }
 
-function GameCard({ g, owned, onOpen, wide }) {
+/** Le logo du jeu (Steam, sans fond), sinon son nom en grand. */
+function Logo({ g }) {
+  const [bad, setBad] = useState(false)
+  useEffect(() => setBad(false), [g.app_id])
+  return bad || !g.app_id ? <h2 className="ld-logo-txt">{g.name}</h2>
+    : <img className="ld-logo" src={steamArt(g.app_id, 'logo.png')} alt={g.name} onError={() => setBad(true)} />
+}
+
+const Platforms = ({ list, max = 6 }) => (list?.length ? <span className="pf-list">{list.slice(0, max).map(p => <i key={p}>{p}</i>)}{list.length > max && <i>+{list.length - max}</i>}</span> : null)
+const Score = ({ n }) => (n ? <span className={'pf-score' + (n >= 80 ? ' hi' : n >= 60 ? ' mid' : '')}>{n}</span> : null)
+
+/* -------------------------------------------------------------------------- */
+/* La bande-annonce                                                           */
+/* -------------------------------------------------------------------------- */
+
+function Trailer({ t, onClose }) {
+  const v = t.videos[t.k || 0]
+  useEffect(() => {
+    const k = e => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
+    window.addEventListener('keydown', k, true)
+    return () => window.removeEventListener('keydown', k, true)
+  }, [onClose])
   return (
-    <button type="button" className={'st-card' + (wide ? ' wide' : '')} onClick={() => onOpen(g.id)}>
-      <span className="st-card-img">{g.img && <img src={g.img} alt="" loading="lazy" onError={e => { e.currentTarget.style.opacity = 0 }} />}</span>
-      <span className="st-card-name">{g.name}</span>
-      <span className="st-card-foot">{owned ? <span className="st-owned">Dans ta bibliothèque</span> : <PriceTag price={g.price} original={g.original} discount={g.discount} />}</span>
+    <div className="tr-back" role="dialog" aria-label={`Bande-annonce de ${t.name}`} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="tr-box">
+        <div className="tr-head"><b>{t.name}</b><button type="button" onClick={onClose} aria-label="Fermer">×</button></div>
+        <div className="tr-frame">
+          {v.yt
+            ? <iframe src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.yt)}?autoplay=1&playsinline=1&rel=0&modestbranding=1&cc_load_policy=1&cc_lang_pref=fr&hl=fr`} title={`Bande-annonce de ${t.name}`} allow="autoplay; encrypted-media; fullscreen" allowFullScreen />
+            : <video src={v.mp4 || v.webm} poster={v.thumb} controls autoPlay playsInline />}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Découvrir : le catalogue                                                   */
+/* -------------------------------------------------------------------------- */
+
+function CatalogCard({ g, mine, onOpen }) {
+  return (
+    <button type="button" className="ct-card" onClick={() => onOpen(g)}>
+      <Cover g={g} />
+      {mine && <span className="ct-mine" title="Dans ma bibliothèque"><CheckGlyph /></span>}
+      <span className="ct-name">{g.name}</span>
+      <span className="ct-meta">{[g.year, g.platforms?.slice(0, 3).join(' · ')].filter(Boolean).join('  —  ')}</span>
     </button>
   )
 }
 
-function Row({ title, list, owned, onOpen }) {
+function CatalogRow({ title, list, mine, onOpen }) {
   if (!list?.length) return null
   return (
-    <section className="st-row">
-      <h3>{title}</h3>
-      <div className="st-row-track">{list.map(g => <GameCard key={g.id} g={g} owned={owned(g.id)} onOpen={onOpen} />)}</div>
+    <section className="ct-sec">
+      <h3 className="cs-h3">{title}</h3>
+      <div className="ld-row ct-row">{list.map(g => <CatalogCard key={g.key} g={g} mine={mine(g)} onOpen={onOpen} />)}</div>
     </section>
   )
 }
 
-function Hero({ list, owned, onOpen }) {
-  const [k, setK] = useState(0)
-  useEffect(() => {
-    if (!list?.length) return
-    const t = setInterval(() => setK(n => (n + 1) % list.length), 6000)
-    return () => clearInterval(t)
-  }, [list])
-  if (!list?.length) return null
-  const g = list[k % list.length]
-  return (
-    <section className="st-hero">
-      <button type="button" className="st-hero-main" onClick={() => onOpen(g.id)} key={g.id}>
-        <img src={g.img} alt="" />
-        <span className="st-hero-info">
-          <span className="st-kicker">À la une</span>
-          <span className="st-hero-name">{g.name}</span>
-          {owned(g.id) ? <span className="st-owned">Dans ta bibliothèque</span> : <PriceTag price={g.price} original={g.original} discount={g.discount} />}
-        </span>
-      </button>
-      <div className="st-dots">{list.map((x, i) => <button type="button" key={x.id} className={i === k % list.length ? 'on' : ''} onClick={() => setK(i)} aria-label={x.name} />)}</div>
-    </section>
-  )
-}
-
-function Media({ g, onWallpaper }) {
-  const movies = useMemo(() => {
-    const hlsOk = typeof document !== 'undefined' && document.createElement('video').canPlayType('application/vnd.apple.mpegurl')
-    return (g.movies || []).filter(m => m.mp4 || m.webm || (m.hls && hlsOk))
-  }, [g])
-  const items = useMemo(() => [...movies.slice(0, 1).map(m => ({ kind: 'video', ...m })), ...(g.screenshots || []).map(src => ({ kind: 'img', src }))], [movies, g])
-  const [k, setK] = useState(0)
-  const cur = items[k]
-  if (!items.length) return g.img ? <div className="st-media"><div className="st-media-main"><img src={g.img} alt="" /></div></div> : null
-  return (
-    <div className="st-media">
-      <div className="st-media-main">
-        {cur.kind === 'video'
-          ? <video key={cur.mp4 || cur.hls} poster={cur.thumb} controls autoPlay muted playsInline onEnded={() => setK(1 % items.length)}>
-              {cur.webm && <source src={cur.webm} type="video/webm" />}
-              {cur.mp4 && <source src={cur.mp4} type="video/mp4" />}
-              {cur.hls && <source src={cur.hls} type="application/vnd.apple.mpegurl" />}
-            </video>
-          : <img key={cur.src} src={cur.src} alt="" />}
-        {cur.kind === 'img' && onWallpaper && (
-          <button type="button" className="st-wallbtn" onClick={() => onWallpaper({ url: cur.src, name: g.name, app_id: g.id })}><PictureGlyph /> Mettre en fond d’écran</button>
-        )}
-      </div>
-      <div className="st-thumbs">
-        {items.map((it, i) => (
-          <button type="button" key={i} className={i === k ? 'on' : ''} onClick={() => setK(i)} aria-label={it.kind === 'video' ? 'Bande-annonce' : `Image ${i}`}>
-            <img src={it.kind === 'video' ? it.thumb : it.src} alt="" loading="lazy" />
-            {it.kind === 'video' && <span className="st-play">▶</span>}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function GamePage({ id, owned, balance, onBuy, onPlay, onFunds, onWallpaper, favOf, onFav }) {
-  const [g, setG] = useState(null)
-  const [err, setErr] = useState(null)
-  const [ask, setAsk] = useState(false)       // la fenêtre de confirmation d'achat
-  const [done, setDone] = useState(false)
-  useEffect(() => {
-    let live = true
-    setG(null); setErr(null); setAsk(false); setDone(false)
-    gameDetails(id).then(d => { if (live) setG(d) }, e => { if (live) setErr(e.message) })
-    return () => { live = false }
-  }, [id])
-  if (err) return <div className="st-empty"><p>{err}</p></div>
-  if (!g) return <div className="st-loading"><span /></div>
-  const price = g.free ? 0 : g.price ?? 0
-  const have = owned(g.id)
-  const short = balance + 1e-9 < price
-  const buy = () => { if (onBuy({ ...g, price })) { setAsk(false); setDone(true) } }
-  return (
-    <div className="st-game">
-      {g.background && <div className="st-game-bg" style={{ backgroundImage: `url("${g.background}")` }} aria-hidden="true" />}
-      <div className="st-game-inner">
-        <h2 className="st-game-name">{g.name}</h2>
-        <div className="st-game-top">
-          <Media g={g} onWallpaper={onWallpaper} />
-          <aside className="st-game-side">
-            {g.img && <img className="st-game-cap" src={g.img} alt="" />}
-            {g.short && <p className="st-game-short">{plain(g.short)}</p>}
-            <dl className="st-facts">
-              {g.release && <><dt>Sortie</dt><dd>{g.release}</dd></>}
-              {g.developers?.length > 0 && <><dt>Studio</dt><dd>{g.developers.join(', ')}</dd></>}
-              {g.publishers?.length > 0 && <><dt>Éditeur</dt><dd>{g.publishers.join(', ')}</dd></>}
-              {g.metacritic && <><dt>Critiques</dt><dd><span className="st-meta">{g.metacritic}</span> sur 100</dd></>}
-            </dl>
-            {g.genres?.length > 0 && <div className="st-tags">{g.genres.map(x => <span key={x}>{x}</span>)}</div>}
-          </aside>
-        </div>
-        <div className="st-buy">
-          <div className="st-buy-txt">
-            <span className="st-buy-title">{have ? `${g.name} est dans ta bibliothèque` : `Acheter ${g.name}`}</span>
-            {!have && <span className="st-buy-sub">{g.platforms?.length ? g.platforms.map(p => ({ windows: 'Windows', mac: 'macOS', linux: 'Linux' })[p] || p).join(' · ') : 'PC'}</span>}
-          </div>
-          {have
-            ? <div className="st-buy-act own">
-                {favOf(g.id) && <button type="button" className={'st-btn ghost gm-fav' + (favOf(g.id).favorite ? ' on' : '')} onClick={() => onFav(g.id)}><Star on={favOf(g.id).favorite} /> {favOf(g.id).favorite ? `N°${favOf(g.id).fav_rank} de mon top` : 'Ajouter à mon top'}</button>}
-                <button type="button" className="st-btn go" onClick={() => onPlay(g.id)}>Jouer</button>
-              </div>
-            : <div className="st-buy-act"><PriceTag price={price} original={g.original} discount={g.discount} /><button type="button" className="st-btn buy" onClick={() => setAsk(true)}>{price === 0 ? 'Ajouter à ma bibliothèque' : 'Acheter'}</button></div>}
-        </div>
-      </div>
-
-      {ask && (
-        <div className="st-modal" role="dialog" aria-label="Confirmer l'achat" onClick={e => { if (e.target === e.currentTarget) setAsk(false) }}>
-          <div className="st-modal-box">
-            <h3>{short ? 'Solde insuffisant' : 'Confirmer l’achat'}</h3>
-            <div className="st-modal-game">{g.img && <img src={g.img} alt="" />}<span><b>{g.name}</b><em>{fmtPrice(price)}</em></span></div>
-            <dl className="st-modal-sum">
-              <dt>Porte-monnaie Stim</dt><dd>{money(balance)}</dd>
-              <dt>Prix</dt><dd>− {fmtPrice(price)}</dd>
-              <dt className="tot">{short ? 'Il manque' : 'Après l’achat'}</dt><dd className={'tot' + (short ? ' neg' : '')}>{money(Math.abs(Math.round((balance - price) * 100) / 100) || 0)}</dd>
-            </dl>
-            <div className="st-modal-act">
-              <button type="button" className="st-btn ghost" onClick={() => setAsk(false)}>Annuler</button>
-              {short
-                ? <button type="button" className="st-btn buy" onClick={() => { setAsk(false); onFunds() }}>Ajouter des fonds</button>
-                : <button type="button" className="st-btn buy" onClick={buy}>Payer {fmtPrice(price)}</button>}
-            </div>
-          </div>
-        </div>
-      )}
-      {done && (
-        <div className="st-modal" role="dialog" aria-label="Achat réussi">
-          <div className="st-modal-box ok">
-            <div className="st-check"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24" /><path d="M15 27l7 7 15-16" /></svg></div>
-            <h3>Merci pour ton achat !</h3>
-            <p>{g.name} t’attend dans <b>Mes jeux</b>.</p>
-            <div className="st-modal-act">
-              <button type="button" className="st-btn ghost" onClick={() => setDone(false)}>Continuer mes achats</button>
-              <button type="button" className="st-btn go" onClick={() => { setDone(false); onPlay(g.id) }}>Jouer</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-const HomeGlyph = () => <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 22L24 9l16 13v17a2 2 0 0 1-2 2h-9V30h-10v11h-9a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinejoin="round" /></svg>
-const PowerGlyph = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8M7 6.5a7.5 7.5 0 1 0 10 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-const SearchGlyph = () => <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20" /></svg>
-const coarse = () => typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
-const heroOf = id => `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/library_hero.jpg`
-
-/** La grande illustration d'un jeu (sans texte), sinon son image de couverture. */
-function Art({ appId, fallback, className }) {
-  const [bad, setBad] = useState(false)
-  useEffect(() => setBad(false), [appId])
-  const src = !bad && appId ? heroOf(appId) : fallback
-  if (!src) return <span className={className} />
-  return <img className={className} key={src} src={src} alt="" onError={() => (bad ? null : setBad(true))} />
-}
-
-/* -------------------------------------------------------------------------- */
-/* Stim (le magasin)                                                          */
-/* -------------------------------------------------------------------------- */
-
-function StoreHome({ owned, onOpen, onSearch }) {
+function Discover({ mine, onOpen, onSearch }) {
   const [feat, setFeat] = useState(null)
   const [err, setErr] = useState(null)
   const [q, setQ] = useState('')
-  const load = () => { setErr(null); featuredGames().then(setFeat, e => setErr(e.message)) }
+  const load = () => { setErr(null); featuredCatalog().then(setFeat, e => setErr(e.message)) }
   useEffect(load, [])
+  const igdb = catalogSource() === 'igdb'
+  const lead = feat?.hot?.[0]
   return (
-    <>
-      <form className="st-search cs-search" onSubmit={e => { e.preventDefault(); if (q.trim()) onSearch(q.trim()) }} role="search">
+    <div className="ct">
+      <form className="st-search cs-search ct-search" onSubmit={e => { e.preventDefault(); if (q.trim()) onSearch(q.trim()) }} role="search">
         <SearchGlyph />
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Chercher un jeu…" enterKeyHint="search" aria-label="Chercher un jeu" />
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Chercher un jeu, sur toutes les plateformes…" enterKeyHint="search" aria-label="Chercher un jeu" />
         {q && <button type="button" onClick={() => setQ('')} aria-label="Effacer">×</button>}
       </form>
       {err ? <div className="st-empty"><p>{err}</p><button type="button" className="st-btn ghost" onClick={load}>Réessayer</button></div>
         : !feat ? <div className="st-loading"><span /></div>
           : <>
-            <Hero list={(feat.top || []).slice(0, 6)} owned={owned} onOpen={onOpen} />
-            <Row title="Promotions" list={feat.specials} owned={owned} onOpen={onOpen} />
-            <Row title="Les plus vendus" list={feat.top} owned={owned} onOpen={onOpen} />
-            <Row title="Nouveautés" list={feat.news} owned={owned} onOpen={onOpen} />
+            {lead && (
+              <button type="button" className="ct-lead" onClick={() => onOpen(lead)}>
+                <Art g={lead} className="ct-lead-art" />
+                <span className="ct-lead-txt">
+                  <span className="cs-hero-kick">{igdb ? 'Le plus suivi en ce moment' : 'À la une'}</span>
+                  <b>{lead.name}</b>
+                  <span className="ct-lead-meta"><Platforms list={lead.platforms} max={5} /><Score n={lead.rating} /></span>
+                </span>
+              </button>
+            )}
+            <CatalogRow title={igdb ? 'Populaires en ce moment' : 'Les plus joués'} list={feat.hot?.slice(lead ? 1 : 0)} mine={mine} onOpen={onOpen} />
+            <CatalogRow title={igdb ? 'Les mieux notés de tous les temps' : 'En vedette'} list={feat.best} mine={mine} onOpen={onOpen} />
+            <CatalogRow title={igdb ? 'Bientôt' : 'Nouveautés'} list={feat.soon} mine={mine} onOpen={onOpen} />
+            {!igdb && <p className="ct-note">Catalogue Steam (PC) pour l’instant : avec les clés IGDB dans Vercel, toutes les plateformes arrivent.</p>}
           </>}
-    </>
+    </div>
   )
 }
 
-function StoreSearch({ q, owned, onOpen }) {
+function CatalogSearch({ q, mine, onOpen }) {
   const [res, setRes] = useState(null)
   useEffect(() => {
     let live = true
     setRes(null)
-    searchGames(q).then(r => { if (live) setRes(r) }, () => { if (live) setRes([]) })
+    searchCatalog(q).then(r => { if (live) setRes(r) }, () => { if (live) setRes([]) })
     return () => { live = false }
   }, [q])
   return (
-    <section className="st-results">
-      <h3>Résultats pour « {q} »</h3>
+    <section className="ct">
+      <h3 className="cs-h3">Résultats pour « {q} »</h3>
       {!res ? <div className="st-loading"><span /></div>
         : !res.length ? <div className="st-empty"><p>Aucun jeu trouvé.</p></div>
-          : <div className="st-grid">{res.map(g => <GameCard key={g.id} g={g} owned={owned(g.id)} onOpen={onOpen} wide />)}</div>}
+          : <div className="ld-grid ct-grid">{res.map(g => <CatalogCard key={g.key} g={g} mine={mine(g)} onOpen={onOpen} />)}</div>}
     </section>
   )
 }
 
-/* -------------------------------------------------------------------------- */
-/* Porte-monnaie et Banque Maruchime : des panneaux qui montent du bas         */
-/* -------------------------------------------------------------------------- */
-
-function Sheet({ onClose, label, className = '', children }) {
-  const [out, setOut] = useState(false)
-  const close = () => { setOut(true); setTimeout(onClose, 240) }
-  // glisser le panneau vers le bas pour le fermer
-  const drag = useRef(null)
-  const [dy, setDy] = useState(0)
-  return (
-    <div className={'cs-sheet-back' + (out ? ' out' : '')} onPointerDown={e => { if (e.target === e.currentTarget) close() }}>
-      <div className={'cs-sheet ' + className + (out ? ' out' : '')} role="dialog" aria-label={label} style={dy ? { transform: `translate(-50%, ${dy}px)`, transition: 'none' } : null}>
-        <div className="cs-grab"
-          onPointerDown={e => { drag.current = e.clientY; e.currentTarget.setPointerCapture?.(e.pointerId) }}
-          onPointerMove={e => { if (drag.current != null) setDy(Math.max(0, e.clientY - drag.current)) }}
-          onPointerUp={() => { if (dy > 90) close(); drag.current = null; setDy(0) }}
-          onPointerCancel={() => { drag.current = null; setDy(0) }}>
-          <i />
-        </div>
-        <button type="button" className="cs-sheet-x" onClick={close} aria-label="Fermer">×</button>
-        {typeof children === 'function' ? children(close) : children}
-      </div>
-    </div>
-  )
-}
-
-function WalletSheet({ games, balance, onFunds, onClose }) {
-  const spent = games.reduce((s, g) => s + (g.price_paid || 0), 0)
-  return (
-    <Sheet onClose={onClose} label="Porte-monnaie" className="cs-wallet">
-      <div className="st-wallet-card">
-        <span className="st-kicker">Porte-monnaie Stim</span>
-        <span className="st-wallet-sum">{money(balance)}</span>
-        <button type="button" className="st-btn buy" onClick={onFunds}>Ajouter des fonds</button>
-      </div>
-      <h3 className="cs-h3">Mes achats</h3>
-      {!games.length ? <p className="st-muted">Aucun achat pour l’instant.</p> : (
-        <ul className="st-history">
-          {games.map(g => <li key={g.id}><span>{g.name}<em>{fmtDate(g.added_at)}</em></span><b>{g.price_paid ? '− ' + fmtPrice(g.price_paid) : 'Gratuit'}</b></li>)}
-          <li className="tot"><span>Total dépensé</span><b>{fmtPrice(spent)}</b></li>
-        </ul>
-      )}
-    </Sheet>
-  )
-}
-
-/** « Glisse pour valider » : on pousse la pastille jusqu'au bout (ou Entrée au clavier). */
-function SlideConfirm({ label, onConfirm }) {
-  const track = useRef(null)
-  const [x, setX] = useState(0)
-  const [hold, setHold] = useState(false)
-  const start = useRef(0)
-  const max = () => Math.max(1, (track.current?.clientWidth || 300) - 60)
-  const done = () => { setX(max()); navigator.vibrate?.(20); onConfirm() }
-  return (
-    <div className="slide" ref={track}>
-      <span className="slide-fill" style={{ width: x + 56, transition: hold ? 'none' : undefined }} />
-      <span className="slide-label" style={{ opacity: 1 - x / max() }}>{label}</span>
-      <button type="button" className="slide-knob" style={{ transform: `translateX(${x}px)`, transition: hold ? 'none' : undefined }} aria-label={label}
-        onPointerDown={e => { start.current = e.clientX - x; setHold(true); e.currentTarget.setPointerCapture?.(e.pointerId) }}
-        onPointerMove={e => { if (hold) setX(Math.max(0, Math.min(max(), e.clientX - start.current))) }}
-        onPointerUp={() => { setHold(false); if (x > max() * 0.82) done(); else setX(0) }}
-        onPointerCancel={() => { setHold(false); setX(0) }}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); done() } }}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" /></svg>
-      </button>
-    </div>
-  )
-}
-
-const AMOUNTS = [5, 10, 20, 50, 100, 250]
-
-function BankSheet({ holder, balance, addFunds, onClose }) {
-  const [amount, setAmount] = useState(50)
-  const [step, setStep] = useState('pick')        // pick → sending → ok
-  const [n, setN] = useState(0)                   // pour remettre le curseur à zéro
-  const send = () => {
-    setStep('sending')
-    setTimeout(() => { addFunds(amount); setStep('ok') }, 1300)
-  }
-  return (
-    <Sheet onClose={onClose} label="Banque Maruchime" className="bk cs-bank">
-      {close => <>
-        <header className="bk-head">
-          <span className="bk-logo"><BankGlyph /></span>
-          <span><b>Banque Maruchime</b><em>Virement vers Stim</em></span>
-        </header>
-        <div className="bk-body">
-          <div className="bk-card" aria-label="Carte bancaire factice">
-            <span className="bk-card-bank">Maruchime</span>
-            <span className="bk-card-chip" aria-hidden="true" />
-            <svg className="bk-card-nfc" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8a6 6 0 0 1 0 8M11.5 5.5a10 10 0 0 1 0 13M15 3a14 14 0 0 1 0 18" /></svg>
-            <span className="bk-card-num">•••• •••• •••• 2048</span>
-            <span className="bk-card-foot"><span><em>Titulaire</em>{(holder || 'Joueur Maruchime').toUpperCase()}</span><span><em>Expire</em>12/99</span></span>
-            <span className="bk-card-brand" aria-hidden="true"><i /><i /></span>
-          </div>
-          <div className="bk-acc">
-            <span><em>Compte courant</em><b>Solde disponible</b></span>
-            <span className="bk-inf">∞ €</span>
-          </div>
-          <p className="bk-to">Porte-monnaie Stim · solde actuel <b>{money(balance)}</b></p>
-          <div className="bk-amounts">
-            {AMOUNTS.map(a => <button type="button" key={a} className={a === amount ? 'on' : ''} onClick={() => { setAmount(a); setN(k => k + 1) }}>{a} €</button>)}
-          </div>
-          <SlideConfirm key={amount + '-' + n} label={`Glisse pour virer ${money(amount)}`} onConfirm={send} />
-          <p className="bk-note">Banque imaginaire : l’argent n’existe pas, rien n’est jamais débité.</p>
-        </div>
-        {step !== 'pick' && (
-          <div className="bk-over" role="status">
-            {step === 'sending'
-              ? <div className="bk-wait"><span className="bk-spin" /><b>Virement en cours…</b></div>
-              : <div className="bk-wait ok">
-                <div className="st-check"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24" /><path d="M15 27l7 7 15-16" /></svg></div>
-                <b>Virement effectué</b>
-                <span>{money(amount)} ajoutés à ton porte-monnaie Stim.</span>
-                <div className="bk-ok-act">
-                  <button type="button" className="bk-cancel" onClick={() => { setStep('pick'); setN(k => k + 1) }}>Autre virement</button>
-                  <button type="button" className="bk-send" onClick={close}>Terminé</button>
-                </div>
-              </div>}
-          </div>
-        )}
-      </>}
-    </Sheet>
-  )
-}
-
-/* -------------------------------------------------------------------------- */
-/* Mes jeux                                                                   */
-/* -------------------------------------------------------------------------- */
-
-function Launch({ game, onQuit }) {
-  const [p, setP] = useState(0)
-  const [shots, setShots] = useState([])
-  useEffect(() => { gameDetails(game.app_id).then(d => setShots(d.screenshots || []), () => {}) }, [game.app_id])
+/** La fiche d'un jeu du catalogue : l'ajouter à notre bibliothèque, à notre top, voir sa bande-annonce. */
+function CatalogPage({ item, games, findGame, addGame, updateGame, setFavorite, onTrailer, quickWall, openMine, notify }) {
+  const [g, setG] = useState(null)
+  const [err, setErr] = useState(null)
   useEffect(() => {
-    if (p >= 100) return
-    const t = setTimeout(() => setP(v => Math.min(100, v + 4 + Math.random() * 9)), 90)
-    return () => clearTimeout(t)
-  }, [p])
-  const bg = shots[0] || game.img
+    let live = true
+    setG(null); setErr(null)
+    catalogGame(item).then(d => { if (live) setG({ ...item, ...d }) }, e => { if (live) setErr(e.message) })
+    return () => { live = false }
+  }, [item.key]) // eslint-disable-line react-hooks/exhaustive-deps
+  const cur = g || item
+  const row = findGame(cur) && games.find(x => x.id === findGame(cur).id)
+  const add = (extra = {}) => { const r = addGame(cur, extra); notify(`${cur.name} ajouté à ta bibliothèque`); return r }
+  const top = () => {
+    const r = row || add()
+    const n = setFavorite(r.id, !r.favorite)
+    notify(n ? `${cur.name} entre dans ton top · n°${n}` : `${cur.name} sort de ton top`)
+  }
+  const summary = cur.summaryFr || cur.summary
   return (
-    <div className="gm-launch">
-      {bg && <div className="gm-launch-bg" style={{ backgroundImage: `url("${bg}")` }} />}
-      <div className="gm-launch-box">
-        {game.img && <img src={game.img} alt="" />}
-        {p < 100 ? <>
-          <b>Lancement de {game.name}…</b>
-          <span className="gm-bar"><i style={{ width: p + '%' }} /></span>
-        </> : <>
-          <b>Bon jeu !</b>
-          <span className="gm-launch-note">C’est pour de faux : le jeu ne se lance pas vraiment.</span>
-        </>}
-        <button type="button" className="st-btn ghost" onClick={onQuit}>Quitter le jeu</button>
+    <div className="ct-page">
+      <div className="ld-hero ct-hero">
+        <Art g={cur} className="ld-hero-art" />
+        <div className="ct-hero-in">
+          <Cover g={cur} className="ct-hero-cover" />
+          <div className="ct-hero-txt">
+            <h2 className="ld-logo-txt">{cur.name}</h2>
+            <p>{[cur.date || cur.year, cur.genres?.slice(0, 3).join(' · ')].filter(Boolean).join('  —  ')}</p>
+            <span className="ct-lead-meta"><Platforms list={cur.platforms} max={8} /><Score n={cur.rating} /></span>
+          </div>
+        </div>
       </div>
+      <div className="ld-bar ct-bar">
+        {row
+          ? <>
+            <span className="ct-owned"><CheckGlyph /> Dans ma bibliothèque</span>
+            <StatusPick value={row.status} onChange={s => updateGame(row.id, { status: s })} />
+            <button type="button" className="st-btn ghost" onClick={() => openMine(row.id)}>Voir dans ma bibliothèque</button>
+          </>
+          : <>
+            <button type="button" className="st-btn buy ld-play" onClick={() => add()}><PlusGlyph /> Ajouter à ma bibliothèque</button>
+            <button type="button" className="st-btn ghost" onClick={() => add({ status: 'en_cours' })}>J’y joue en ce moment</button>
+          </>}
+        <div className="ld-bar-act">
+          <button type="button" className={'ld-icon' + (row?.favorite ? ' on' : '')} onClick={top} title={row?.favorite ? 'Retirer de mon top' : 'Ajouter à mon top'} aria-label="Mon top"><Star on={!!row?.favorite} /></button>
+          {g?.videos?.length > 0 && <button type="button" className="ld-icon" onClick={() => onTrailer({ name: cur.name, videos: g.videos })} title="Bande-annonce" aria-label="Bande-annonce"><PlayGlyph /></button>}
+        </div>
+      </div>
+      {err && <div className="st-empty"><p>{err}</p></div>}
+      {!g && !err && <div className="st-loading"><span /></div>}
+      {g && (
+        <div className="ld-cols">
+          <div className="ld-col-main">
+            {g.videos?.length > 0 && (
+              <section className="ld-box">
+                <h3 className="cs-h3">Vidéos</h3>
+                <div className="ct-vids">
+                  {g.videos.map((v, k) => (
+                    <button type="button" key={k} className="ct-vid" onClick={() => onTrailer({ name: cur.name, videos: g.videos, k })}>
+                      <img src={v.yt ? `https://i.ytimg.com/vi/${v.yt}/hqdefault.jpg` : v.thumb} alt="" loading="lazy" />
+                      <span><PlayGlyph /></span><em>{v.name || 'Bande-annonce'}</em>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+            {summary && <section className="ld-box"><h3 className="cs-h3">À propos</h3><p className="ld-about">{summary}</p>{!g.summaryFr && <p className="ct-en">Résumé en anglais (le catalogue n’a pas de traduction).</p>}</section>}
+            {g.shots?.length > 0 && <Shots list={g.shots} name={cur.name} g={cur} quickWall={quickWall} />}
+          </div>
+          <aside className="ld-col-side">
+            <Facts g={g} />
+          </aside>
+        </div>
+      )}
     </div>
   )
 }
 
-const SORTS = [['recent', 'Récents'], ['name', 'Nom'], ['rating', 'Ma note']]
+function Facts({ g, row }) {
+  return (
+    <section className="ld-box">
+      <h3 className="cs-h3">Infos</h3>
+      <dl className="st-facts">
+        {g.platforms?.length > 0 && <><dt>Plateformes</dt><dd>{g.platforms.join(', ')}</dd></>}
+        {g.genres?.length > 0 && <><dt>Genres</dt><dd>{g.genres.slice(0, 4).join(', ')}</dd></>}
+        {(g.date || g.year) && <><dt>Sortie</dt><dd>{g.date || g.year}</dd></>}
+        {g.developers?.length > 0 && <><dt>Studio</dt><dd>{g.developers.join(', ')}</dd></>}
+        {g.publishers?.length > 0 && <><dt>Éditeur</dt><dd>{g.publishers.join(', ')}</dd></>}
+        {g.rating ? <><dt>Note</dt><dd><Score n={g.rating} /> sur 100{g.votes ? ` · ${g.votes} avis` : ''}</dd></> : null}
+        {row && <><dt>Ajouté le</dt><dd>{fmtDate(row.added_at)}</dd></>}
+      </dl>
+    </section>
+  )
+}
+
+function Shots({ list, name, g, quickWall }) {
+  return (
+    <section className="ld-box">
+      <h3 className="cs-h3">Images</h3>
+      <div className="ld-shots">
+        {list.slice(0, 8).map(u => (
+          <figure key={u} className="ld-shot">
+            <img src={u} alt="" loading="lazy" />
+            <button type="button" className="st-wallbtn" onClick={() => quickWall({ url: u, name, app_id: g.app_id || null, igdb_id: g.igdb_id || null })}><PictureGlyph /> En fond d’écran</button>
+          </figure>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** Où on en est : à jouer, en cours, terminé, abandonné. */
+function StatusPick({ value, onChange }) {
+  return (
+    <div className="ld-status" role="radiogroup" aria-label="Où j’en suis">
+      {STATUSES.map(([k, t]) => <button type="button" key={k} role="radio" aria-checked={value === k} className={'s-' + k + (value === k ? ' on' : '')} onClick={() => onChange(k)}>{t}</button>)}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Mon top                                                                    */
+/* -------------------------------------------------------------------------- */
+
 const byRank = (a, b) => (a.fav_rank ?? 1e9) - (b.fav_rank ?? 1e9) || a.added_at.localeCompare(b.added_at)
 const Stars = ({ n }) => <span className="gm-stars" aria-label={n ? `${n} sur 5` : 'Pas de note'}>{[1, 2, 3, 4, 5].map(k => <Star key={k} on={(n || 0) >= k} />)}</span>
 const Grip = () => <svg viewBox="0 0 24 24" aria-hidden="true">{[7, 12, 17].flatMap(y => [9, 15].map(x => <circle key={x + '-' + y} cx={x} cy={y} r="1.6" fill="currentColor" />))}</svg>
@@ -571,7 +422,7 @@ function TopList({ top, onOpen, onPlay, onRemove, reorder }) {
             <span className="gm-top-act">
               <button type="button" className="gm-mini arrow" onClick={() => step(i, -1)} disabled={i === 0} aria-label="Monter">▲</button>
               <button type="button" className="gm-mini arrow" onClick={() => step(i, 1)} disabled={i === top.length - 1} aria-label="Descendre">▼</button>
-              <button type="button" className="gm-mini play" onClick={() => onPlay(g.app_id)} aria-label={`Jouer à ${g.name}`}>▶</button>
+              <button type="button" className="gm-mini play" onClick={() => onPlay(g)} aria-label={`Bande-annonce de ${g.name}`}><PlayGlyph /></button>
               <button type="button" className="gm-mini" onClick={() => onRemove(g.id)} aria-label="Retirer de mon top">✕</button>
             </span>
           </li>
@@ -583,55 +434,323 @@ function TopList({ top, onOpen, onPlay, onRemove, reorder }) {
 
 function clampInt(v, a, b) { return Math.max(a, Math.min(b, v)) }
 
+
+function TopCarousel({ items, ranked = true, onPlay, onGame, strip: showStrip = false }) {
+  const n = items.length
+  const [k, setK] = useState(0)
+  const [hold, setHold] = useState(false)
+  const drag = useRef(null)
+  const strip = useRef(null)
+  const cur = Math.min(k, n - 1)
+  const g = items[cur]
+  useEffect(() => { if (k >= n) setK(0) }, [n, k])
+  useEffect(() => {
+    if (hold || n < 2) return
+    const t = setTimeout(() => setK(v => (v + 1) % n), 7000)
+    return () => clearTimeout(t)
+  }, [k, hold, n])
+  // la vignette active reste visible dans la rangée
+  useEffect(() => { strip.current?.children[cur]?.scrollIntoView?.({ block: 'nearest', inline: 'center', behavior: 'smooth' }) }, [cur])
+  const go = d => setK(v => (v + d + n) % n)   // le minuteur repart de zéro à chaque changement
+  const label = i => (ranked ? `N°${i + 1}` : i === 0 ? 'Dernier ajouté' : 'Récent')
+  return (
+    <section className="cs-car" onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)}>
+      <div className="cs-hero cs-car-stage"
+        onPointerDown={e => { drag.current = { x: e.clientX, y: e.clientY } }}
+        onPointerUp={e => {
+          const d = drag.current; drag.current = null
+          if (!d) return
+          const dx = e.clientX - d.x
+          if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(e.clientY - d.y)) go(dx < 0 ? 1 : -1)
+        }}>
+        {items.map((x, i) => (Math.abs(i - cur) <= 1 || (cur === 0 && i === n - 1) || (cur === n - 1 && i === 0)) && (
+          <div key={x.id} className={'cs-car-slide' + (i === cur ? ' on' : '')} aria-hidden={i !== cur}>
+            <Art g={x} className="cs-hero-art" />
+          </div>
+        ))}
+        <div className="cs-hero-txt" key={g.id}>
+          <span className="cs-hero-kick">{ranked ? (cur === 0 ? 'Ton n°1' : `N°${cur + 1} de ton top`) : 'Ajouté récemment'}</span>
+          <Logo g={g} />
+          <span className="cs-car-meta">
+            {g.rating ? <Stars n={g.rating} /> : null}
+            <em>{[statusLabel(g.status), g.platform || g.platforms?.[0], g.genres?.slice(0, 2).join(' · ')].filter(Boolean).join('  ·  ')}</em>
+          </span>
+          <span className="cs-hero-act">
+            <button type="button" className="st-btn buy big" onClick={() => onGame(g.id)}>Voir le jeu</button>
+            <button type="button" className="st-btn ghost" onClick={() => onPlay(g)}><PlayGlyph /> Bande-annonce</button>
+          </span>
+        </div>
+        {n > 1 && <>
+          <button type="button" className="cs-car-arrow prev" onClick={() => go(-1)} aria-label="Jeu précédent"><Back /></button>
+          <button type="button" className="cs-car-arrow next" onClick={() => go(1)} aria-label="Jeu suivant"><Back /></button>
+          <span className="cs-car-count">{cur + 1} / {n}</span>
+          {!hold && <span className="cs-car-timer" key={'t' + cur} />}
+        </>}
+      </div>
+      {n > 1 && showStrip && (
+        <div className="cs-car-strip" ref={strip} role="tablist" aria-label={ranked ? 'Mon top' : 'Mes jeux'}>
+          {items.map((x, i) => (
+            <button type="button" key={x.id} role="tab" aria-selected={i === cur} className={'cs-car-thumb' + (i === cur ? ' on' : '') + (ranked && i < 3 ? ' r' + (i + 1) : '')}
+              onClick={() => setK(i)}>
+              {x.img && <img src={x.img} alt="" loading="lazy" draggable="false" />}
+              <span className="cs-car-rank">{ranked ? i + 1 : ''}</span>
+              <span className="cs-car-name">{x.name}<em>{label(i)}</em></span>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* La bibliothèque : liste à gauche ; à droite notre top ou la fiche du jeu    */
+/* -------------------------------------------------------------------------- */
+
+function CoverCard({ g, rank, onOpen, onPlay, onFav }) {
+  return (
+    <div className={'ld-card' + (rank ? ' ranked' : '') + (rank && rank <= 3 ? ' r' + rank : '')}>
+      <button type="button" className="ld-card-btn" onClick={() => onOpen(g.id)} aria-label={g.name}><Cover g={g} /></button>
+      {rank ? <span className="ld-card-rank">{rank}</span> : null}
+      {g.status && g.status !== 'a_jouer' && <span className={'ld-card-status s-' + g.status}>{statusLabel(g.status)}</span>}
+      <span className="ld-card-hover">
+        <button type="button" className="ld-card-play" onClick={() => onPlay(g)} aria-label={`Bande-annonce de ${g.name}`}><PlayGlyph /></button>
+        <button type="button" className={'ld-card-star' + (g.favorite ? ' on' : '')} onClick={() => onFav(g, !g.favorite)} aria-label={g.favorite ? 'Retirer de mon top' : 'Ajouter à mon top'}><Star on={g.favorite} /></button>
+      </span>
+      <span className="ld-card-name">{g.name}</span>
+    </div>
+  )
+}
+
+const FILTERS = [['all', 'Tous'], ...STATUSES]
+
+function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filter, setFilter }) {
+  const [sort, setSort] = useState('top')
+  const [ranking, setRanking] = useState(false)
+  const playingNow = useMemo(() => games.filter(g => g.status === 'en_cours'), [games])
+  const all = useMemo(() => {
+    const by = {
+      top: (a, b) => (b.favorite - a.favorite) || (a.fav_rank ?? 1e9) - (b.fav_rank ?? 1e9) || a.name.localeCompare(b.name, 'fr'),
+      recent: (a, b) => b.added_at.localeCompare(a.added_at),
+      name: (a, b) => a.name.localeCompare(b.name, 'fr'),
+      rating: (a, b) => (b.rating || 0) - (a.rating || 0) || a.name.localeCompare(b.name, 'fr'),
+    }[sort]
+    return games.filter(g => filter === 'all' || g.status === filter).sort(by)
+  }, [games, sort, filter])
+  if (!games.length) {
+    return (
+      <div className="gm-empty ld-empty">
+        <span className="gm-empty-ico"><GamesGlyph /></span>
+        <b>Ta ludothèque est vide</b>
+        <p>Cherche tes jeux dans Découvrir — sur toutes les plateformes — et ajoute-les à ta bibliothèque, comme tes livres et tes films.</p>
+        <button type="button" className="st-btn buy" onClick={openStore}>Découvrir des jeux</button>
+      </div>
+    )
+  }
+  return (
+    <div className="ld-home">
+      {top.length > 0 ? (
+        <TopCarousel items={top} onPlay={onPlay} onGame={onOpen} />
+      ) : (
+        <section className="ld-banner empty">
+          <div className="ld-banner-txt">
+            <span className="cs-hero-kick">Mon top</span>
+            <h2 className="ld-logo-txt">Classe tes jeux préférés</h2>
+            <p>Touche l’étoile <Star on={false} /> d’un jeu : il entre dans ton top, que tu ranges ensuite comme tu veux.</p>
+          </div>
+        </section>
+      )}
+
+      {top.length > 0 && (
+        <section className="ld-sec">
+          <div className="ld-sec-head">
+            <h3 className="cs-h3">Mon top <em>{top.length}</em></h3>
+            <button type="button" className={'st-btn ghost ld-rank-btn' + (ranking ? ' on' : '')} onClick={() => setRanking(r => !r)}>{ranking ? 'Terminé' : 'Ranger mon top'}</button>
+          </div>
+          {ranking
+            ? <TopList top={top} onOpen={onOpen} onPlay={onPlay} onRemove={id => fav(games.find(g => g.id === id), false)} reorder={reorderTop} />
+            : <div className="ld-row">{top.map((g, i) => <CoverCard key={g.id} g={g} rank={i + 1} onOpen={onOpen} onPlay={onPlay} onFav={fav} />)}</div>}
+        </section>
+      )}
+
+      {playingNow.length > 0 && (
+        <section className="ld-sec">
+          <div className="ld-sec-head"><h3 className="cs-h3">En cours <em>{playingNow.length}</em></h3></div>
+          <div className="ld-row">{playingNow.map(g => <CoverCard key={g.id} g={g} rank={g.favorite ? g.fav_rank : null} onOpen={onOpen} onPlay={onPlay} onFav={fav} />)}</div>
+        </section>
+      )}
+
+      <section className="ld-sec">
+        <div className="ld-sec-head">
+          <h3 className="cs-h3">Toute ma collection <em>{games.length}</em></h3>
+          <div className="gm-sort" role="group" aria-label="Trier">
+            {[['top', 'Top d’abord'], ['recent', 'Récents'], ['name', 'Nom'], ['rating', 'Ma note']].map(([k, t]) => <button type="button" key={k} className={sort === k ? 'on' : ''} onClick={() => setSort(k)}>{t}</button>)}
+          </div>
+        </div>
+        <div className="ld-filters" role="group" aria-label="Où j’en suis">
+          {FILTERS.map(([k, t]) => {
+            const n = k === 'all' ? games.length : games.filter(g => g.status === k).length
+            return <button type="button" key={k} className={'s-' + k + (filter === k ? ' on' : '')} onClick={() => setFilter(k)} disabled={!n && k !== 'all'}>{t} <b>{n}</b></button>
+          })}
+        </div>
+        {!all.length ? <p className="st-muted">Aucun jeu ici pour l’instant.</p>
+          : <div className="ld-grid">{all.map(g => <CoverCard key={g.id} g={g} rank={g.favorite ? g.fav_rank : null} onOpen={onOpen} onPlay={onPlay} onFav={fav} />)}</div>}
+      </section>
+    </div>
+  )
+}
+
+/** La fiche d'un de nos jeux : sa grande image, où on en est, notre note, ses images, ses infos. */
+function LudoGame({ g, onPlay, fav, updateGame, removeGame, onWallpaper, onCatalog, onGone, quickWall }) {
+  const [d, setD] = useState(null)
+  useEffect(() => {
+    if (!g) return
+    let live = true
+    setD(null)
+    catalogGame(refOf(g)).then(x => { if (live) setD(x) }, () => { if (live) setD(false) })
+    return () => { live = false }
+  }, [g?.igdb_id, g?.app_id]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!g) return <div className="st-empty"><p>Ce jeu n’est plus dans ta liste.</p></div>
+  const platforms = g.platforms?.length ? g.platforms : d?.platforms || []
+  const summary = d ? d.summaryFr || d.summary : ''
+  return (
+    <div className="ld-game" key={g.id}>
+      <div className="ld-hero">
+        <Art g={{ ...g, heroFallback: d?.hero }} className="ld-hero-art" />
+        <div className="ld-hero-logo"><Logo g={g} /></div>
+      </div>
+      <div className="ld-bar">
+        <StatusPick value={g.status} onChange={s => updateGame(g.id, { status: s })} />
+        <dl className="ld-stats">
+          {platforms.length > 0 && (
+            <div><dt>J’y joue sur</dt><dd>
+              <select className="ld-select" value={g.platform || ''} onChange={e => updateGame(g.id, { platform: e.target.value || null })} aria-label="Plateforme">
+                <option value="">—</option>
+                {platforms.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </dd></div>
+          )}
+          <div><dt>Dans mon top</dt><dd>{g.favorite ? `N°${g.fav_rank}` : '—'}</dd></div>
+          <div className="ld-stats-rate"><dt>Ma note</dt><dd>
+            {[1, 2, 3, 4, 5].map(n => (
+              <button type="button" key={n} className={(g.rating || 0) >= n ? 'on' : ''} onClick={() => updateGame(g.id, { rating: g.rating === n ? null : n })} aria-label={`${n} sur 5`}><Star on={(g.rating || 0) >= n} /></button>
+            ))}
+          </dd></div>
+        </dl>
+        <div className="ld-bar-act">
+          <button type="button" className={'ld-icon' + (g.favorite ? ' on' : '')} onClick={() => fav(g, !g.favorite)} title={g.favorite ? 'Retirer de mon top' : 'Ajouter à mon top'} aria-label="Mon top"><Star on={g.favorite} /></button>
+          <button type="button" className="ld-icon" onClick={() => onPlay(g)} title="Bande-annonce" aria-label="Bande-annonce"><PlayGlyph /></button>
+          <button type="button" className="ld-icon" onClick={() => onWallpaper(g)} title="Fond d’écran" aria-label="Choisir un fond d’écran de ce jeu"><PictureGlyph /></button>
+          <button type="button" className="ld-icon" onClick={() => onCatalog(g)} title="Fiche du catalogue" aria-label="Fiche du catalogue"><StimGlyph /></button>
+        </div>
+      </div>
+      <div className="ld-cols">
+        <div className="ld-col-main">
+          {summary && <section className="ld-box"><h3 className="cs-h3">À propos</h3><p className="ld-about">{summary}</p></section>}
+          {d?.shots?.length > 0 && <Shots list={d.shots} name={g.name} g={g} quickWall={quickWall} />}
+          {d === null && <div className="st-loading"><span /></div>}
+        </div>
+        <aside className="ld-col-side">
+          <Facts g={{ ...(d || {}), platforms, genres: d?.genres?.length ? d.genres : g.genres, date: d?.date || g.release }} row={g} />
+          <button type="button" className="gm-link danger" onClick={() => { removeGame(g.id); onGone() }}>Retirer de ma bibliothèque</button>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+function Ludo({ games, top, selId, onSelect, onHome, mobile, setFavorite, reorderTop, updateGame, removeGame, onPlay, onWallpaper, onCatalog, quickWall, openStore, notify }) {
+  const [q, setQ] = useState('')
+  const [filter, setFilter] = useState('all')
+  const mainRef = useRef(null)
+  useEffect(() => { mainRef.current?.scrollTo?.(0, 0) }, [selId])
+  const fav = (g, on) => { const r = setFavorite(g.id, on); notify(on ? `${g.name} entre dans ton top · n°${r}` : `${g.name} sort de ton top`) }
+  const t = q.trim().toLowerCase()
+  const match = g => !t || g.name.toLowerCase().includes(t)
+  const rest = useMemo(() => [...games].sort((a, b) => a.name.localeCompare(b.name, 'fr')), [games])
+  const sel = selId ? games.find(g => g.id === selId) : null
+  const main = sel || selId
+    ? <LudoGame g={sel} onPlay={onPlay} fav={fav} updateGame={updateGame} removeGame={id => { removeGame(id); notify(`${sel?.name} retiré de ta bibliothèque`) }} onWallpaper={onWallpaper} onCatalog={onCatalog} onGone={onHome} quickWall={quickWall} />
+    : <LudoHome games={games} top={top} onOpen={onSelect} onPlay={onPlay} fav={fav} reorderTop={reorderTop} openStore={openStore} filter={filter} setFilter={setFilter} />
+  if (mobile) return <div className="ld ld-mobile">{main}</div>
+  const row = (g, rank) => (
+    <button type="button" key={g.id} className={'ld-item' + (g.id === selId ? ' on' : '')} onClick={() => onSelect(g.id)}>
+      <span className="ld-item-img">{g.img && <img src={g.img} alt="" loading="lazy" />}</span>
+      <span className="ld-item-name">{g.name}{g.platform && <em>{g.platform}</em>}</span>
+      {rank ? <span className={'ld-item-rank' + (rank <= 3 ? ' r' + rank : '')}>{rank}</span> : g.status === 'en_cours' ? <span className="ld-item-dot" title="En cours" /> : null}
+    </button>
+  )
+  const topShown = top.filter(match), nowShown = games.filter(g => g.status === 'en_cours' && match(g)), allShown = rest.filter(match)
+  return (
+    <div className="ld">
+      <aside className="ld-side">
+        <button type="button" className={'ld-home-btn' + (!selId ? ' on' : '')} onClick={onHome}><GamesGlyph /> Ma ludothèque</button>
+        <label className="gm-find ld-find">
+          <SearchGlyph />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Retrouver un jeu…" aria-label="Retrouver un jeu" />
+        </label>
+        <div className="ld-list">
+          {topShown.length > 0 && <><h4>Mon top <em>{top.length}</em></h4>{topShown.map(g => row(g, g.fav_rank))}</>}
+          {nowShown.length > 0 && <><h4>En cours <em>{nowShown.length}</em></h4>{nowShown.map(g => row(g, null))}</>}
+          <h4>Tous mes jeux <em>{games.length}</em></h4>
+          {allShown.map(g => row(g, null))}
+          {!allShown.length && <p className="st-muted ld-none">{games.length ? 'Aucun jeu ne correspond.' : 'Aucun jeu pour l’instant.'}</p>}
+        </div>
+      </aside>
+      <div className="ld-main" ref={mainRef}>
+        <div className="ld-main-in" key={selId || 'home'}>{main}</div>
+      </div>
+    </div>
+  )
+}
+
 /* -------------------------------------------------------------------------- */
 /* Fond d'écran                                                               */
 /* -------------------------------------------------------------------------- */
 
-/** Les grandes images d'un jeu, de la plus « fond d'écran » à la moins. */
-const artOf = (id, d) => {
-  const base = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/`
-  return [...new Set([base + 'library_hero.jpg', d?.background, ...(d?.screenshots || []), d?.img].filter(Boolean))]
-}
-
 function Wallpapers({ games, wallpaper, setWallpaper, request }) {
-  const [game, setGame] = useState(() => request || (wallpaper?.app_id ? { app_id: wallpaper.app_id, name: wallpaper.name } : games[0] ? { app_id: games[0].app_id, name: games[0].name } : null))
+  const first = request || (wallpaper?.name ? { name: wallpaper.name, igdb_id: wallpaper.igdb_id, app_id: wallpaper.app_id } : games[0] || null)
+  const [game, setGame] = useState(first ? { name: first.name, ...refOf(first) } : null)
   const [pending, setPending] = useState(wallpaper)
   const [imgs, setImgs] = useState(null)
   const [bad, setBad] = useState(() => new Set())
   const [q, setQ] = useState('')
   const [found, setFound] = useState(null)
   const [saved, setSaved] = useState(false)
-  useEffect(() => { if (request) setGame(request) }, [request])
+  useEffect(() => { if (request) setGame({ name: request.name, ...refOf(request) }) }, [request])
   useEffect(() => {
     if (!game) return
     let live = true
     setImgs(null)
-    gameDetails(game.app_id).then(d => { if (live) setImgs(artOf(game.app_id, d)) }, () => { if (live) setImgs(artOf(game.app_id, null)) })
+    const steam = game.app_id ? [steamArt(game.app_id, 'library_hero.jpg')] : []
+    catalogGame(game).then(d => { if (live) setImgs([...new Set([...steam, ...(d.art || []), d.hero].filter(Boolean))]) }, () => { if (live) setImgs(steam) })
     return () => { live = false }
-  }, [game?.app_id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [game?.igdb_id, game?.app_id]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!saved) return; const t = setTimeout(() => setSaved(false), 2200); return () => clearTimeout(t) }, [saved])
   const search = e => {
     e.preventDefault()
     const t = q.trim()
     if (!t) return
     setFound([])
-    searchGames(t).then(r => setFound(r.slice(0, 12)), () => setFound([]))
+    searchCatalog(t).then(r => setFound(r.slice(0, 12)), () => setFound([]))
   }
   const apply = w => { setWallpaper(w); setPending(w); setSaved(true) }
   const same = (pending?.url || null) === (wallpaper?.url || null)
   const list = (imgs || []).filter(u => !bad.has(u))
-  const pick = (g, i) => (
-    <button type="button" key={g.app_id + '-' + i} className={'wp-chip' + (game?.app_id === g.app_id ? ' on' : '')} onClick={() => setGame({ app_id: g.app_id, name: g.name })}>
-      {g.img && <img src={g.img} alt="" loading="lazy" />}<span>{g.name}</span>
+  const isOn = g => game && ((g.igdb_id && g.igdb_id === game.igdb_id) || (!g.igdb_id && g.app_id && g.app_id === game.app_id))
+  const chip = (g, i) => (
+    <button type="button" key={(g.key || g.id) + '-' + i} className={'wp-chip' + (isOn(g) ? ' on' : '')} onClick={() => setGame({ name: g.name, ...refOf(g) })}>
+      {(g.img || g.cover) && <img src={g.img || g.cover} alt="" loading="lazy" />}<span>{g.name}</span>
     </button>
   )
+  const wall = u => ({ url: u, name: game.name, ...refOf(game) })
   return (
     <div className="wp">
       <div className="wp-left">
         <div className="wp-preview">
           {pending?.url ? <img key={pending.url} src={pending.url} alt="" /> : <span className="wp-default" />}
-          <span className="wp-fake" aria-hidden="true"><i className="g" /><i className="s" /></span>
-          <span className="wp-fake-bar" aria-hidden="true" />
+          <span className="wp-fake-bar top" aria-hidden="true" />
         </div>
         <p className="wp-cap">{pending?.url ? <>Image de <b>{pending.name}</b></> : 'Fond Maruchime (par défaut)'}</p>
         <div className="wp-act">
@@ -643,19 +762,19 @@ function Wallpapers({ games, wallpaper, setWallpaper, request }) {
       <div className="wp-right">
         {games.length > 0 && <>
           <h4>Mes jeux</h4>
-          <div className="wp-chips">{games.map((g, i) => pick({ app_id: g.app_id, name: g.name, img: g.img }, i))}</div>
+          <div className="wp-chips">{games.map(chip)}</div>
         </>}
         <form className="st-search wp-search" onSubmit={search} role="search">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20" /></svg>
+          <SearchGlyph />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Un autre jeu…" enterKeyHint="search" aria-label="Chercher un jeu" />
         </form>
-        {found && (found.length ? <div className="wp-chips">{found.map((g, i) => pick({ app_id: g.id, name: g.name, img: g.img }, i))}</div> : <p className="st-muted">Recherche…</p>)}
+        {found && (found.length ? <div className="wp-chips">{found.map(chip)}</div> : <p className="st-muted">Recherche…</p>)}
         {game && <>
           <h4>Images de {game.name}</h4>
-          {!imgs ? <div className="st-loading"><span /></div> : (
+          {!imgs ? <div className="st-loading"><span /></div> : !list.length ? <p className="st-muted">Pas d’image pour ce jeu.</p> : (
             <div className="wp-grid">
               {list.map(u => (
-                <button type="button" key={u} className={'wp-img' + (pending?.url === u ? ' on' : '')} onClick={() => setPending({ url: u, name: game.name, app_id: game.app_id })} onDoubleClick={() => apply({ url: u, name: game.name, app_id: game.app_id })}>
+                <button type="button" key={u} className={'wp-img' + (pending?.url === u ? ' on' : '')} onClick={() => setPending(wall(u))} onDoubleClick={() => apply(wall(u))}>
                   <img src={u} alt="" loading="lazy" onError={() => setBad(b => new Set(b).add(u))} />
                 </button>
               ))}
@@ -741,304 +860,15 @@ function Clock() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Mes jeux : la ludothèque (liste à gauche, à droite notre top ou la fiche)   */
+/* Le logiciel : une barre en haut (← →, Découvrir, Bibliothèque, Personnaliser) */
 /* -------------------------------------------------------------------------- */
 
-const steamArt = (id, f) => `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/${f}`
-
-/** La jaquette verticale d'un jeu (sinon son image de couverture, recadrée, avec son nom). */
-function Cover({ g, className = '' }) {
-  const [bad, setBad] = useState(false)
-  return (
-    <span className={'ld-cover ' + className + (bad ? ' flat' : '')}>
-      {!bad ? <img src={steamArt(g.app_id, 'library_600x900.jpg')} alt="" loading="lazy" draggable="false" onError={() => setBad(true)} />
-        : <>{g.img && <img src={g.img} alt="" loading="lazy" draggable="false" />}<b>{g.name}</b></>}
-    </span>
-  )
-}
-
-/** Le logo du jeu (sans fond), sinon son nom en grand. */
-function Logo({ g }) {
-  const [bad, setBad] = useState(false)
-  useEffect(() => setBad(false), [g.app_id])
-  return bad ? <h2 className="ld-logo-txt">{g.name}</h2>
-    : <img className="ld-logo" src={steamArt(g.app_id, 'logo.png')} alt={g.name} onError={() => setBad(true)} />
-}
-
-function CoverCard({ g, rank, onOpen, onPlay, onFav }) {
-  return (
-    <div className={'ld-card' + (rank ? ' ranked' : '') + (rank && rank <= 3 ? ' r' + rank : '')}>
-      <button type="button" className="ld-card-btn" onClick={() => onOpen(g.id)} aria-label={g.name}><Cover g={g} /></button>
-      {rank ? <span className="ld-card-rank">{rank}</span> : null}
-      <span className="ld-card-hover">
-        <button type="button" className="ld-card-play" onClick={() => onPlay(g.app_id)} aria-label={`Jouer à ${g.name}`}>▶</button>
-        <button type="button" className={'ld-card-star' + (g.favorite ? ' on' : '')} onClick={() => onFav(g, !g.favorite)} aria-label={g.favorite ? 'Retirer de mon top' : 'Ajouter à mon top'}><Star on={g.favorite} /></button>
-      </span>
-      <span className="ld-card-name">{g.name}</span>
-    </div>
-  )
-}
-
-function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore }) {
-  const [sort, setSort] = useState('top')
-  const [ranking, setRanking] = useState(false)
-  const all = useMemo(() => {
-    const by = {
-      top: (a, b) => (b.favorite - a.favorite) || (a.fav_rank ?? 1e9) - (b.fav_rank ?? 1e9) || a.name.localeCompare(b.name, 'fr'),
-      recent: (a, b) => b.added_at.localeCompare(a.added_at),
-      name: (a, b) => a.name.localeCompare(b.name, 'fr'),
-      rating: (a, b) => (b.rating || 0) - (a.rating || 0) || a.name.localeCompare(b.name, 'fr'),
-    }[sort]
-    return [...games].sort(by)
-  }, [games, sort])
-  if (!games.length) {
-    return (
-      <div className="gm-empty ld-empty">
-        <span className="gm-empty-ico"><GamesGlyph /></span>
-        <b>Aucun jeu pour l’instant</b>
-        <p>Va faire un tour dans le magasin : les jeux que tu achètes arrivent ici.</p>
-        <button type="button" className="st-btn buy" onClick={openStore}>Ouvrir le magasin</button>
-      </div>
-    )
-  }
-  const first = top[0]
-  return (
-    <div className="ld-home">
-      {first ? (
-        <TopCarousel items={top} ranked onPlay={onPlay} onGame={onOpen} strip={false} />
-      ) : (
-        <section className="ld-banner empty">
-          <div className="ld-banner-txt">
-            <span className="cs-hero-kick">Mon top</span>
-            <h2 className="ld-logo-txt">Classe tes jeux préférés</h2>
-            <p>Touche l’étoile <Star on={false} /> d’un jeu : il entre dans ton top, que tu ranges ensuite comme tu veux.</p>
-          </div>
-        </section>
-      )}
-
-      {top.length > 0 && (
-        <section className="ld-sec">
-          <div className="ld-sec-head">
-            <h3 className="cs-h3">Mon top <em>{top.length}</em></h3>
-            <button type="button" className={'st-btn ghost ld-rank-btn' + (ranking ? ' on' : '')} onClick={() => setRanking(r => !r)}>{ranking ? 'Terminé' : 'Ranger mon top'}</button>
-          </div>
-          {ranking
-            ? <TopList top={top} onOpen={onOpen} onPlay={onPlay} onRemove={id => fav(games.find(g => g.id === id), false)} reorder={reorderTop} />
-            : <div className="ld-row">{top.map((g, i) => <CoverCard key={g.id} g={g} rank={i + 1} onOpen={onOpen} onPlay={onPlay} onFav={fav} />)}</div>}
-        </section>
-      )}
-
-      <section className="ld-sec">
-        <div className="ld-sec-head">
-          <h3 className="cs-h3">Toute ma collection <em>{games.length}</em></h3>
-          <div className="gm-sort" role="group" aria-label="Trier">
-            {[['top', 'Top d’abord'], ['recent', 'Récents'], ['name', 'Nom'], ['rating', 'Ma note']].map(([k, t]) => <button type="button" key={k} className={sort === k ? 'on' : ''} onClick={() => setSort(k)}>{t}</button>)}
-          </div>
-        </div>
-        <div className="ld-grid">{all.map(g => <CoverCard key={g.id} g={g} rank={g.favorite ? g.fav_rank : null} onOpen={onOpen} onPlay={onPlay} onFav={fav} />)}</div>
-      </section>
-    </div>
-  )
-}
-
-/** La fiche d'un jeu : la grande image et son logo, Jouer, nos infos, ses images, sa description. */
-function LudoGame({ g, onPlay, fav, updateGame, removeGame, onWallpaper, onStore, onGone, quickWall }) {
-  const [d, setD] = useState(null)
-  useEffect(() => {
-    if (!g) return
-    let live = true
-    setD(null)
-    gameDetails(g.app_id).then(x => { if (live) setD(x) }, () => { if (live) setD(false) })
-    return () => { live = false }
-  }, [g?.app_id]) // eslint-disable-line react-hooks/exhaustive-deps
-  if (!g) return <div className="st-empty"><p>Ce jeu n’est plus dans ta liste.</p></div>
-  return (
-    <div className="ld-game" key={g.id}>
-      <div className="ld-hero">
-        <Art appId={g.app_id} fallback={d?.background || g.img} className="ld-hero-art" />
-        <div className="ld-hero-logo"><Logo g={g} /></div>
-      </div>
-      <div className="ld-bar">
-        <button type="button" className="st-btn go ld-play" onClick={() => onPlay(g.app_id)}>▶ Jouer</button>
-        <dl className="ld-stats">
-          <div><dt>Dans mon top</dt><dd>{g.favorite ? `N°${g.fav_rank}` : '—'}</dd></div>
-          <div><dt>Acheté le</dt><dd>{fmtDate(g.added_at)}</dd></div>
-          <div><dt>Payé</dt><dd>{g.price_paid ? fmtPrice(g.price_paid) : 'Gratuit'}</dd></div>
-          <div className="ld-stats-rate"><dt>Ma note</dt><dd>
-            {[1, 2, 3, 4, 5].map(n => (
-              <button type="button" key={n} className={(g.rating || 0) >= n ? 'on' : ''} onClick={() => updateGame(g.id, { rating: g.rating === n ? null : n })} aria-label={`${n} sur 5`}><Star on={(g.rating || 0) >= n} /></button>
-            ))}
-          </dd></div>
-        </dl>
-        <div className="ld-bar-act">
-          <button type="button" className={'ld-icon' + (g.favorite ? ' on' : '')} onClick={() => fav(g, !g.favorite)} title={g.favorite ? 'Retirer de mon top' : 'Ajouter à mon top'} aria-label={g.favorite ? 'Retirer de mon top' : 'Ajouter à mon top'}><Star on={g.favorite} /></button>
-          <button type="button" className="ld-icon" onClick={() => onWallpaper(g)} title="Fond d’écran" aria-label="Choisir un fond d’écran de ce jeu"><PictureGlyph /></button>
-          <button type="button" className="ld-icon" onClick={() => onStore(g.app_id)} title="Page du magasin" aria-label="Page du magasin"><StimGlyph /></button>
-        </div>
-      </div>
-      <div className="ld-cols">
-        <div className="ld-col-main">
-          {d?.short && <section className="ld-box"><h3 className="cs-h3">À propos</h3><p className="ld-about">{plain(d.short)}</p></section>}
-          {d?.screenshots?.length > 0 && (
-            <section className="ld-box">
-              <h3 className="cs-h3">Images</h3>
-              <div className="ld-shots">
-                {d.screenshots.slice(0, 8).map(u => (
-                  <figure key={u} className="ld-shot">
-                    <img src={u} alt="" loading="lazy" />
-                    <button type="button" className="st-wallbtn" onClick={() => quickWall({ url: u, name: g.name, app_id: g.app_id })}><PictureGlyph /> En fond d’écran</button>
-                  </figure>
-                ))}
-              </div>
-            </section>
-          )}
-          {d === null && <div className="st-loading"><span /></div>}
-        </div>
-        <aside className="ld-col-side">
-          <section className="ld-box">
-            <h3 className="cs-h3">Infos</h3>
-            <dl className="st-facts">
-              {(d?.genres?.length || g.genres?.length) ? <><dt>Genres</dt><dd>{(d?.genres || g.genres).slice(0, 3).join(', ')}</dd></> : null}
-              {(d?.release || g.release) && <><dt>Sortie</dt><dd>{d?.release || g.release}</dd></>}
-              {d?.developers?.length > 0 && <><dt>Studio</dt><dd>{d.developers.join(', ')}</dd></>}
-              {d?.metacritic && <><dt>Critiques</dt><dd><span className="st-meta">{d.metacritic}</span> sur 100</dd></>}
-            </dl>
-          </section>
-          <button type="button" className="gm-link danger" onClick={() => { removeGame(g.id); onGone() }}>Retirer de mes jeux</button>
-        </aside>
-      </div>
-    </div>
-  )
-}
-
-function Ludo({ games, top, selId, onSelect, onHome, mobile, setFavorite, reorderTop, updateGame, removeGame, onPlay, onWallpaper, onStore, quickWall, openStore, notify }) {
-  const [q, setQ] = useState('')
-  const mainRef = useRef(null)
-  useEffect(() => { mainRef.current?.scrollTo?.(0, 0) }, [selId])
-  const fav = (g, on) => { const r = setFavorite(g.id, on); notify(on ? `${g.name} entre dans ton top · n°${r}` : `${g.name} sort de ton top`) }
-  const t = q.trim().toLowerCase()
-  const match = g => !t || g.name.toLowerCase().includes(t)
-  const rest = useMemo(() => [...games].sort((a, b) => a.name.localeCompare(b.name, 'fr')), [games])
-  const sel = selId ? games.find(g => g.id === selId) : null
-  const main = sel || selId
-    ? <LudoGame g={sel} onPlay={onPlay} fav={fav} updateGame={updateGame} removeGame={id => { removeGame(id); notify(`${sel?.name} retiré de tes jeux`) }} onWallpaper={onWallpaper} onStore={onStore} onGone={onHome} quickWall={quickWall} />
-    : <LudoHome games={games} top={top} onOpen={onSelect} onPlay={onPlay} fav={fav} reorderTop={reorderTop} openStore={openStore} />
-  if (mobile) return <div className="ld ld-mobile">{main}</div>
-  const row = (g, rank) => (
-    <button type="button" key={g.id} className={'ld-item' + (g.id === selId ? ' on' : '')} onClick={() => onSelect(g.id)}>
-      <span className="ld-item-img">{g.img && <img src={g.img} alt="" loading="lazy" />}</span>
-      <span className="ld-item-name">{g.name}</span>
-      {rank ? <span className={'ld-item-rank' + (rank <= 3 ? ' r' + rank : '')}>{rank}</span> : g.favorite ? <span className="ld-item-star"><Star on /></span> : null}
-    </button>
-  )
-  const topShown = top.filter(match), allShown = rest.filter(match)
-  return (
-    <div className="ld">
-      <aside className="ld-side">
-        <button type="button" className={'ld-home-btn' + (!selId ? ' on' : '')} onClick={onHome}><GamesGlyph /> Ma ludothèque</button>
-        <label className="gm-find ld-find">
-          <SearchGlyph />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Retrouver un jeu…" aria-label="Retrouver un jeu" />
-        </label>
-        <div className="ld-list">
-          {topShown.length > 0 && <><h4>Mon top <em>{top.length}</em></h4>{topShown.map(g => row(g, g.fav_rank))}</>}
-          <h4>Tous mes jeux <em>{games.length}</em></h4>
-          {allShown.map(g => row(g, null))}
-          {!allShown.length && <p className="st-muted ld-none">Aucun jeu ne correspond.</p>}
-        </div>
-      </aside>
-      <div className="ld-main" ref={mainRef}>
-        <div className="ld-main-in" key={selId || 'home'}>{main}</div>
-      </div>
-    </div>
-  )
-}
-
-/* -------------------------------------------------------------------------- */
-/* L'accueil                                                                  */
-/* -------------------------------------------------------------------------- */
-
-/**
- * La grande fenêtre de l'accueil : notre top, un jeu après l'autre (toutes les 7 s, ou au doigt,
- * aux flèches), et en dessous la rangée de tout le classement pour y sauter directement.
- */
-function TopCarousel({ items, ranked, onPlay, onGame, strip: showStrip = true }) {
-  const n = items.length
-  const [k, setK] = useState(0)
-  const [hold, setHold] = useState(false)
-  const drag = useRef(null)
-  const strip = useRef(null)
-  const cur = Math.min(k, n - 1)
-  const g = items[cur]
-  useEffect(() => { if (k >= n) setK(0) }, [n, k])
-  useEffect(() => {
-    if (hold || n < 2) return
-    const t = setTimeout(() => setK(v => (v + 1) % n), 7000)
-    return () => clearTimeout(t)
-  }, [k, hold, n])
-  // la vignette active reste visible dans la rangée
-  useEffect(() => { strip.current?.children[cur]?.scrollIntoView?.({ block: 'nearest', inline: 'center', behavior: 'smooth' }) }, [cur])
-  const go = d => setK(v => (v + d + n) % n)   // le minuteur repart de zéro à chaque changement
-  const label = i => (ranked ? `N°${i + 1}` : i === 0 ? 'Dernier ajouté' : 'Récent')
-  return (
-    <section className="cs-car" onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)}>
-      <div className="cs-hero cs-car-stage"
-        onPointerDown={e => { drag.current = { x: e.clientX, y: e.clientY } }}
-        onPointerUp={e => {
-          const d = drag.current; drag.current = null
-          if (!d) return
-          const dx = e.clientX - d.x
-          if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(e.clientY - d.y)) go(dx < 0 ? 1 : -1)
-        }}>
-        {items.map((x, i) => (Math.abs(i - cur) <= 1 || (cur === 0 && i === n - 1) || (cur === n - 1 && i === 0)) && (
-          <div key={x.id} className={'cs-car-slide' + (i === cur ? ' on' : '')} aria-hidden={i !== cur}>
-            <Art appId={x.app_id} fallback={x.img} className="cs-hero-art" />
-          </div>
-        ))}
-        <div className="cs-hero-txt" key={g.id}>
-          <span className="cs-hero-kick">{ranked ? (cur === 0 ? 'Ton n°1' : `N°${cur + 1} de ton top`) : 'Ajouté récemment'}</span>
-          <Logo g={g} />
-          <span className="cs-car-meta">
-            {g.rating ? <Stars n={g.rating} /> : null}
-            <em>{g.genres?.slice(0, 2).join(' · ')}</em>
-          </span>
-          <span className="cs-hero-act">
-            <button type="button" className="st-btn go big" onClick={() => onPlay(g.app_id)}>▶ Jouer</button>
-            <button type="button" className="st-btn ghost" onClick={() => onGame(g.id)}>Voir le jeu</button>
-          </span>
-        </div>
-        {n > 1 && <>
-          <button type="button" className="cs-car-arrow prev" onClick={() => go(-1)} aria-label="Jeu précédent"><Back /></button>
-          <button type="button" className="cs-car-arrow next" onClick={() => go(1)} aria-label="Jeu suivant"><Back /></button>
-          <span className="cs-car-count">{cur + 1} / {n}</span>
-          {!hold && <span className="cs-car-timer" key={'t' + cur} />}
-        </>}
-      </div>
-      {n > 1 && showStrip && (
-        <div className="cs-car-strip" ref={strip} role="tablist" aria-label={ranked ? 'Mon top' : 'Mes jeux'}>
-          {items.map((x, i) => (
-            <button type="button" key={x.id} role="tab" aria-selected={i === cur} className={'cs-car-thumb' + (i === cur ? ' on' : '') + (ranked && i < 3 ? ' r' + (i + 1) : '')}
-              onClick={() => setK(i)}>
-              {x.img && <img src={x.img} alt="" loading="lazy" draggable="false" />}
-              <span className="cs-car-rank">{ranked ? i + 1 : ''}</span>
-              <span className="cs-car-name">{x.name}<em>{label(i)}</em></span>
-            </button>
-          ))}
-        </div>
-      )}
-    </section>
-  )
-}
-
-/* -------------------------------------------------------------------------- */
-/* Le logiciel : une barre en haut (← →, Magasin, Bibliothèque, Personnaliser)  */
-/* -------------------------------------------------------------------------- */
-
-const NAV = [['stim', 'Magasin'], ['games', 'Bibliothèque'], ['custom', 'Personnaliser']]
+const NAV = [['stim', 'Découvrir'], ['games', 'Bibliothèque'], ['custom', 'Personnaliser']]
 const ROOT = { stim: { v: 'store' }, games: { v: 'list' }, custom: { v: 'main' } }
 const Fwd = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+const entryKey = e => (e.item ? e.v + ':' + e.item.key : JSON.stringify(e))
 
-export default function PcOS({ games, balance, addFunds, buy, updateGame, removeGame, setFavorite, reorderTop, wallpaper, setWallpaper, setup, setSetup, holder, fromRect, onClose }) {
+export default function PcOS({ games, addGame, findGame, updateGame, removeGame, setFavorite, reorderTop, wallpaper, setWallpaper, setup, setSetup, holder, fromRect, onClose }) {
   const mobile = useIsMobile()
   const rootRef = useRef(null)
   const [closing, setClosing] = useState(false)
@@ -1046,8 +876,7 @@ export default function PcOS({ games, balance, addFunds, buy, updateGame, remove
   const [nav, setNav] = useState({ cur: { tab: 'games', e: ROOT.games }, past: [], future: [] })
   const [last, setLast] = useState({ ...ROOT })        // le dernier écran vu dans chaque onglet
   const [dir, setDir] = useState('tab')
-  const [sheet, setSheet] = useState(null)              // 'wallet' | 'bank'
-  const [playId, setPlayId] = useState(null)
+  const [trailer, setTrailer] = useState(null)
   const [toast, setToast] = useState(null)
   const [customTab, setCustomTab] = useState('wall')
   const [wallFor, setWallFor] = useState(null)
@@ -1073,8 +902,7 @@ export default function PcOS({ games, balance, addFunds, buy, updateGame, remove
   }, [closing, onClose, rectInset, fromRect])
 
   const top = useMemo(() => games.filter(g => g.favorite).sort(byRank), [games])
-  const ownedIds = useMemo(() => new Set(games.map(g => g.app_id)), [games])
-  const owned = useCallback(id => ownedIds.has(id), [ownedIds])
+  const mine = useCallback(item => !!findGame(item), [findGame, games]) // eslint-disable-line react-hooks/exhaustive-deps
   const { tab, e: cur } = nav.cur
 
   const navigate = (t, e, d = 'fwd') => {
@@ -1084,27 +912,33 @@ export default function PcOS({ games, balance, addFunds, buy, updateGame, remove
   }
   const goTab = t => navigate(t, t === tab ? ROOT[t] : last[t] || ROOT[t], 'tab')
   const back = useCallback(() => {
-    if (sheet) { setSheet(null); return true }
-    if (playId) { setPlayId(null); return true }
+    if (trailer) { setTrailer(null); return true }
     if (!nav.past.length) return false
     setDir('back')
     setNav(n => { const p = n.past[n.past.length - 1]; setLast(l => ({ ...l, [p.tab]: p.e })); return { cur: p, past: n.past.slice(0, -1), future: [n.cur, ...n.future] } })
     return true
-  }, [sheet, playId, nav.past.length])
+  }, [trailer, nav.past.length])
   const forward = () => {
     if (!nav.future.length) return
     setDir('fwd')
     setNav(n => { const f = n.future[0]; setLast(l => ({ ...l, [f.tab]: f.e })); return { cur: f, past: [...n.past, n.cur], future: n.future.slice(1) } })
   }
-  const play = id => setPlayId(id)
+  // la bande-annonce d'un jeu (de notre bibliothèque ou du catalogue)
+  const playTrailer = g => {
+    catalogGame(refOf(g)).then(d => {
+      if (d.videos?.length) setTrailer({ name: g.name, videos: d.videos })
+      else setToast(`Pas de bande-annonce pour ${g.name}`)
+    }, () => setToast('Le catalogue ne répond pas'))
+  }
   const openGame = id => navigate('games', { v: 'game', id })
-  const openStoreGame = id => navigate('stim', { v: 'game', id })
-  const chooseWall = g => { setWallFor(g ? { app_id: g.app_id, name: g.name } : null); setCustomTab('wall'); navigate('custom', { v: 'main', k: Date.now() }) }
+  const openItem = item => navigate('stim', { v: 'game', item })
+  const toCatalog = g => openItem({ key: g.igdb_id ? 'igdb:' + g.igdb_id : 'steam:' + g.app_id, ...refOf(g), name: g.name, cover: g.img, hero: g.hero, platforms: g.platforms, genres: g.genres })
+  const chooseWall = g => { setWallFor(g ? { name: g.name, ...refOf(g) } : null); setCustomTab('wall'); navigate('custom', { v: 'main', k: Date.now() }) }
   const quickWall = w => { setWallpaper(w); setToast(`Nouveau fond d’écran : ${w.name}`) }
 
   useEffect(() => {
     const k = e => {
-      if (e.target?.tagName === 'INPUT') return
+      if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'SELECT') return
       if (e.key === 'Escape') { if (!back()) close() }
       else if (e.altKey && e.key === 'ArrowLeft') back()
       else if (e.altKey && e.key === 'ArrowRight') forward()
@@ -1123,17 +957,16 @@ export default function PcOS({ games, balance, addFunds, buy, updateGame, remove
     if (s.edge && dx > 70 && Math.abs(dy) < 60) back()
   }
 
-  const playing = playId ? games.find(g => g.app_id === playId) : null
   const ld = tab === 'games' && !mobile
   let body = null
   if (tab === 'stim') {
-    if (cur.v === 'store') body = <StoreHome owned={owned} onOpen={openStoreGame} onSearch={q => navigate('stim', { v: 'search', q })} />
-    else if (cur.v === 'search') body = <StoreSearch q={cur.q} owned={owned} onOpen={openStoreGame} />
-    else body = <GamePage id={cur.id} owned={owned} balance={balance} onBuy={buy} onPlay={play} onFunds={() => setSheet('bank')} onWallpaper={quickWall}
-      favOf={appId => games.find(x => x.app_id === appId)} onFav={appId => { const r = games.find(x => x.app_id === appId); if (r) { const n = setFavorite(r.id, !r.favorite); setToast(n ? `${r.name} entre dans ton top · n°${n}` : `${r.name} sort de ton top`) } }} />
+    if (cur.v === 'store') body = <Discover mine={mine} onOpen={openItem} onSearch={q => navigate('stim', { v: 'search', q })} />
+    else if (cur.v === 'search') body = <CatalogSearch q={cur.q} mine={mine} onOpen={openItem} />
+    else body = <CatalogPage item={cur.item} games={games} findGame={findGame} addGame={addGame} updateGame={updateGame} setFavorite={setFavorite}
+      onTrailer={setTrailer} quickWall={quickWall} openMine={openGame} notify={setToast} />
   } else if (tab === 'games') {
     body = <Ludo games={games} top={top} selId={cur.v === 'game' ? cur.id : null} onSelect={openGame} onHome={() => navigate('games', ROOT.games, 'back')} mobile={mobile}
-      setFavorite={setFavorite} reorderTop={reorderTop} updateGame={updateGame} removeGame={removeGame} onPlay={play} onWallpaper={chooseWall} onStore={openStoreGame} quickWall={quickWall} openStore={() => goTab('stim')} notify={setToast} />
+      setFavorite={setFavorite} reorderTop={reorderTop} updateGame={updateGame} removeGame={removeGame} onPlay={playTrailer} onWallpaper={chooseWall} onCatalog={toCatalog} quickWall={quickWall} openStore={() => goTab('stim')} notify={setToast} />
   } else {
     body = <Custom tab={customTab} setTab={setCustomTab} games={games} wallpaper={wallpaper} setWallpaper={setWallpaper} request={wallFor} setup={setup} setSetup={setSetup} />
   }
@@ -1147,7 +980,7 @@ export default function PcOS({ games, balance, addFunds, buy, updateGame, remove
 
       <header className="cl-top">
         <div className="cl-arrows">
-          <button type="button" onClick={back} disabled={!nav.past.length && !sheet && !playId} aria-label="Retour" title="Retour"><Back /></button>
+          <button type="button" onClick={back} disabled={!nav.past.length && !trailer} aria-label="Retour" title="Retour"><Back /></button>
           <button type="button" onClick={forward} disabled={!nav.future.length} aria-label="Suivant" title="Suivant"><Fwd /></button>
         </div>
         <nav className="cl-nav" aria-label="Maruchime OS">
@@ -1157,19 +990,16 @@ export default function PcOS({ games, balance, addFunds, buy, updateGame, remove
         </nav>
         <div className="cl-right">
           {!mobile && <Clock />}
-          <button type="button" className="pc-task-bal" onClick={() => setSheet('wallet')} title="Porte-monnaie Stim"><Wallet /> {money(balance)}</button>
           {!mobile && holder && <span className="cl-user"><span className="pc-orb" />{holder.split(' ')[0]}</span>}
           <button type="button" className="cl-power" onClick={close} aria-label="Éteindre et revenir au salon" title="Éteindre et revenir au salon"><PowerGlyph /></button>
         </div>
       </header>
 
       <main className="cl-main">
-        <div className={'cs-body st-body ' + (ld ? 'ld-body enter-tab' : 'enter-' + dir)} key={ld ? 'games' : tab + ':' + JSON.stringify(cur)}>{body}</div>
+        <div className={'cs-body st-body ' + (ld ? 'ld-body enter-tab' : 'enter-' + dir)} key={ld ? 'games' : tab + ':' + entryKey(cur)}>{body}</div>
       </main>
 
-      {sheet === 'wallet' && <WalletSheet games={games} balance={balance} onFunds={() => setSheet('bank')} onClose={() => setSheet(null)} />}
-      {sheet === 'bank' && <BankSheet holder={holder} balance={balance} addFunds={addFunds} onClose={() => setSheet(null)} />}
-      {playing && <Launch game={playing} onQuit={() => setPlayId(null)} />}
+      {trailer && <Trailer t={trailer} onClose={() => setTrailer(null)} />}
       {toast && <div className="pc-toast cs-toast" role="status">{toast}</div>}
     </div>
   )
