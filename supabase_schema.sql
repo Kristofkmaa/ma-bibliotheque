@@ -147,3 +147,33 @@ alter table user_series add column if not exists media text not null default 'tv
 alter table user_series add column if not exists runtime integer;
 alter table user_series drop constraint if exists user_series_user_id_tmdb_id_key;
 create unique index if not exists user_series_work on user_series(user_id, media, tmdb_id);
+
+-- =============================================
+-- Le PC du salon : nos jeux (achetés dans Stim, pour de faux) et le porte-monnaie
+-- À exécuter une fois : sans ces tables, tout reste gardé dans le navigateur.
+-- =============================================
+create table if not exists user_games (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid references auth.users(id) on delete cascade not null,
+  app_id      integer not null,
+  name        text not null,
+  img         text,
+  genres      text[] default '{}',
+  release     text,
+  price_paid  numeric default 0,
+  favorite    boolean default false,
+  rating      integer check (rating between 1 and 5),
+  added_at    timestamptz default now(),
+  unique(user_id, app_id)
+);
+alter table user_games enable row level security;
+drop policy if exists "Ses jeux" on user_games;
+create policy "Ses jeux" on user_games for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create table if not exists user_wallet (
+  user_id  uuid primary key references auth.users(id) on delete cascade,
+  balance  numeric not null default 0
+);
+alter table user_wallet enable row level security;
+drop policy if exists "Son porte-monnaie" on user_wallet;
+create policy "Son porte-monnaie" on user_wallet for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

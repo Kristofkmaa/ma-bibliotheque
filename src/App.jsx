@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth'
 import { useLibrary } from './hooks/useLibrary'
 import { useShelves } from './hooks/useShelves'
 import { useSeries } from './hooks/useSeries'
+import { useGames } from './hooks/useGames'
 import { effectiveShelves, placeBook, moveBook } from './lib/shelfOps'
 import { useBasket } from './hooks/useBasket'
 import { SearchBasket, BasketTray } from './components/Basket'
@@ -55,6 +56,7 @@ function Library({ user, onSignOut }) {
   const { books, loading, addBook, updateBook, removeBook, removeBooks, isInLibrary } = useLibrary(user.id)
   const { shelves, commit: commitShelves, storage } = useShelves(user.id)
   const { series, addSeries, updateSeries, removeSeries, renameCategory } = useSeries(user.id)
+  const gamesApi = useGames(user.id)
   const [sort, setSortState] = useState(() => readPref('levana.sort2', 'manual'))
   const [newShelfSignal] = useState(0)
   const [shelvesOpen, setShelvesOpen] = useState(null)   // null : fermé ; sinon { id } de l'étagère à montrer
@@ -376,6 +378,7 @@ function Library({ user, onSignOut }) {
           <LivingRoom
             from={salon} books={books} shelves={effShelves} basketItems={basket.items}
             series={series} onAddSeries={addSeries} onUpdateSeries={updateSeries} onRemoveSeries={removeSeries} onRenameCategory={renameCategory}
+            gamesApi={gamesApi} holder={user.user_metadata?.full_name || user.user_metadata?.name || ''}
             onEntered={next => { setSalon(null); if (next === 'guide' && manual && basket.items.length) setGuide(true) }}
             onOpenBook={b => (b ? openBook(b, null) : openSearch())}
             onAddBooks={() => openSearch()}

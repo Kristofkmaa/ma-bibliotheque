@@ -24,13 +24,14 @@ const TARGET0 = new THREE.Vector3(0, 0.95, 0)
 
 // emplacements (repère de la pièce)
 const BOOKCASE = { x: -1.05, z: -R + 0.2, w: 1.62, h: 2.18, d: 0.38 }   // mur du fond, à gauche (face à la caméra)
-const FIRE = { x: 0, w: 1.3, d: 0.3, h: 1.38 }                         // centrée sur le mur de devant (loin des livres et du canapé)
+const PC = { x: 0, w: 1.7 }                 // le bureau gamer, centré sur le mur de devant (à la place de la cheminée)
+const MON = { w: 0.8, h: 0.45, y: 1.2 }     // l'écran principal du PC (16:9)
 // le mur de gauche est tout entier pour le vidéoprojecteur ; celui du fond pour la bibliothèque
 const TV = { z: 0 }                         // mur de gauche, en face du canapé : l'image projetée
 const SCR = { w: 3.0, h: 1.69, y: 1.68 }    // l'image projetée (16:9), presque tout le mur
 const PROJ = { x: 1.0, y: 2.62 }            // le vidéoprojecteur, suspendu au-dessus du canapé
 // les meubles en plus grand
-const BIG = { sofa: 1.4, fire: 1.3, table: 1.25, lamp: 1.25, plant: 1.35, cabinet: 1, projector: 1.4 }
+const BIG = { sofa: 1.4, table: 1.25, lamp: 1.25, plant: 1.35, cabinet: 1, projector: 1.4 }
 const SOFA = { x: R - 0.78, z: 0.0 }        // contre le mur de droite, face à l'image
 const TABLE = { x: 0.1, z: 0.0 }            // entre le canapé et l'image
 const LAMP = { x: R - 0.45, z: 1.82 }       // au bout du canapé
@@ -292,7 +293,7 @@ export class LivingRoomScene {
     this._buildLights()
     this._buildShell()
     this._buildBookcase()
-    this._buildFireplace()
+    this._buildGamingDesk()
     this._buildTvCorner()
     this._buildSofa()
     this._buildTable()
@@ -382,11 +383,6 @@ export class LivingRoomScene {
     this.mix = 0     // 0 : lumière du salon ; 1 : lumière de la bibliothèque
     // assis dans le canapé (molette en avant / pincer) : on regarde l'écran, on tourne la tête
     this.seat = { k: new Spring(0, 30, 1), on: false, yaw: 0.12, pitch: 0.02, then: null }
-    this.firePower = new Spring(m.fire, 30, 0.5)
-    this.fireFull = m.fire
-    this.fireLow = store('levana.salon.feu') === 'bas'
-    this.firePower.base = this.fireLow ? Math.min(m.fire, 0.28) : m.fire
-    this.firePower.v = this.firePower.base
     this.setLamp(m.lamp)
   }
 
@@ -617,108 +613,130 @@ export class LivingRoomScene {
   wave(delay = 0) { this.waveAt = this.time + delay }
 
   // ---- Cheminée ---------------------------------------------------------------------------
-  _buildFireplace() {
+  /**
+   * Le coin gamer, contre le mur de devant : un grand bureau, deux écrans, le clavier lumineux,
+   * la tour vitrée aux ventilateurs colorés, la chaise de gamer et un néon au mur. On touche le PC :
+   * on entre dans son écran (Maruchime OS : « Mes jeux » et la boutique Stim).
+   */
+  _buildGamingDesk() {
     const grp = new THREE.Group()
-    grp.position.set(FIRE.x, 0, R)    // contre le mur de devant, face à la pièce (−z)
-    grp.rotation.y = Math.PI
+    grp.position.set(PC.x, 0, R)
+    grp.rotation.y = Math.PI          // contre le mur de devant, face à la pièce (−z)
     this.room.add(grp)
-    const W = FIRE.w, D = FIRE.d
-    const aw = 0.74, ah = 0.5, ay = 0.1, ar = aw / 2
-    const outline = new THREE.Shape()
-    outline.moveTo(-W / 2, 0); outline.lineTo(W / 2, 0); outline.lineTo(W / 2, FIRE.h); outline.lineTo(-W / 2, FIRE.h); outline.closePath()
-    const arch = new THREE.Path()
-    arch.moveTo(-aw / 2, ay); arch.lineTo(aw / 2, ay); arch.lineTo(aw / 2, ay + ah)
-    arch.absarc(0, ay + ah, ar, 0, Math.PI, false)
-    arch.lineTo(-aw / 2, ay)
-    outline.holes.push(arch)
-    const breast = new THREE.Mesh(this._geo(new THREE.ExtrudeGeometry(outline, { depth: D, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 3, curveSegments: 24 })), this._mat(COL.plaster, { roughness: 0.92 }))
-    breast.castShadow = true; breast.receiveShadow = true
-    grp.add(breast)
-    // dos plein (vue de derrière, quand le mur de devant est abaissé)
-    const backPlate = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(W + 0.02, FIRE.h + 0.02)), this._mat(COL.plaster, { roughness: 0.92 }))
-    backPlate.rotation.y = Math.PI
-    backPlate.position.set(0, FIRE.h / 2, -0.016)
-    grp.add(backPlate)
-    // intérieur noirci
-    const inner = new THREE.Shape()
-    inner.moveTo(-aw / 2 + 0.01, ay); inner.lineTo(aw / 2 - 0.01, ay); inner.lineTo(aw / 2 - 0.01, ay + ah)
-    inner.absarc(0, ay + ah, ar - 0.01, 0, Math.PI, false)
-    inner.lineTo(-aw / 2 + 0.01, ay)
-    const liner = new THREE.Mesh(this._geo(new THREE.ExtrudeGeometry(inner, { depth: D - 0.04, bevelEnabled: false, curveSegments: 24 })), this._mat(COL.soot, { roughness: 1, side: THREE.BackSide }))
-    liner.position.z = 0.02
-    grp.add(liner)
-    // âtre et tablette
-    const hearth = this._rbox(W + 0.24, 0.07, 0.46, 0.02, this._mat(COL.stone, { roughness: 0.8 }))
-    hearth.position.set(0, 0.035, D + 0.2)
-    grp.add(hearth)
-    const mantel = this._rbox(W + 0.18, 0.07, D + 0.16, 0.02, this._woodMat(COL.oak))
-    mantel.position.set(0, 1.12, D / 2 + 0.06)
-    grp.add(mantel)
-    // bûches
-    const logMat = this._woodMat('#6B4A2E'), endMat = this._mat('#C9A36E', { roughness: 0.9 })
-    ;[[-0.1, 0.16, 0.25, 0.3], [0.12, 0.155, 0.17, -0.35], [0.0, 0.25, 0.2, 0.05]].forEach(([x, y, z, rot]) => {
-      const lg = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.055, 0.06, 0.46, 14)), [logMat, endMat, endMat])
-      lg.rotation.z = Math.PI / 2; lg.rotation.y = rot
-      lg.position.set(x, y, z)
-      lg.castShadow = true
-      grp.add(lg)
-    })
-    // braises
-    const ember = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(0.62, 0.3)), new THREE.MeshBasicMaterial({ map: this.glow, color: 0xff6a1f, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }))
-    ember.rotation.x = -Math.PI / 2
-    ember.position.set(0, ay + 0.012, 0.2)
-    grp.add(ember)
-    this.ember = ember
-    // flammes
-    this.flames = []
-    ;[[-0.1, 0.3, 0.42, 0.1], [0.1, 0.28, 0.38, 0.6], [0, 0.34, 0.5, 0.33]].forEach(([x, w, h, seed]) => {
-      const mat = flameMaterial(seed); this.disposables.push(mat)
-      const f = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(w, h)), mat)
-      f.geometry.translate(0, h / 2, 0)
-      f.position.set(x, 0.17, 0.22)
-      f.renderOrder = 5
-      grp.add(f)
-      this.flames.push(f)
-    })
-    // lueur du feu
-    this.fireLight = new THREE.PointLight(0xff8a3c, 2, 5.5, 1.6)
-    this.fireLight.position.set(FIRE.x, 0.55 * BIG.fire, R - (D + 0.45) * BIG.fire)
-    this.scene.add(this.fireLight)
-    // déco de la tablette : miroir rond, bougies, petit vase
-    const mirror = new THREE.Mesh(this._geo(new THREE.CircleGeometry(0.3, 48)), this._mat('#C9D3D8', { roughness: 0.15, metalness: 0.3 }))
-    // le miroir est accroché au mur (il s'abaisse avec lui)
-    mirror.position.set(FIRE.x, 2.2, R - 0.014)
-    mirror.rotation.y = Math.PI
-    const rim = new THREE.Mesh(this._geo(new THREE.TorusGeometry(0.3, 0.022, 10, 64)), this._mat(COL.brass, { roughness: 0.35, metalness: 0.6 }))
-    rim.position.copy(mirror.position); rim.rotation.y = Math.PI
-    rim.castShadow = true
-    const fw = this.wallOf('front')
-    fw.grp.add(mirror, rim)
-    fw.decor.push(mirror, rim)
-    this.candles = []
-    ;[[-0.52, 0.16], [-0.43, 0.11]].forEach(([x, h]) => {
-      const c = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.025, 0.025, h, 16)), this._mat('#F6F0E2', { roughness: 0.6 }))
-      c.position.set(x, 1.155 + h / 2, D / 2 + 0.08)
-      c.castShadow = true
-      const mat = flameMaterial(x * 7); this.disposables.push(mat)
-      const f = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(0.045, 0.09)), mat)
-      f.geometry.translate(0, 0.045, 0)
-      f.position.set(x, 1.155 + h + 0.005, D / 2 + 0.08)
-      grp.add(c, f)
-      this.candles.push(f)
-    })
-    const vase = this._vase(0.06, 0.2, '#C2774E')
-    vase.position.set(0.48, 1.155, D / 2 + 0.06)
-    grp.add(vase)
-    // brindilles dans le vase
-    const twigMat = this._mat('#6B4A2E')
-    for (let k = 0; k < 4; k++) {
-      const a = k * 1.6
-      const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, 0.15, 0), new THREE.Vector3(Math.cos(a) * 0.05, 0.35, Math.sin(a) * 0.03), new THREE.Vector3(Math.cos(a) * 0.12, 0.5 + k * 0.03, Math.sin(a) * 0.06))
-      const tw = new THREE.Mesh(this._geo(new THREE.TubeGeometry(curve, 8, 0.004, 4)), twigMat)
-      vase.add(tw)
+    const black = this._mat('#17171B', { roughness: 0.45 })
+    const metal = this._mat('#2A2A31', { metalness: 0.5, roughness: 0.35 })
+    const top = this._mat('#1E1E24', { roughness: 0.4 })
+    const glow = c => new THREE.MeshBasicMaterial({ color: c, toneMapped: false })
+    this.rgbMats = []
+    const rgb = () => { const m = glow('#7A5CFF'); this.rgbMats.push(m); this.disposables.push(m); return m }
+    // le bureau
+    const W = PC.w, D = 0.72, Ht = 0.76
+    const desk = this._rbox(W, 0.045, D, 0.012, top)
+    desk.position.set(0, Ht, D / 2 + 0.02)
+    grp.add(desk)
+    for (const sx of [-1, 1]) {
+      const leg = this._rbox(0.06, Ht, D - 0.08, 0.01, metal)
+      leg.position.set(sx * (W / 2 - 0.08), Ht / 2, D / 2 + 0.02)
+      grp.add(leg)
     }
-    this._register('fire', grp, 'Baisser le feu')
+    const strip = new THREE.Mesh(this._geo(new THREE.BoxGeometry(W - 0.1, 0.012, 0.012)), rgb())
+    strip.position.set(0, Ht - 0.03, D + 0.015)
+    grp.add(strip)
+    // l'écran principal (on y entre) et son pied
+    const mon = new THREE.Group()
+    mon.position.set(-0.1, 0, 0.2)
+    grp.add(mon)
+    const bez = this._rbox(MON.w + 0.04, MON.h + 0.04, 0.03, 0.01, black)
+    bez.position.set(0, MON.y, 0)
+    const neck = this._rbox(0.05, MON.y - Ht - 0.1, 0.03, 0.008, metal)
+    neck.position.set(0, Ht + (MON.y - Ht - 0.1) / 2 + 0.02, -0.03)
+    const foot = this._rbox(0.28, 0.015, 0.18, 0.006, metal)
+    foot.position.set(0, Ht + 0.03, 0.02)
+    mon.add(bez, neck, foot)
+    this.pcCanvas = document.createElement('canvas')
+    this.pcCanvas.width = 1280; this.pcCanvas.height = 720
+    this.pcTex = this._track(new THREE.CanvasTexture(this.pcCanvas))
+    this.pcTex.colorSpace = THREE.SRGBColorSpace
+    const screen = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(MON.w, MON.h)), new THREE.MeshBasicMaterial({ map: this.pcTex, toneMapped: false }))
+    screen.position.set(0, MON.y, 0.016)
+    mon.add(screen)
+    this.pcScreen = screen
+    drawPcDesktop(this.pcCanvas)
+    this.pcTex.needsUpdate = true
+    // le second écran, tourné vers le centre
+    const mon2 = new THREE.Group()
+    mon2.position.set(0.62, 0, 0.26)
+    mon2.rotation.y = -0.45
+    grp.add(mon2)
+    const bez2 = this._rbox(0.5, 0.31, 0.03, 0.01, black)
+    bez2.position.set(0, 1.12, 0)
+    const scr2 = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(0.46, 0.27)), new THREE.MeshBasicMaterial({ map: this._track(secondScreenTexture()), toneMapped: false }))
+    scr2.position.set(0, 1.12, 0.016)
+    const neck2 = this._rbox(0.04, 0.26, 0.03, 0.008, metal)
+    neck2.position.set(0, Ht + 0.15, -0.03)
+    mon2.add(bez2, scr2, neck2)
+    // clavier, souris, tapis
+    const pad = this._rbox(0.78, 0.006, 0.3, 0.004, this._mat('#101014', { roughness: 0.9 }))
+    pad.position.set(-0.05, Ht + 0.025, 0.52)
+    const kb = this._rbox(0.44, 0.022, 0.14, 0.006, black)
+    kb.position.set(-0.12, Ht + 0.04, 0.5)
+    const kbGlow = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(0.42, 0.12)), rgb())
+    kbGlow.rotation.x = -Math.PI / 2
+    kbGlow.position.set(-0.12, Ht + 0.052, 0.5)
+    const mouse = this._rbox(0.06, 0.03, 0.1, 0.02, black)
+    mouse.position.set(0.22, Ht + 0.045, 0.52)
+    grp.add(pad, kb, kbGlow, mouse)
+    // la tour vitrée, posée au sol à droite, avec ses ventilateurs lumineux
+    const tower = new THREE.Group()
+    tower.position.set(W / 2 - 0.2, 0, 0.32)
+    grp.add(tower)
+    const caseBox = this._rbox(0.24, 0.5, 0.46, 0.015, black)
+    caseBox.position.set(0, 0.25, 0)
+    const glass = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(0.42, 0.44)), new THREE.MeshBasicMaterial({ map: this._track(towerGlassTexture()), toneMapped: false }))
+    glass.rotation.y = -Math.PI / 2
+    glass.position.set(-0.122, 0.26, 0)
+    tower.add(caseBox, glass)
+    for (let k = 0; k < 3; k++) {
+      const fan = new THREE.Mesh(this._geo(new THREE.TorusGeometry(0.055, 0.008, 8, 24)), rgb())
+      fan.position.set(0, 0.12 + k * 0.13, 0.232)
+      tower.add(fan)
+    }
+    // la chaise de gamer, tournée vers le bureau
+    const chair = new THREE.Group()
+    chair.position.set(-0.1, 0, 1.15)
+    chair.rotation.y = Math.PI + 0.25
+    grp.add(chair)
+    this.pcChair = chair
+    const seatMat = this._mat('#1B1B22', { roughness: 0.7 }), accent = this._mat('#2B47B0', { roughness: 0.6 })
+    const seat = this._rbox(0.5, 0.09, 0.48, 0.04, seatMat)
+    seat.position.set(0, 0.5, 0)
+    const back = this._rbox(0.48, 0.78, 0.09, 0.05, seatMat)
+    back.position.set(0, 0.92, 0.24); back.rotation.x = -0.12
+    const stripe = this._rbox(0.12, 0.7, 0.095, 0.02, accent)
+    stripe.position.set(0, 0.93, 0.245); stripe.rotation.x = -0.12
+    const post = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.03, 0.03, 0.36, 12)), metal)
+    post.position.set(0, 0.28, 0)
+    chair.add(seat, back, stripe, post)
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * Math.PI * 2
+      const legC = this._rbox(0.3, 0.03, 0.04, 0.01, metal)
+      legC.position.set(Math.cos(a) * 0.15, 0.07, Math.sin(a) * 0.15)
+      legC.rotation.y = -a
+      chair.add(legC)
+    }
+    grp.traverse(o => { if (o.isMesh && o.material?.isMeshStandardMaterial) { o.castShadow = true; o.receiveShadow = true } })
+    // la lumière colorée du coin gamer (elle change doucement de teinte)
+    this.pcLight = new THREE.PointLight(0x7a5cff, 1.4, 3.2, 1.6)
+    this.pcLight.position.set(PC.x, 0.9, R - 0.6)
+    this.scene.add(this.pcLight)
+    // un néon au mur, au-dessus des écrans (il s'abaisse avec le mur)
+    const neon = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(0.9, 0.3)), new THREE.MeshBasicMaterial({ map: this._track(neonTexture()), transparent: true, toneMapped: false }))
+    neon.position.set(PC.x, 2.05, R - 0.01)
+    neon.rotation.y = Math.PI
+    const fw = this.wallOf('front')
+    fw.grp.add(neon)
+    fw.decor.push(neon)
+    this._register('pc', grp, 'Le PC')
     this.wallOf('front').attached.push(grp)
   }
 
@@ -937,6 +955,12 @@ export class LivingRoomScene {
   // ---- Zoom sur la télé (le tuto en grand) -------------------------------------------------
   _tvView() {
     const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
+    if (this.tvZoom?.kind === 'pc') {
+      // face à l'écran du PC, à sa hauteur : il tient entier à l'écran (le bureau s'ouvrira depuis lui)
+      const target = this.pcScreen.getWorldPosition(new THREE.Vector3())
+      const dist = Math.max(MON.w / 2 / (t * this.camera.aspect), MON.h / 2 / t) / 0.9
+      return { target, az: Math.PI, el: 0.02, dist: Math.min(dist, 2 * R - 0.6) }
+    }
     if (this.tvZoom?.kind === 'cab') {
       // devant le meuble, un peu au-dessus : la vitrine occupe le bas de l'écran
       this.cabGroup.updateWorldMatrix(true, false)
@@ -1007,13 +1031,15 @@ export class LivingRoomScene {
   }
 
   /** Où se trouve l'image projetée à l'écran (en pixels de la page) : le menu s'ouvre depuis là. */
-  screenRect() {
+  screenRect(kind = 'tv') {
+    const scr = kind === 'pc' ? this.pcScreen : this.tvScreen
+    const W2 = kind === 'pc' ? MON.w / 2 : SCR.w / 2, H2 = kind === 'pc' ? MON.h / 2 : SCR.h / 2
     this.camera.updateMatrixWorld()
-    this.tvScreen.updateWorldMatrix(true, false)
+    scr.updateWorldMatrix(true, false)
     const S = this.renderer.domElement.getBoundingClientRect()
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
-    for (const [x, y] of [[-SCR.w / 2, SCR.h / 2], [SCR.w / 2, SCR.h / 2], [SCR.w / 2, -SCR.h / 2], [-SCR.w / 2, -SCR.h / 2]]) {
-      const v = this.tvScreen.localToWorld(new THREE.Vector3(x, y, 0.002)).project(this.camera)
+    for (const [x, y] of [[-W2, H2], [W2, H2], [W2, -H2], [-W2, -H2]]) {
+      const v = scr.localToWorld(new THREE.Vector3(x, y, 0.002)).project(this.camera)
       const px = S.left + ((v.x + 1) / 2) * S.width, py = S.top + ((1 - v.y) / 2) * S.height
       x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py)
     }
@@ -1035,6 +1061,12 @@ export class LivingRoomScene {
     if (z.dir > 0 && z.k >= 1 && !z.inside) { z.inside = true; this.cb.onTvInside?.(z.kind) }
     if (z.dir < 0 && z.inside) { z.inside = false; this.cb.onTvInside?.(false) }
     if (this.cabGlass) this.cabGlass.opacity = z.kind === 'cab' ? 1 - clamp(e * 1.4, 0, 1) : 1
+    if (this.pcChair && z.kind === 'pc') {
+      // la chaise roule de côté : on vient s'installer devant l'écran sans passer à travers son dossier
+      const c = ease(clamp(z.k / 0.7, 0, 1))
+      this.pcChair.position.set(-0.1 - 0.85 * c, 0, 1.15 + 0.15 * c)
+      this.pcChair.rotation.y = Math.PI + 0.25 + 0.9 * c
+    }
     if (this.lensHalo) {
       // le projecteur s'allume quand on passe derrière lui, le faisceau s'éclaire pendant qu'on le suit
       const L = z.kind === 'tv' ? Math.sin(Math.PI * clamp(z.k / 0.75, 0, 1)) : 0
@@ -1511,16 +1543,6 @@ export class LivingRoomScene {
     this._applyCurtains()
   }
 
-  /** Le feu : bas (des braises, sa lumière ne gêne plus la projection) ou vif. */
-  setFireLow(low) {
-    this.fireLow = low
-    this.firePower.base = low ? Math.min(this.fireFull, 0.28) : this.fireFull
-    if (!low) this.firePower.vel += 4
-    store('levana.salon.feu', low ? 'bas' : 'vif')
-    const it = this.items.get('fire')
-    if (it) it.label = low ? 'Raviver le feu' : 'Baisser le feu'
-  }
-
   setCurtains(closed) {
     this.curtainsClosed = closed
     this.curtainK.t = closed ? 1 : 0
@@ -1746,7 +1768,7 @@ export class LivingRoomScene {
       return
     }
     if (!this.fadeList) {
-      const skip = new Set([this.ember.material, this.lampGlow.material, ...this.steam.map(x => x.material), ...this.flames.map(x => x.material), ...this.candles.map(x => x.material)])
+      const skip = new Set([this.lampGlow.material, ...this.steam.map(x => x.material)])
       const seen = new Set(), list = []
       this.scene.traverse(o => {
         if (!o.isMesh || (this.mirror && isUnder(o, this.mirror.g))) return
@@ -2006,14 +2028,14 @@ export class LivingRoomScene {
     if (this.seat?.on) {
       if (['tv', 'projector', 'tvbubble'].includes(kind)) { if (!this.tvZoom) this.zoomTv('tv'); return }   // droit vers l'image
       if (kind === 'bookcase') { this.seat.turn = { to: 0.85, then: () => this.cb.onEnter?.() }; return }  // on tourne la tête, puis on y va
-      if (kind === 'cabinet') { this.stand(() => this.tap(kind)); return }
+      if (kind === 'cabinet' || kind === 'pc') { this.stand(() => this.tap(kind)); return }
     }
     const it = this.items.get(kind)
     if (it) it.bounce.vel += kind === 'bookcase' ? 0.6 : 1.4
     this.shadowDirty = 2
     switch (kind) {
       case 'bookcase': this.cb.onEnter?.(); break
-      case 'fire': this.setFireLow(!this.fireLow); this.cb.onTap?.(kind); break
+      case 'pc': if (!this.tvZoom) this.zoomTv('pc'); break
       case 'window': this.setCurtains(!this.curtainsClosed); break
       case 'lamp': this.setLamp(!this.lampState); break
       case 'sofa': this.cushions.forEach((c, i) => { c.s.vel -= 1.1 + (i % 3) * 0.2 }); break
@@ -2104,6 +2126,7 @@ export class LivingRoomScene {
         const facing = (w.n.x * dx + w.n.z * dz) / len
         // pendant le zoom sur la télé, les murs restent comme ils sont (sinon la télé s'aplatirait)
         if (!this.tvZoom) w.cut.t = facing > 0.2 ? 0.07 : 1
+        else if (this.tvZoom.kind === 'pc' && w.name === 'front') w.cut.t = 1
         if (!this.wallsReady) w.cut.snap(w.cut.t)          // à l'ouverture : déjà en place, sans animation
         if (!w.cut.done || !this.wallsReady) {
           for (let i = 0; i < sub; i++) w.cut.step(h)
@@ -2168,28 +2191,15 @@ export class LivingRoomScene {
       l.pivot.rotation.z = Math.sin(this.time * 0.9 + l.phase) * 0.018 + l.sway.v * 0.06
       l.pivot.rotation.x = Math.cos(this.time * 0.7 + l.phase) * 0.012
     }
-    // feu
-    for (let i = 0; i < sub; i++) this.firePower.step(h)
-    this.firePower.t = this.firePower.base
-    const flick = 0.82 + 0.1 * Math.sin(this.time * 9.1) + 0.06 * Math.sin(this.time * 23.7 + 1.3) + 0.05 * Math.sin(this.time * 5.3)
-    const fp = Math.max(0.2, this.firePower.v)
-    const cam = this.camera.position
-    for (const f of this.flames) {
-      f.material.uniforms.uTime.value = this.time
-      f.material.uniforms.uPower.value = Math.min(1.6, fp) * vis
-      f.scale.set(1, 0.85 + 0.25 * fp, 1)
-      f.getWorldPosition(tmp)
-      f.rotation.y = Math.atan2(cam.x - tmp.x, cam.z - tmp.z)
+    // le coin gamer : les lumières changent doucement de couleur
+    if (this.rgbMats) {
+      const hue = (this.time * 0.04) % 1
+      const c = new THREE.Color().setHSL(hue, 0.85, 0.6)
+      for (const m of this.rgbMats) m.color.copy(c)
+      const pcOn = this.wallOf('front').f ?? 1
+      this.pcLight.color.copy(c)
+      this.pcLight.intensity = (this.mode === 'jour' ? 0.9 : 1.6) * sal * pcOn
     }
-    for (const f of this.candles) {
-      f.material.uniforms.uTime.value = this.time * 1.3
-      f.material.uniforms.uPower.value = vis
-      f.getWorldPosition(tmp)
-      f.rotation.y = Math.atan2(cam.x - tmp.x, cam.z - tmp.z)
-    }
-    const fireOn = this.wallOf('front').f ?? 1
-    this.fireLight.intensity = 3.2 * fp * flick * sal * fireOn
-    this.ember.material.opacity = (0.65 + 0.25 * flick) * vis
     // lampe
     for (let i = 0; i < sub; i++) this.lampOn.step(h)
     const lo = clamp(this.lampOn.v, 0, 1.2)
@@ -2375,5 +2385,73 @@ function glassTexture() {
   g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 2; g.strokeRect(1, 1, 254, 62)
   const t = new THREE.CanvasTexture(c)
   t.colorSpace = THREE.SRGBColorSpace
+  return t
+}
+
+// ---- Le coin gamer : l'écran du PC, le second écran, la vitre de la tour, le néon -------------
+/** L'écran du PC vu du salon : le bureau de « Maruchime OS » (fond, deux icônes, barre du bas). */
+function drawPcDesktop(c) {
+  const g = c.getContext('2d'), W = c.width, H = c.height
+  const bg = g.createLinearGradient(0, 0, W, H)
+  bg.addColorStop(0, '#1B1F4B'); bg.addColorStop(0.55, '#3A2470'); bg.addColorStop(1, '#0E1430')
+  g.fillStyle = bg; g.fillRect(0, 0, W, H)
+  for (const [x, y, r, col] of [[0.78, 0.3, 0.32, 'rgba(122,92,255,0.45)'], [0.2, 0.85, 0.3, 'rgba(232,176,75,0.25)'], [0.55, 0.65, 0.22, 'rgba(60,160,255,0.3)']]) {
+    const gr = g.createRadialGradient(x * W, y * H, 0, x * W, y * H, r * W)
+    gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)')
+    g.fillStyle = gr; g.fillRect(0, 0, W, H)
+  }
+  g.fillStyle = 'rgba(255,255,255,0.9)'; g.font = '600 64px "Inter Tight", system-ui, sans-serif'; g.textAlign = 'right'
+  g.fillText('Maruchime OS', W - 70, H - 140)
+  // deux icônes
+  const icon = (x, y, label, col) => {
+    g.fillStyle = col; g.beginPath(); g.roundRect?.(x, y, 110, 110, 24); g.fill()
+    g.fillStyle = '#fff'; g.font = '600 26px "Inter Tight", system-ui, sans-serif'; g.textAlign = 'center'
+    g.fillText(label, x + 55, y + 150)
+  }
+  icon(60, 50, 'Mes jeux', '#E8B04B')
+  icon(60, 240, 'Stim', '#2F6BFF')
+  // la barre du bas
+  g.fillStyle = 'rgba(10,12,28,0.75)'; g.fillRect(0, H - 70, W, 70)
+  g.fillStyle = '#7A5CFF'; g.beginPath(); g.arc(50, H - 35, 20, 0, 7); g.fill()
+}
+
+function secondScreenTexture() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 300
+  const g = c.getContext('2d')
+  g.fillStyle = '#0F1220'; g.fillRect(0, 0, 512, 300)
+  g.fillStyle = '#2F6BFF'; g.fillRect(0, 0, 512, 40)
+  g.fillStyle = '#fff'; g.font = '700 22px "Inter Tight", system-ui, sans-serif'; g.fillText('stim', 18, 28)
+  const cols = ['#3B2A6E', '#14506B', '#6E3A2A', '#2A6E46', '#6E2A5A', '#4A4A6E']
+  for (let k = 0; k < 6; k++) { g.fillStyle = cols[k]; g.fillRect(18 + (k % 3) * 164, 58 + Math.floor(k / 3) * 116, 150, 100) }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace
+  return t
+}
+
+function towerGlassTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256
+  const g = c.getContext('2d')
+  const bg = g.createLinearGradient(0, 0, 0, 256)
+  bg.addColorStop(0, '#120c2a'); bg.addColorStop(1, '#0a1630')
+  g.fillStyle = bg; g.fillRect(0, 0, 256, 256)
+  g.fillStyle = '#1d1d26'; g.fillRect(40, 60, 120, 70)            // la carte graphique
+  g.fillStyle = 'rgba(122,92,255,0.8)'; g.fillRect(40, 128, 120, 4)
+  for (const [x, y] of [[200, 70], [200, 150], [200, 225]]) {
+    const r = g.createRadialGradient(x, y, 4, x, y, 30)
+    r.addColorStop(0, 'rgba(160,120,255,0.95)'); r.addColorStop(1, 'rgba(60,160,255,0)')
+    g.fillStyle = r; g.beginPath(); g.arc(x, y, 30, 0, 7); g.fill()
+  }
+  g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 4; g.strokeRect(2, 2, 252, 252)
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace
+  return t
+}
+
+function neonTexture() {
+  const c = document.createElement('canvas'); c.width = 600; c.height = 200
+  const g = c.getContext('2d')
+  g.font = 'italic 700 92px "Newsreader", Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle'
+  g.shadowColor = '#ff4fd8'; g.shadowBlur = 30
+  g.fillStyle = '#ffd6f6'; g.fillText('Player 2', 300, 100)
+  g.shadowBlur = 12; g.fillText('Player 2', 300, 100)
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace
   return t
 }

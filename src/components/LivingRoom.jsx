@@ -4,6 +4,7 @@ import { useIsMobile } from '../hooks/useIsMobile'
 import SeriesTV from './SeriesTV'
 import TvBackdrop from './TvBackdrop'
 import Vitrine from './Vitrine'
+import PcOS from './PcOS'
 import { applyTheme } from '../lib/theme'
 
 const store = {
@@ -23,7 +24,7 @@ function greeting(hour) {
  * L'accueil : le salon. La bibliothèque du salon mène au mur de livres ;
  * l'image projetée passe nos films et séries (on la touche : on entre dedans).
  */
-export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
+export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, gamesApi, holder, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
   const rootRef = useRef(null)
   const hostRef = useRef(null)
   const topRef = useRef(null)
@@ -32,7 +33,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   const [hover, setHover] = useState(null)
   const [going, setGoing] = useState(from === 'back')
   const [tv, setTv] = useState(false)           // zoom sur la télé (en cours ou fini)
-  const [inside, setInside] = useState(false)   // zoom fini : 'tv' (dans l'image projetée) ou 'cab' (devant la vitrine)
+  const [inside, setInside] = useState(false)   // zoom fini : 'tv' (dans l'image projetée), 'cab' (devant la vitrine) ou 'pc' (l'écran du PC)
   const [openWork, setOpenWork] = useState(null) // depuis la vitrine : la fiche ouverte (ou 'list' pour notre liste)
   const [bubbleOff, setBubbleOff] = useState(() => store.get(BUBBLE_KEY) === 'off')
   const tvVideo = useRef(null)
@@ -116,7 +117,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
 
   // Échap pendant le zoom : on ressort (une fois dans la télé, c'est le module qui s'en charge)
   useEffect(() => {
-    if (!tv || inside === 'tv' || openWork) return
+    if (!tv || inside === 'tv' || inside === 'pc' || openWork) return
     const onKey = e => { if (e.key === 'Escape') sceneRef.current?.unzoomTv() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -204,6 +205,11 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
           onClose={() => setOpenWork(null)} />
       )}
 
+      {/* devant le PC du bureau gamer : son écran s'agrandit, on est sur le bureau de Maruchime OS */}
+      {inside === 'pc' && gamesApi && (
+        <PcOS {...gamesApi} holder={holder} fromRect={sceneRef.current?.screenRect?.('pc')} onClose={() => sceneRef.current?.unzoomTv()} />
+      )}
+
       <div className="salon-top" ref={topRef}>
         <div className="logo">
           <div className="logo-name">Maruchime</div>
@@ -221,14 +227,18 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       {mobile ? (
         /* téléphone : le menu du bas propose les deux « pièces » du salon */
         <nav className={'tabbar salon-tabs' + (going || tv ? ' away' : '')} ref={bottomRef} aria-label="Où aller">
+          <p className="salon-tabs-hint">{seated ? 'Glisse pour tourner la tête' : 'Pince pour t’asseoir dans le canapé'}</p>
           <button type="button" className="tab" onClick={go} disabled={going}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16M20 4v16M4 9h16M4 14.5h16M4 20h16M7 9V6M9 9V5.5M12 14.5v-3.5M14.5 14.5v-3" /></svg>
             <span>Ma bibliothèque</span>
           </button>
-          <p className="salon-tabs-hint">{seated ? 'Glisse pour tourner la tête' : 'Pince pour t’asseoir dans le canapé'}</p>
-          <button type="button" className="tab" onClick={() => sceneRef.current?.zoomTv()} disabled={going}>
+          <button type="button" className="tab" onClick={() => sceneRef.current?.tap('tv')} disabled={going}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="1.5" /><path d="M8.5 20h7M10.5 9l4 2-4 2z" /></svg>
             <span>Films & séries</span>
+          </button>
+          <button type="button" className="tab" onClick={() => sceneRef.current?.tap('pc')} disabled={going}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5h9a4 4 0 0 1 3.9 4.8l-.8 3.6a2.2 2.2 0 0 1-3.7 1.1L13.8 16h-3.6l-2.1 2a2.2 2.2 0 0 1-3.7-1.1l-.8-3.6A4 4 0 0 1 7.5 8.5zM8 11.2v3M6.5 12.7h3" /><circle cx="15.8" cy="12" r=".6" /><circle cx="17.3" cy="13.8" r=".6" /></svg>
+            <span>Jeux</span>
           </button>
         </nav>
       ) : (
@@ -239,6 +249,9 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
             </button>
             <button type="button" className="lbl box salon-go" onClick={() => sceneRef.current?.zoomTv()} disabled={going}>
               Films & séries <span aria-hidden="true">▶</span>
+            </button>
+            <button type="button" className="lbl box salon-go" onClick={() => sceneRef.current?.tap('pc')} disabled={going}>
+              Le PC · Jeux <span aria-hidden="true">◆</span>
             </button>
           </div>
           <p className="salon-hint">{seated ? 'Fais glisser pour tourner la tête · molette en arrière pour te lever' : 'Fais glisser pour regarder autour · molette en avant pour t’asseoir dans le canapé'}</p>
