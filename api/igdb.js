@@ -46,8 +46,21 @@ const pick = g => ({
 })
 
 export default async function handler(req, res) {
-  const id = (process.env.TWITCH_CLIENT_ID || '').trim(), secret = (process.env.TWITCH_CLIENT_SECRET || '').trim()
-  if (!id || !secret) { res.status(503).json({ error: 'TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET manquants dans Vercel' }); return }
+  // les clés : TWITCH_CLIENT_ID et TWITCH_CLIENT_SECRET (on tolère un nom approchant, des espaces en trop)
+  const names = Object.keys(process.env).filter(k => /twitch|igdb/i.test(k))
+  const val = re => { const k = names.find(n => re.test(n.replace(/\s+/g, ''))); return k ? String(process.env[k] || '').trim() : '' }
+  const id = val(/^TWITCH_CLIENT_ID$/i) || val(/client_?id/i) || val(/(twitch|igdb).*_id$/i)
+  const secret = val(/^TWITCH_CLIENT_SECRET$/i) || val(/secret/i)
+  // diagnostic : quelles variables le site voit (leurs noms seulement, jamais leurs valeurs)
+  if (req.query.check) {
+    res.setHeader('Cache-Control', 'no-store')
+    res.status(200).json({ variables: names.map(n => ({ nom: n, remplie: !!String(process.env[n] || '').trim() })), clientId: !!id, secret: !!secret, environnement: process.env.VERCEL_ENV || 'inconnu' })
+    return
+  }
+  if (!id || !secret) {
+    res.status(503).json({ error: 'TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET manquants dans Vercel', vues: names, environnement: process.env.VERCEL_ENV || 'inconnu' })
+    return
+  }
   const auth = async () => {
     if (token && Date.now() < tokenExp - 60000) return token
     const r = await fetch(`https://id.twitch.tv/oauth2/token?client_id=${encodeURIComponent(id)}&client_secret=${encodeURIComponent(secret)}&grant_type=client_credentials`, { method: 'POST' })
