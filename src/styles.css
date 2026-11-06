@@ -3852,3 +3852,102 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
 .sc-pick-txt em { font-style: normal; font-size: 11.5px; color: rgba(243, 239, 232, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sc-pick-mark { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(243, 239, 232, 0.3); font-size: 15px; }
 .sc-pick.on .sc-pick-mark { background: #E8B04B; border-color: #E8B04B; color: #1d1430; }
+
+/* =============================================================================
+   Bibliothèque de jeux, façon console : la rangée, le jeu choisi en grand, les rayons
+   ========================================================================== */
+.cn { position: relative; margin: -16px -20px -40px; padding: 18px 0 60px; min-height: calc(100% + 56px); isolation: isolate; color: #F3F1F8; }
+.cn-bg { position: absolute; left: 0; right: 0; top: 0; height: min(86vh, 760px); z-index: -1; overflow: hidden; pointer-events: none; }
+.cn-bg-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: cnBg 0.9s ease both; }
+@keyframes cnBg { from { opacity: 0; transform: scale(1.04); } }
+.cn-bg::after { content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(10, 9, 16, 0.55) 0%, rgba(10, 9, 16, 0.15) 30%, rgba(10, 9, 16, 0.55) 62%, var(--cn-end, #100f18) 100%),
+    linear-gradient(90deg, rgba(10, 9, 16, 0.85) 0%, rgba(10, 9, 16, 0.35) 45%, transparent 75%); }
+.pfx-ps .cn { --cn-end: #050C22; } .pfx-xbox .cn { --cn-end: #0A0B0A; } .pfx-pc .cn { --cn-end: #0E1319; } .pfx-mobile .cn { --cn-end: #041615; } .pfx-retro .cn { --cn-end: #0C0804; }
+.pfx-switch .cn { --cn-end: #ECECEE; color: #F3F1F8; }
+.cn-chips { padding: 0 34px; }
+.cn-none { padding-top: 80px; }
+/* la rangée de jaquettes */
+.cn-row { display: flex; align-items: flex-end; gap: 14px; overflow-x: auto; padding: 26px 34px 18px; scroll-snap-type: x proximity; scrollbar-width: none; }
+.cn-row::-webkit-scrollbar { display: none; }
+.cn-tile { position: relative; flex: none; width: 104px; scroll-snap-align: center; border-radius: 10px; transition: width 0.35s cubic-bezier(.2, .8, .2, 1), transform 0.2s, opacity 0.3s; opacity: 0.78; }
+.cn-tile .ld-cover { border-radius: 10px; box-shadow: 0 16px 30px -14px rgba(0, 0, 0, 0.9); }
+.cn-tile:hover { opacity: 1; transform: translateY(-3px); }
+.cn-tile.on { width: 156px; opacity: 1; }
+.cn-tile.on .ld-cover { box-shadow: 0 0 0 3px #fff, 0 26px 40px -14px rgba(0, 0, 0, 0.95); }
+.cn-tile:focus-visible { outline: none; }
+.cn-tile:focus-visible .ld-cover { box-shadow: 0 0 0 3px #fff; }
+.cn-rank { position: absolute; top: -10px; left: -8px; min-width: 28px; height: 28px; padding: 0 7px; border-radius: 14px; display: grid; place-items: center; font: italic 700 15px var(--serif);
+  background: rgba(12, 10, 20, 0.85); color: #fff; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
+.cn-rank.m1 { background: linear-gradient(160deg, #F6D77A, #C99A2E); color: #2A1F0E; }
+.cn-rank.m2 { background: linear-gradient(160deg, #E8EAEE, #A9AFBA); color: #1E2128; }
+.cn-rank.m3 { background: linear-gradient(160deg, #E8B48A, #A8683A); color: #fff; }
+/* le jeu choisi */
+.cn-info { padding: 8px 34px 0; max-width: 760px; display: flex; flex-direction: column; gap: 10px; animation: cnInfo 0.5s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes cnInfo { from { opacity: 0; transform: translateY(10px); } }
+.cn-kicker { font: 700 11.5px var(--sans); letter-spacing: 0.22em; text-transform: uppercase; color: rgba(243, 241, 248, 0.7); white-space: pre-wrap; }
+.cn-logo .ld-logo { max-height: 120px; max-width: min(460px, 80%); }
+.cn-logo .ld-logo-txt { font-size: clamp(32px, 4.4vw, 58px); }
+.cn-meta { font: 500 13px var(--sans); color: rgba(243, 241, 248, 0.7); white-space: pre-wrap; }
+.cn-stars { font-size: 15px; letter-spacing: 4px; color: #F6C766; }
+.cn-stars i { font-style: normal; color: rgba(255, 255, 255, 0.2); }
+.cn-act { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+.cn-btn { height: 46px; padding: 0 22px; border-radius: 23px; display: inline-flex; align-items: center; gap: 9px; font: 700 14px var(--sans); background: rgba(255, 255, 255, 0.14); color: #fff;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: background 0.2s, transform 0.12s; }
+.cn-btn:hover { background: rgba(255, 255, 255, 0.24); }
+.cn-btn:active { transform: scale(0.97); }
+.cn-btn.main { background: #fff; color: #111; }
+.cn-btn.main:hover { background: #E9E9EE; }
+.cn-btn svg { width: 16px; height: 16px; }
+.cn-btn.icon { width: 46px; padding: 0; justify-content: center; }
+.cn-btn.icon svg { width: 20px; height: 20px; }
+.cn-btn.icon.on { color: #F6C766; }
+/* les rayons */
+.cn-shelves { margin-top: clamp(40px, 9vh, 90px); display: flex; flex-direction: column; gap: 28px; }
+.cn-shelf header { display: flex; align-items: baseline; gap: 10px; padding: 0 34px 10px; }
+.cn-shelf h3 { font: 800 17px var(--sans); letter-spacing: -0.01em; }
+.cn-shelf header em { font-style: normal; font-size: 13px; color: rgba(243, 241, 248, 0.45); }
+.cn-arrange { margin-left: auto; font: italic 400 14px var(--serif); color: rgba(243, 241, 248, 0.6); }
+.cn-arrange:hover { color: #fff; }
+.cn-shelf .gm-top { padding: 0 34px; }
+.cn-toprow, .cn-shelfrow { display: flex; gap: 14px; overflow-x: auto; padding: 4px 34px 10px; scrollbar-width: none; }
+.cn-toprow::-webkit-scrollbar, .cn-shelfrow::-webkit-scrollbar { display: none; }
+/* Mon top : de grands chiffres à côté des jaquettes */
+.cn-topitem { flex: none; display: flex; align-items: flex-end; }
+.cn-topnum { font: italic 400 150px/0.78 var(--serif); letter-spacing: -0.06em; margin-right: -6px; position: relative; z-index: 0; color: transparent; -webkit-text-stroke: 2px rgba(243, 241, 248, 0.45); transition: -webkit-text-stroke-color 0.2s; }
+.cn-topitem.m1 .cn-topnum, .cn-topitem.m2 .cn-topnum, .cn-topitem.m3 .cn-topnum { -webkit-text-stroke: 0; -webkit-background-clip: text; background-clip: text; }
+.cn-topitem.m1 .cn-topnum { background-image: linear-gradient(172deg, #FBEFC2 0%, #E2B95C 38%, #9A6A22 62%, #E9C774 100%); }
+.cn-topitem.m2 .cn-topnum { background-image: linear-gradient(172deg, #FFFFFF 0%, #C9CED8 40%, #7D8494 64%, #E3E6EC 100%); }
+.cn-topitem.m3 .cn-topnum { background-image: linear-gradient(172deg, #FBD7B4 0%, #C98450 40%, #7A4422 64%, #E5A878 100%); }
+.cn-topitem:hover .cn-topnum { -webkit-text-stroke-color: #fff; }
+.cn-topcover { position: relative; z-index: 1; width: 112px; border-radius: 8px; overflow: hidden; box-shadow: 0 16px 30px -14px rgba(0, 0, 0, 0.9); transition: transform 0.2s; }
+.cn-topitem:hover .cn-topcover { transform: translateY(-4px); }
+.cn-topitem.on .cn-topcover { box-shadow: 0 0 0 3px #fff, 0 16px 30px -14px rgba(0, 0, 0, 0.9); }
+.cn-mini { flex: none; width: 120px; display: flex; flex-direction: column; gap: 7px; text-align: left; }
+.cn-mini .ld-cover { border-radius: 8px; box-shadow: 0 14px 26px -14px rgba(0, 0, 0, 0.9); transition: transform 0.2s, box-shadow 0.2s; }
+.cn-mini:hover .ld-cover { transform: translateY(-4px); }
+.cn-mini.on .ld-cover { box-shadow: 0 0 0 3px #fff; }
+.cn-mini span { font: 600 12.5px var(--sans); color: rgba(243, 241, 248, 0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* thème clair (Switch) : en bas de la page, le texte redevient sombre */
+.pfx-switch .cn-shelf h3, .pfx-switch .cn-mini span { color: #1E1E24; }
+.pfx-switch .cn-shelf header em, .pfx-switch .cn-arrange { color: rgba(30, 30, 36, 0.5); }
+.pfx-switch .cn-topnum { -webkit-text-stroke-color: rgba(30, 30, 36, 0.35); }
+.cn-page { margin: -16px -20px -40px; }
+@media (max-width: 767px) {
+  .cn { margin: -12px -12px -30px; padding-top: 12px; }
+  .cn-chips { padding: 0 12px; }
+  .cn-row { padding: 22px 16px 14px; gap: 10px; }
+  .cn-tile { width: 84px; }
+  .cn-tile.on { width: 124px; }
+  .cn-info { padding: 4px 16px 0; }
+  .cn-logo .ld-logo { max-height: 86px; }
+  .cn-btn { height: 42px; padding: 0 16px; font-size: 13.5px; }
+  .cn-btn.icon { width: 42px; }
+  .cn-shelf header { padding: 0 16px 8px; }
+  .cn-toprow, .cn-shelfrow { padding: 4px 16px 10px; gap: 10px; }
+  .cn-shelf .gm-top { padding: 0 12px; }
+  .cn-topnum { font-size: 110px; margin-right: -4px; }
+  .cn-topcover { width: 88px; }
+  .cn-mini { width: 96px; }
+  .cn-page { margin: -12px -12px -30px; }
+}

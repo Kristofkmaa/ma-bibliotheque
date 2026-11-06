@@ -811,6 +811,125 @@ function LudoGame({ g, onPlay, fav, updateGame, removeGame, onWallpaper, onCatal
   )
 }
 
+/* -------------------------------------------------------------------------- */
+/* La bibliothèque, façon console : une rangée de jaquettes, le jeu choisi en grand */
+/* -------------------------------------------------------------------------- */
+
+let lastFocus = null   // le jeu sélectionné, retrouvé en revenant d'une fiche
+
+function ConsoleLib({ games, top, selId, onSelect, onHome, setFavorite, reorderTop, updateGame, removeGame, onPlay, onWallpaper, onCatalog, quickWall, openStore, notify, pf, setPf }) {
+  const fav = (g, on) => { const r = setFavorite(g.id, on); notify(on ? `${g.name} entre dans ton top · n°${r}` : `${g.name} sort de ton top`) }
+  // la rangée : le top d'abord (dans l'ordre), puis ceux en cours, puis les plus récents
+  const list = useMemo(() => {
+    const W = { en_cours: 0, a_jouer: 1, termine: 2, abandonne: 3 }
+    return games.filter(g => onPlatform(g, pf)).sort((a, b) =>
+      (b.favorite - a.favorite) || (a.fav_rank ?? 99) - (b.fav_rank ?? 99) || (W[a.status] ?? 1) - (W[b.status] ?? 1) || b.added_at.localeCompare(a.added_at))
+  }, [games, pf])
+  const [focus, setFocusState] = useState(() => (lastFocus && list.some(g => g.id === lastFocus) ? lastFocus : list[0]?.id))
+  const setFocus = id => { lastFocus = id; setFocusState(id) }
+  const cur = list.find(g => g.id === focus) || list[0] || null
+  const [ranking, setRanking] = useState(false)
+  const rowRef = useRef(null)
+  const tiles = useRef(new Map())
+  const pfCounts = useMemo(() => Object.fromEntries([...PLATFORM_GROUPS.map(([k]) => k), ...PC_STORES.map(([k]) => 'pc:' + k)].map(k => [k, games.filter(g => onPlatform(g, k)).length])), [games])
+  // la jaquette choisie reste au milieu de la rangée
+  useEffect(() => { if (cur) tiles.current.get(cur.id)?.scrollIntoView?.({ block: 'nearest', inline: 'center', behavior: 'smooth' }) }, [cur?.id])
+  // au clavier : ← → pour choisir, Entrée pour ouvrir
+  useEffect(() => {
+    if (selId || !cur) return
+    const k = e => {
+      if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'SELECT' || e.altKey) return
+      const i = list.findIndex(g => g.id === cur.id)
+      if (e.key === 'ArrowRight' && i < list.length - 1) { e.preventDefault(); setFocus(list[i + 1].id) }
+      else if (e.key === 'ArrowLeft' && i > 0) { e.preventDefault(); setFocus(list[i - 1].id) }
+      else if (e.key === 'Enter' && e.target === document.body) onSelect(cur.id)
+    }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  })
+  if (selId) {
+    const sel = games.find(g => g.id === selId)
+    return (
+      <div className="cn-page">
+        <LudoGame g={sel} onPlay={onPlay} fav={fav} updateGame={updateGame} removeGame={id => { removeGame(id); notify(`${sel?.name} retiré de ta bibliothèque`) }} onWallpaper={onWallpaper} onCatalog={onCatalog} onGone={onHome} quickWall={quickWall} />
+      </div>
+    )
+  }
+  if (!games.length) {
+    return (
+      <div className="gm-empty ld-empty">
+        <span className="gm-empty-ico"><GamesGlyph /></span>
+        <b>Ta ludothèque est vide</b>
+        <p>Cherche tes jeux dans Découvrir — sur toutes les plateformes — et ajoute-les à ta bibliothèque, comme tes livres et tes films.</p>
+        <button type="button" className="st-btn buy" onClick={openStore}>Découvrir des jeux</button>
+      </div>
+    )
+  }
+  const shelves = [
+    ['en_cours', 'En cours'], ['a_jouer', 'À jouer'], ['termine', 'Terminés'], ['abandonne', 'Abandonnés'],
+  ].map(([k, t]) => [k, t, list.filter(g => g.status === k)]).filter(x => x[2].length)
+  const topHere = top.filter(g => onPlatform(g, pf))
+  const pick = g => { setFocus(g.id); rowRef.current?.closest('.cs-body')?.scrollTo?.({ top: 0, behavior: 'smooth' }) }
+  const rank = cur?.favorite ? cur.fav_rank : null
+  return (
+    <div className="cn">
+      <div className="cn-bg" aria-hidden="true">
+        {cur && <Art key={cur.id} g={cur} className="cn-bg-img" />}
+      </div>
+      <div className="cn-chips"><PlatformChips value={pf} onChange={setPf} counts={pfCounts} /></div>
+      {!list.length ? <div className="st-empty cn-none"><p>Aucun jeu sur {pfLabel(pf)} dans ta bibliothèque.</p></div> : <>
+        <div className="cn-row" ref={rowRef} role="listbox" aria-label="Mes jeux" aria-orientation="horizontal">
+          {list.map(g => (
+            <button type="button" key={g.id} ref={el => (el ? tiles.current.set(g.id, el) : tiles.current.delete(g.id))} role="option" aria-selected={g.id === cur.id}
+              className={'cn-tile' + (g.id === cur.id ? ' on' : '')} onClick={() => (g.id === cur.id ? onSelect(g.id) : setFocus(g.id))} aria-label={g.name}>
+              <Cover g={g} />
+              {g.favorite && <span className={'cn-rank' + (g.fav_rank <= 3 ? ' m' + g.fav_rank : '')}>{g.fav_rank}</span>}
+            </button>
+          ))}
+        </div>
+        {cur && (
+          <section className="cn-info" key={cur.id}>
+            <span className="cn-kicker">{rank ? (rank === 1 ? 'Ton n°1' : `N°${rank} de ton top`) : statusLabel(cur.status)}{(cur.platform || cur.platforms?.[0]) ? '  ·  ' + (cur.platform || cur.platforms[0]) : ''}</span>
+            <div className="cn-logo"><Logo g={cur} /></div>
+            <p className="cn-meta">{[rank ? statusLabel(cur.status) : null, cur.genres?.slice(0, 2).join(' · '), cur.release].filter(Boolean).join('   ·   ')}</p>
+            {cur.rating ? <span className="cn-stars" aria-label={`Ma note : ${cur.rating} sur 5`}>{'★'.repeat(cur.rating)}<i>{'★'.repeat(5 - cur.rating)}</i></span> : null}
+            <div className="cn-act">
+              <button type="button" className="cn-btn main" onClick={() => onSelect(cur.id)}>Ouvrir la fiche</button>
+              <button type="button" className="cn-btn" onClick={() => onPlay(cur)}><PlayGlyph /> Bande-annonce</button>
+              <button type="button" className={'cn-btn icon' + (cur.favorite ? ' on' : '')} onClick={() => fav(cur, !cur.favorite)} aria-label={cur.favorite ? 'Retirer de mon top' : 'Ajouter à mon top'} title={cur.favorite ? 'Retirer de mon top' : 'Ajouter à mon top'}><Star on={cur.favorite} /></button>
+            </div>
+          </section>
+        )}
+        <div className="cn-shelves">
+          {topHere.length > 0 && (
+            <section className="cn-shelf">
+              <header><h3>Mon top</h3><button type="button" className="cn-arrange" onClick={() => setRanking(r => !r)}>{ranking ? 'Terminé' : 'Ranger'}</button></header>
+              {ranking
+                ? <TopList top={top} onOpen={id => pick(games.find(g => g.id === id))} onPlay={onPlay} onRemove={id => fav(games.find(g => g.id === id), false)} reorder={reorderTop} />
+                : <div className="cn-toprow">{topHere.map(g => (
+                  <button type="button" key={g.id} className={'cn-topitem' + (g.fav_rank <= 3 ? ' m' + g.fav_rank : '') + (g.id === cur?.id ? ' on' : '')} onClick={() => pick(g)}>
+                    <span className="cn-topnum">{g.fav_rank}</span>
+                    <span className="cn-topcover"><Cover g={g} /></span>
+                  </button>
+                ))}</div>}
+            </section>
+          )}
+          {shelves.map(([k, t, l]) => (
+            <section className="cn-shelf" key={k}>
+              <header><h3>{t}</h3><em>{l.length}</em></header>
+              <div className="cn-shelfrow">{l.map(g => (
+                <button type="button" key={g.id} className={'cn-mini' + (g.id === cur?.id ? ' on' : '')} onClick={() => pick(g)}>
+                  <Cover g={g} /><span>{g.name}</span>
+                </button>
+              ))}</div>
+            </section>
+          ))}
+        </div>
+      </>}
+    </div>
+  )
+}
+
 function Ludo({ games, top, selId, onSelect, onHome, mobile, setFavorite, reorderTop, updateGame, removeGame, onPlay, onWallpaper, onCatalog, quickWall, openStore, notify, pf, setPf }) {
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
@@ -1126,7 +1245,7 @@ export default function PcOS({ games, addGame, findGame, updateGame, removeGame,
     if (s.edge && dx > 70 && Math.abs(dy) < 60) back()
   }
 
-  const ld = tab === 'games' && !mobile
+  const ld = false
   let body = null
   if (tab === 'stim') {
     if (cur.v === 'store') body = <Discover mine={mine} onOpen={openItem} onSearch={q => navigate('stim', { v: 'search', q })} pf={pf} setPf={setPf} />
@@ -1134,7 +1253,7 @@ export default function PcOS({ games, addGame, findGame, updateGame, removeGame,
     else body = <CatalogPage item={cur.item} games={games} findGame={findGame} addGame={addGame} updateGame={updateGame} setFavorite={setFavorite}
       onTrailer={setTrailer} quickWall={quickWall} openMine={openGame} notify={setToast} pf={pf} />
   } else if (tab === 'games') {
-    body = <Ludo games={games} top={top} selId={cur.v === 'game' ? cur.id : null} onSelect={openGame} onHome={() => navigate('games', ROOT.games, 'back')} mobile={mobile}
+    body = <ConsoleLib games={games} top={top} selId={cur.v === 'game' ? cur.id : null} onSelect={openGame} onHome={() => navigate('games', ROOT.games, 'back')}
       setFavorite={setFavorite} reorderTop={reorderTop} updateGame={updateGame} removeGame={removeGame} onPlay={playTrailer} onWallpaper={chooseWall} onCatalog={toCatalog} quickWall={quickWall} openStore={() => goTab('stim')} notify={setToast} pf={pf} setPf={setPf} />
   } else {
     body = <Custom tab={customTab} setTab={setCustomTab} games={games} wallpaper={wallpaper} setWallpaper={setWallpaper} request={wallFor} setup={setup} setSetup={setSetup} />
