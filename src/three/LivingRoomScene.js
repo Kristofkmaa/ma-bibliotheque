@@ -670,18 +670,6 @@ export class LivingRoomScene {
     this.pcScreen = screen
     drawPcDesktop(this.pcCanvas)
     this.pcTex.needsUpdate = true
-    // le second écran, tourné vers le centre
-    const mon2 = new THREE.Group()
-    mon2.position.set(0.62, 0, 0.26)
-    mon2.rotation.y = -0.45
-    grp.add(mon2)
-    const bez2 = this._rbox(0.5, 0.31, 0.03, 0.01, black)
-    bez2.position.set(0, 1.12, 0)
-    const scr2 = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(0.46, 0.27)), new THREE.MeshBasicMaterial({ map: this._track(secondScreenTexture()), toneMapped: false }))
-    scr2.position.set(0, 1.12, 0.016)
-    const neck2 = this._rbox(0.04, 0.26, 0.03, 0.008, metal)
-    neck2.position.set(0, Ht + 0.15, -0.03)
-    mon2.add(bez2, scr2, neck2)
     // clavier, souris, tapis
     const pad = this._rbox(0.78, 0.006, 0.3, 0.004, this._mat('#101014', { roughness: 0.9 }))
     pad.position.set(-0.05, Ht + 0.025, 0.52)
@@ -693,9 +681,10 @@ export class LivingRoomScene {
     const mouse = this._rbox(0.06, 0.03, 0.1, 0.02, black)
     mouse.position.set(0.22, Ht + 0.045, 0.52)
     grp.add(pad, kb, kbGlow, mouse)
-    // la tour vitrée, posée au sol à droite, avec ses ventilateurs lumineux
+    // la tour vitrée, posée sur le bureau à droite de l'écran, avec ses ventilateurs lumineux
     const tower = new THREE.Group()
-    tower.position.set(W / 2 - 0.2, 0, 0.32)
+    tower.position.set(W / 2 - 0.24, Ht + 0.024, 0.3)
+    tower.rotation.y = -0.18
     grp.add(tower)
     const caseBox = this._rbox(0.24, 0.5, 0.46, 0.015, black)
     caseBox.position.set(0, 0.25, 0)
@@ -2460,18 +2449,6 @@ function drawPcDesktop(c) {
   // la barre du bas
   g.fillStyle = 'rgba(10,12,28,0.75)'; g.fillRect(0, H - 70, W, 70)
   g.fillStyle = '#7A5CFF'; g.beginPath(); g.arc(50, H - 35, 20, 0, 7); g.fill()
-}
-
-function secondScreenTexture() {
-  const c = document.createElement('canvas'); c.width = 512; c.height = 300
-  const g = c.getContext('2d')
-  g.fillStyle = '#0F1220'; g.fillRect(0, 0, 512, 300)
-  g.fillStyle = '#2F6BFF'; g.fillRect(0, 0, 512, 40)
-  g.fillStyle = '#fff'; g.font = '700 22px "Inter Tight", system-ui, sans-serif'; g.fillText('stim', 18, 28)
-  const cols = ['#3B2A6E', '#14506B', '#6E3A2A', '#2A6E46', '#6E2A5A', '#4A4A6E']
-  for (let k = 0; k < 6; k++) { g.fillStyle = cols[k]; g.fillRect(18 + (k % 3) * 164, 58 + Math.floor(k / 3) * 116, 150, 100) }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace
-  return t
 }
 
 function towerGlassTexture() {
