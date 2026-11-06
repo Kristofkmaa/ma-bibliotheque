@@ -848,7 +848,7 @@ export class BookcaseScene {
       const MIN_GAP = 0.012, room = CW - PADX - 0.12
       const s0 = span(raw)
       const full = s0.need + s0.first + s0.lastExt
-      const k = raw.length > 1 && full + MIN_GAP * (raw.length - 1) > room ? clamp((room - MIN_GAP * (raw.length - 1)) / full, 0.4, 1) : 1
+      const k = raw.length > 1 && full + MIN_GAP * (raw.length - 1) > room ? clamp((room - MIN_GAP * (raw.length - 1)) / full, 0.22, 1) : 1
       const items = k < 1 ? raw.map(it => ({ ...it, t: it.t * k, d: it.d * k, h: it.h * k })) : raw
       const { need, first, lastExt } = k < 1 ? span(items) : s0
       const avail = room - first - lastExt - need

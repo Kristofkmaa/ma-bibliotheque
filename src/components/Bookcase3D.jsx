@@ -97,8 +97,9 @@ export default function Bookcase3D({
   }, [])
 
   const L = useMemo(() => worldLayout(size.w, size.h, size.mobile), [size])
-  // téléphone : une étagère tient sur une seule rangée (on la fait défiler du doigt)
-  const shelfRow = manual && L.mobile ? Infinity : L.perRow
+  // rangement à la main : une étagère tient toujours sur sa rangée (les livres se serrent) ;
+  // poser un livre ne fait jamais passer les autres sur une autre rangée
+  const shelfRow = manual ? Infinity : L.perRow
 
   // ---- Données --------------------------------------------------------------------------
   const byId = useMemo(() => new Map(allBooks.map(b => [b.id, b])), [allBooks])
