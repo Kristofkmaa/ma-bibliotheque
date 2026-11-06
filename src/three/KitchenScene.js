@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { noTouchSelect } from './webgl'
+import { makeFood } from './foodModels'
 
 /**
  * La cuisine en maquette, comme le salon : un plancher épais, quatre murs (celui qui est entre
@@ -593,10 +594,24 @@ export default class KitchenScene {
 
   // ---- Les ingrédients sur les étagères ---------------------------------------------------------
   setPantry(items) {
-    for (const g of Object.values(this.items)) { for (const c of [...g.children]) { g.remove(c); c.geometry?.dispose(); c.material?.dispose() } }
-    const plane = new THREE.PlaneGeometry(1, 1)
-    this.disposables.push(plane)
+    // on vide les étagères (les emballages libèrent leurs étiquettes ; leurs formes sont partagées)
+    for (const g of Object.values(this.items)) {
+      for (const c of [...g.children]) { g.remove(c); if (c.userData.dispose) c.userData.dispose(); else c.material?.dispose() }
+    }
+    this.plane ||= new THREE.PlaneGeometry(1, 1)
+    const plane = this.plane
     const put = (group, it, x, y, z, s, k) => {
+      // un produit emballé : son emballage en 3D, avec son étiquette
+      const food = makeFood(it)
+      if (food) {
+        food.position.set(x, y, z)
+        food.scale.setScalar(1.25 * s / 0.095)   // un peu plus grands que nature : on les reconnaît de loin
+        seed = 100 + k; food.rotation.y = (rand() - 0.5) * 0.3
+        food.userData.item = it
+        group.add(food)
+        return
+      }
+      // un produit frais : son pictogramme (pour l'instant)
       const m = new THREE.Mesh(plane, new THREE.MeshBasicMaterial({ map: emojiTexture(it.emoji || '🥣'), transparent: true, alphaTest: 0.08, toneMapped: false, depthWrite: true }))
       m.scale.set(s, s, 1)
       m.position.set(x, y + s * 0.46, z)
@@ -612,21 +627,29 @@ export default class KitchenScene {
     const crisp = fridge.filter(i => i.aisle === 'legumes' || i.aisle === 'fruits')
     const doorIt = fridge.filter(i => i.aisle === 'frais')
     const rest = fridge.filter(i => !crisp.includes(i) && !doorIt.includes(i))
-    const slots = []
-    for (const y of this.fridgeShelves.slice().reverse()) for (const [z, off] of [[0.5, 0], [0.3, 0.5]]) for (let c = 0; c < cols; c++) slots.push([FR.x - inner / 2 + sx * (c + 0.5 + off * 0.5), y + 0.006, z])
+    // chaque clayette a son rayon, comme dans un vrai frigo : la crèmerie en haut, la viande et le
+    // poisson au milieu, le reste en bas ; devant d'abord, puis derrière ; ce qui déborde va ailleurs
+    const shelfOf = it => (it.aisle === 'cremerie' ? 2 : it.aisle === 'viande' ? 1 : 0)
+    const shelfSlots = this.fridgeShelves.map(y => {
+      const out = []
+      for (const [z, off] of [[0.5, 0], [0.3, 0.5]]) for (let c = 0; c < cols; c++) out.push([FR.x - inner / 2 + sx * (c + 0.5 + off * 0.5), y + 0.006, z])
+      return out
+    })
+    const takeSlot = it => shelfSlots[shelfOf(it)].shift() || shelfSlots.find(l => l.length)?.shift() || null
     const crispSlots = []
     for (const [z, off] of [[0.5, 0], [0.3, 0.5]]) for (let c = 0; c < cols; c++) crispSlots.push([FR.x - inner / 2 + sx * (c + 0.5 + off * 0.5), 0.07, z])
     let k = 0
     // ce qui ne tient pas dans le bac monte sur les clayettes, et inversement
     const over = []
     crisp.forEach(it => { const sl = crispSlots.shift(); if (sl) put(this.items.frigo, it, ...sl, s, k++); else over.push(it) })
-    ;[...rest, ...over].forEach(it => { const sl = slots.shift(); if (sl) put(this.items.frigo, it, ...sl, s, k++) })
+    ;[...rest, ...over].forEach(it => { const sl = takeSlot(it); if (sl) put(this.items.frigo, it, ...sl, s, k++) })
     // les balconnets (dans le repère de la porte : x de 0 à w, z vers l'intérieur)
     const dslots = []
     for (const y of this.doorBins.slice().reverse()) for (let c = 0; c < 5; c++) dslots.push([0.08 + (FR.w - 0.16) * (c + 0.5) / 5, y, -0.11])
     doorIt.forEach(it => { const sl = dslots.shift(); if (sl) put(this.items.door, it, ...sl, s * 0.9, k++) })
     // dans la porte grande ouverte, les pictogrammes se tournent vers nous (sinon on les verrait de profil)
     this.items.door.children.forEach(m => { m.rotation.y = 1.75 })
+    this.renderer.shadowMap.needsUpdate = true
     // placards : deux niveaux par meuble, une rangée
     const cslots = []
     for (const lvl of [1, 0]) for (const cab of this.cabShelves) for (let c = 0; c < 6; c++) cslots.push([cab.x - CAB.w / 2 + 0.06 + (CAB.w - 0.12) * (c + 0.5) / 6, cab.ys[lvl], 0.2])
