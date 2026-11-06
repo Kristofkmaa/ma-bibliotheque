@@ -2954,3 +2954,201 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
   .lt-kb { left: 8%; width: 180px; }
   .lt-tower { right: 8%; }
 }
+
+/* =============================================================================
+   Maruchime OS, façon console (la même au doigt et à la souris)
+   ========================================================================== */
+.pcos.cs { background: #0b0a12; }
+.cs-bg { position: absolute; inset: 0; overflow: hidden; }
+.cs-bg > img, .cs-bg > .pc-wall { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: filter 0.5s ease, transform 0.6s ease; animation: pcWallIn 0.8s ease both; }
+.cs-bg > .pc-wall { background: linear-gradient(135deg, #1B1F4B 0%, #3A2470 55%, #0E1430 100%); }
+.cs-bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 7, 14, 0.55) 0%, transparent 22%, transparent 45%, rgba(8, 7, 14, 0.75) 100%); pointer-events: none; }
+.cs.in-app .cs-bg > img, .cs.in-app .cs-bg > .pc-wall { filter: blur(24px) brightness(0.42) saturate(1.2); transform: scale(1.08); }
+
+.cs-status { position: absolute; left: 0; right: 0; top: 0; z-index: 10; height: calc(56px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 16px 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cs-power { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px 0 10px; border-radius: 19px; background: rgba(10, 9, 18, 0.55); color: #F2F0FA; font-size: 13px; font-weight: 600; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.cs-power svg { width: 19px; height: 19px; }
+.cs-power:hover { background: rgba(217, 58, 82, 0.5); }
+.cs-brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 14px; letter-spacing: 0.02em; color: rgba(242, 240, 250, 0.9); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5); }
+.cs-brand .pc-orb { width: 18px; height: 18px; }
+.cs-brand .pc-orb::after { inset: 4.5px; }
+.cs-status-r { display: flex; align-items: center; gap: 8px; }
+.cs-status .pc-clock { text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6); }
+.cs-status .pc-task-bal { background: rgba(10, 30, 20, 0.6); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); height: 38px; padding: 0 14px; border-radius: 19px; }
+
+.cs-main { position: absolute; left: 0; right: 0; top: calc(56px + env(safe-area-inset-top)); bottom: 96px; z-index: 2; overflow-y: auto; overscroll-behavior: contain; }
+.cs.in-app .cs-main { overflow: hidden; padding: 0 24px; }
+
+/* l'accueil */
+.cs-home { max-width: 1180px; margin: 0 auto; padding: 4px 32px 28px; display: flex; flex-direction: column; gap: 18px; color: #F2F0FA; animation: csTab 0.4s ease both; }
+.cs-hello { font-family: var(--serif); font-style: italic; font-size: 30px; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); }
+.cs-hero { position: relative; height: clamp(230px, 40vh, 420px); border-radius: 24px; overflow: hidden; background: #15121f; box-shadow: 0 30px 60px -28px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.08); flex: none; }
+.cs-hero-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: pcWallIn 0.8s ease both; }
+.cs-hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10, 8, 18, 0.88) 0%, rgba(10, 8, 18, 0.4) 50%, transparent 75%), linear-gradient(0deg, rgba(10, 8, 18, 0.6), transparent 50%); }
+.cs-hero.empty { background: radial-gradient(70% 90% at 85% 20%, rgba(122, 92, 255, 0.55), transparent 70%), radial-gradient(60% 80% at 10% 100%, rgba(232, 176, 75, 0.3), transparent 70%), linear-gradient(135deg, #1B1F4B, #2A1E4A); }
+.cs-hero-txt { position: absolute; left: 32px; bottom: 28px; right: 32px; z-index: 1; display: flex; flex-direction: column; gap: 8px; max-width: 560px; }
+.cs-hero-kick { font-size: 12px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: #F6C766; }
+.cs-hero-txt > b { font-size: clamp(28px, 4.4vw, 52px); font-weight: 800; letter-spacing: -0.025em; line-height: 1; text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); }
+.cs-hero-sub { font-size: 14.5px; color: rgba(242, 240, 250, 0.8); line-height: 1.45; }
+.cs-hero-act { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.st-btn.big { height: 48px; padding: 0 26px; font-size: 16px; border-radius: 12px; }
+.cs-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.cs-tile { display: flex; align-items: center; gap: 14px; height: 96px; padding: 0 18px; border-radius: 20px; text-align: left; color: #F2F0FA;
+  background: rgba(16, 14, 30, 0.62); border: 1px solid rgba(255, 255, 255, 0.08); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  transition: transform 0.18s cubic-bezier(.2, .9, .3, 1), background 0.18s, box-shadow 0.18s; }
+.cs-tile:hover { transform: translateY(-3px); background: rgba(30, 26, 52, 0.75); box-shadow: 0 18px 30px -16px rgba(0, 0, 0, 0.9); }
+.cs-tile:active { transform: scale(0.97); }
+.cs-tile-ico { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; flex: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 8px 18px -8px rgba(0, 0, 0, 0.7); }
+.cs-tile-ico svg { width: 32px; height: 32px; }
+.cs-tile.games .cs-tile-ico { background: linear-gradient(160deg, #F6C766, #D9902E); color: #1d1430; }
+.cs-tile.stim .cs-tile-ico { background: linear-gradient(160deg, #4B86FF, #1C46C9); color: #fff; }
+.cs-tile.custom .cs-tile-ico { background: linear-gradient(160deg, #FF8FB8, #C2407A); color: #fff; }
+.cs-tile.wallet .cs-tile-ico { background: linear-gradient(160deg, #4BD99A, #1D8F5C); color: #f0fff6; }
+.cs-tile-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cs-tile-txt b { font-size: 16px; }
+.cs-tile-txt em { font-style: normal; font-size: 12.5px; color: rgba(242, 240, 250, 0.62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.cs-h3 { font-size: 12.5px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(242, 240, 250, 0.75); margin-bottom: 10px; }
+.cs-recent-row { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.cs-recent-card { flex: none; width: 230px; border-radius: 14px; overflow: hidden; background: rgba(16, 14, 30, 0.7); text-align: left; scroll-snap-align: start; transition: transform 0.18s; border: 1px solid rgba(255, 255, 255, 0.06); }
+.cs-recent-card:hover { transform: translateY(-3px); }
+.cs-recent-card img { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; display: block; }
+.cs-recent-card span { display: block; padding: 9px 12px 11px; font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* une appli ouverte : un grand panneau de verre */
+.cs-app { max-width: 1180px; height: 100%; margin: 0 auto; display: flex; flex-direction: column; border-radius: 22px; overflow: hidden; color: #E9EDF5;
+  background: rgba(14, 13, 24, 0.8); border: 1px solid rgba(255, 255, 255, 0.08); -webkit-backdrop-filter: blur(20px) saturate(1.2); backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.9); }
+.cs-head { flex: none; display: flex; align-items: center; gap: 14px; height: 60px; padding: 0 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+.cs-back { display: flex; align-items: center; gap: 4px; height: 40px; padding: 0 14px 0 8px; border-radius: 20px; background: rgba(255, 255, 255, 0.08); font-size: 14px; font-weight: 700; flex: none; }
+.cs-back:hover { background: rgba(255, 255, 255, 0.14); }
+.cs-back svg { width: 20px; height: 20px; }
+.cs-head h2 { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-body { flex: 1; min-height: 0; }
+.cs-body.enter-fwd { animation: csFwd 0.32s cubic-bezier(.2, .9, .3, 1) both; }
+.cs-body.enter-back { animation: csBack 0.32s cubic-bezier(.2, .9, .3, 1) both; }
+.cs-body.enter-tab { animation: csTab 0.3s ease both; }
+@keyframes csFwd { from { opacity: 0; transform: translateX(36px); } }
+@keyframes csBack { from { opacity: 0; transform: translateX(-36px); } }
+@keyframes csTab { from { opacity: 0; transform: translateY(10px); } }
+
+/* la barre d'onglets */
+.cs-tabs { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 10; display: flex; gap: 4px; padding: 6px; border-radius: 24px;
+  background: rgba(14, 12, 26, 0.82); border: 1px solid rgba(255, 255, 255, 0.1); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: 0 20px 40px -14px rgba(0, 0, 0, 0.8); }
+.cs-tab { display: flex; align-items: center; gap: 9px; height: 48px; padding: 0 18px 0 12px; border-radius: 18px; color: rgba(242, 240, 250, 0.62); font-size: 14px; font-weight: 700; transition: background 0.2s, color 0.2s; }
+.cs-tab:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.cs-tab.on { color: #fff; background: rgba(255, 255, 255, 0.13); }
+.cs-tab-ico { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; transition: background 0.2s, color 0.2s; }
+.cs-tab-ico svg { width: 20px; height: 20px; }
+.cs-tab.on.home .cs-tab-ico { background: linear-gradient(160deg, #9C86FF, #6146E0); color: #fff; }
+.cs-tab.on.games .cs-tab-ico { background: linear-gradient(160deg, #F6C766, #D9902E); color: #1d1430; }
+.cs-tab.on.stim .cs-tab-ico { background: linear-gradient(160deg, #4B86FF, #1C46C9); color: #fff; }
+.cs-tab.on.custom .cs-tab-ico { background: linear-gradient(160deg, #FF8FB8, #C2407A); color: #fff; }
+
+/* les panneaux qui montent du bas */
+.cs-sheet-back { position: fixed; inset: 0; z-index: 50; background: rgba(4, 4, 10, 0.55); animation: stFade 0.22s ease both; }
+.cs-sheet-back.out { animation: csFadeOut 0.24s ease both; }
+@keyframes csFadeOut { to { opacity: 0; } }
+.cs-sheet { position: absolute; left: 50%; bottom: 0; width: min(560px, 100%); max-height: 92%; overflow-y: auto; overscroll-behavior: contain; transform: translateX(-50%);
+  border-radius: 24px 24px 0 0; padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -20px 60px -10px rgba(0, 0, 0, 0.7); animation: csUp 0.36s cubic-bezier(.2, .9, .3, 1) backwards; transition: transform 0.25s ease; }
+.cs-sheet.out { animation: csDown 0.24s ease-in both; }
+@keyframes csUp { from { transform: translate(-50%, 100%); } to { transform: translate(-50%, 0); } }
+@keyframes csDown { to { transform: translate(-50%, 100%); } }
+.cs-grab { position: sticky; top: 0; z-index: 3; height: 24px; display: grid; place-items: center; touch-action: none; cursor: grab; }
+.cs-grab i { width: 44px; height: 5px; border-radius: 3px; background: rgba(128, 128, 140, 0.55); }
+.cs-sheet-x { position: absolute; top: 12px; right: 12px; z-index: 4; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; line-height: 1; background: rgba(128, 128, 140, 0.22); }
+.cs-wallet { background: #171527; color: #F2F0FA; padding: 0 20px 26px; }
+.cs-wallet .st-wallet-card { margin-top: 18px; }
+.cs-bank { padding-bottom: env(safe-area-inset-bottom); }
+.cs-bank .cs-grab { margin-bottom: -24px; }
+.cs-bank .cs-grab i { background: rgba(234, 247, 239, 0.5); }
+.cs-bank .cs-sheet-x { color: #EAF7EF; background: rgba(234, 247, 239, 0.15); }
+.cs-bank .bk-head { padding-top: 26px; border-radius: 24px 24px 0 0; }
+.cs-bank .bk-body { overflow: visible; flex: none; }
+.cs-bank .bk-over { border-radius: 24px 24px 0 0; }
+/* glisser pour valider */
+.slide { position: relative; height: 58px; border-radius: 29px; background: #12382A; overflow: hidden; user-select: none; -webkit-user-select: none; flex: none; }
+.slide-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 29px; background: linear-gradient(90deg, #1D8F5C, #33C27F); transition: width 0.3s cubic-bezier(.2, .9, .3, 1); }
+.slide-label { position: absolute; inset: 0; display: grid; place-items: center; padding-left: 40px; color: #EAF7EF; font-size: 15px; font-weight: 700; pointer-events: none; }
+.slide-label::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.18) 50%, transparent 70%); background-size: 220% 100%; animation: slideShine 2.4s ease-in-out infinite; }
+@keyframes slideShine { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+.slide-knob { position: absolute; left: 5px; top: 5px; width: 48px; height: 48px; border-radius: 50%; background: #fff; color: #12382A; display: grid; place-items: center; touch-action: none; cursor: grab;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); transition: transform 0.3s cubic-bezier(.2, .9, .3, 1); }
+.slide-knob svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+/* les pages dans la console */
+.cs .st-modal { position: fixed; z-index: 55; }
+.cs .gm-launch { position: fixed; z-index: 60; }
+.cs-toast { bottom: 104px; z-index: 70; position: fixed; }
+.cs .st-wallbtn { opacity: 0.95; }
+.cs-search { max-width: 560px; }
+.cs-seg { display: inline-flex; gap: 2px; padding: 4px; border-radius: 14px; background: rgba(255, 255, 255, 0.06); }
+.cs-seg button { height: 40px; padding: 0 16px; border-radius: 10px; font-size: 14px; font-weight: 700; color: rgba(242, 240, 250, 0.62); display: flex; align-items: center; gap: 8px; }
+.cs-seg button b { font-size: 11.5px; padding: 2px 7px; border-radius: 8px; background: rgba(255, 255, 255, 0.1); }
+.cs-seg button.on { background: rgba(232, 176, 75, 0.2); color: #F6C766; }
+.cs-seg button.on b { background: rgba(232, 176, 75, 0.3); }
+.cs-body .gm-grid { padding: 14px 0 0; }
+.cs-body .gm-top { padding: 4px 0 10px; }
+.cs-body .gm-tools { padding: 14px 0 0; }
+.cs-body .gm-hint { padding: 14px 0 8px; }
+.cs-body .gm-add { padding: 10px 0 10px; }
+.cs-body .gm-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 12px; padding: 40px 20px; min-height: 60%; }
+.gm-top-row { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.gm-top-row img { pointer-events: none; }
+.gm-top-row .gm-grip { cursor: grab; }
+@media (pointer: coarse) { .gm-top-row .gm-grip { display: none; } .gm-top-row { padding-left: 10px; } }
+.cs-body .cu { background: transparent; margin: -16px -20px -40px; }
+.cs-body .wp, .cs-body .wp-right { background: transparent; overflow: visible; }
+.cs-body .lt { overflow: visible; }
+
+/* la fiche d'un de nos jeux */
+.gd { margin: -16px -20px -40px; }
+.gd-hero { position: relative; height: clamp(240px, 46vh, 420px); overflow: hidden; }
+.gd-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.gd-hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(14, 13, 24, 1) 0%, rgba(14, 13, 24, 0.55) 45%, rgba(14, 13, 24, 0.1) 100%); }
+.gd-hero-txt { position: absolute; left: 24px; right: 24px; bottom: 20px; z-index: 1; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.gd-hero-txt h2 { font-size: clamp(26px, 4vw, 44px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.02; }
+.gd-hero-txt p { color: rgba(233, 237, 245, 0.75); font-size: 14px; }
+.gd-act { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.gd-act .st-btn svg { width: 18px; height: 18px; }
+.gd-body { padding: 18px 24px 40px; display: flex; flex-direction: column; gap: 16px; align-items: flex-start; }
+.gd-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: 100%; max-width: 720px; }
+.gd-card { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 16px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.07); text-align: left; transition: background 0.15s, transform 0.15s; }
+.gd-card:hover { background: rgba(255, 255, 255, 0.1); transform: translateY(-2px); }
+.gd-card svg { width: 30px; height: 30px; flex: none; color: #FF8FB8; }
+.gd-card:nth-child(2) svg { color: #6EA1FF; }
+.gd-card span { display: flex; flex-direction: column; gap: 3px; }
+.gd-card b { font-size: 15px; }
+.gd-card em { font-style: normal; font-size: 12.5px; color: rgba(233, 237, 245, 0.6); }
+
+@media (max-width: 767px) {
+  .cs-status { height: calc(52px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 10px 0; }
+  .cs-power span { display: none; }
+  .cs-power { width: 40px; padding: 0; justify-content: center; }
+  .cs-brand { font-size: 13px; }
+  .cs-main { top: calc(52px + env(safe-area-inset-top)); bottom: calc(66px + env(safe-area-inset-bottom)); }
+  .cs.in-app .cs-main { padding: 0; }
+  .cs-home { padding: 2px 14px 24px; gap: 14px; }
+  .cs-hello { font-size: 24px; }
+  .cs-hero { height: clamp(260px, 46vh, 380px); border-radius: 20px; }
+  .cs-hero::after { background: linear-gradient(0deg, rgba(10, 8, 18, 0.92) 0%, rgba(10, 8, 18, 0.45) 55%, transparent 85%); }
+  .cs-hero-txt { left: 18px; right: 18px; bottom: 18px; }
+  .cs-tiles { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .cs-tile { height: auto; min-height: 112px; flex-direction: column; align-items: flex-start; justify-content: space-between; padding: 14px; border-radius: 18px; }
+  .cs-tile-ico { width: 46px; height: 46px; border-radius: 14px; }
+  .cs-tile-ico svg { width: 28px; height: 28px; }
+  .cs-recent-card { width: 62vw; }
+  .cs-app { border-radius: 0; border: 0; background: rgba(12, 11, 20, 0.86); box-shadow: none; }
+  .cs-head { height: 54px; padding: 0 10px; }
+  .cs-tabs { left: 0; right: 0; bottom: 0; transform: none; border-radius: 0; padding: 4px 4px env(safe-area-inset-bottom); gap: 0; display: grid; grid-template-columns: repeat(4, 1fr); border-width: 1px 0 0; }
+  .cs-tab { flex-direction: column; gap: 3px; height: 60px; padding: 0; border-radius: 14px; font-size: 11px; justify-content: center; }
+  .cs-tab.on { background: transparent; }
+  .cs-tab-ico { width: 40px; height: 28px; border-radius: 14px; }
+  .cs-toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
+  .gd { margin: -12px -12px -30px; }
+  .gd-hero-txt { left: 16px; right: 16px; }
+  .gd-body { padding: 16px 16px 32px; }
+  .gd-cards { grid-template-columns: minmax(0, 1fr); }
+  .cs-body .cu { margin: -12px -12px -30px; }
+  .cs-seg { display: flex; }
+  .cs-seg button { flex: 1; justify-content: center; padding: 0 8px; }
+}
