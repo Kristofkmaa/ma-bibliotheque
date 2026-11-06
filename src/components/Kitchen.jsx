@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import KitchenScene from '../three/KitchenScene'
 import { useKitchen } from '../hooks/useKitchen'
 import { AISLES, INGREDIENTS, aisleOf, findIngredients, inPantry } from '../lib/ingredients'
 import { recipesWith, searchRecipes, randomRecipes, recipeDetail, toEnglish, DISH_TYPES, DIETS, amountFr, timeFr } from '../lib/recipes'
@@ -22,11 +21,10 @@ const Close = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12
 const Back = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
 const Heart = ({ on }) => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" className={on ? 'fill' : ''} /></svg>
 
-export default function Kitchen({ userId, onClose }) {
+export default function Kitchen({ userId, scene, onClose }) {
   const k = useKitchen(userId)
   const mobile = useIsMobile()
-  const hostRef = useRef(null)
-  const sceneRef = useRef(null)
+  const sceneRef = useRef(scene)
   const rootRef = useRef(null)
   const [view, setView] = useState(null)       // où la caméra va
   const [arrived, setArrived] = useState(null) // où elle est arrivée (le panneau s'ouvre)
@@ -35,17 +33,18 @@ export default function Kitchen({ userId, onClose }) {
   const cb = useRef({})
   cb.current.tap = kind => go(kind)
 
+  // la maquette existe déjà (elle était au fond du carrousel) : on prend la main
   useEffect(() => {
-    const s = new KitchenScene(hostRef.current, {
+    const s = scene
+    sceneRef.current = s
+    s.cb = {
       onHover: (label, x, y) => setChip(label ? { label, x, y } : null),
       onTap: kind => cb.current.tap(kind),
       onArrive: kind => { setArrived(kind); if (kind === 'tablette') setApp(a => a || { tab: 'frigo', from: s.tabletRect() }) },
-    })
-    sceneRef.current = s
-    if (location.search.includes('debug')) window.__kitchen = s
+    }
     rootRef.current?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 420, easing: 'ease-out' })
-    return () => { s.dispose(); sceneRef.current = null }
-  }, [])
+    return () => { s.cb = {} }
+  }, [scene])
   useEffect(() => { sceneRef.current?.setPantry(k.pantry) }, [k.pantry])
   useEffect(() => { sceneRef.current?.setShopping(k.shopping.filter(s => !s.done).map(s => s.fr)) }, [k.shopping])
 
@@ -59,6 +58,7 @@ export default function Kitchen({ userId, onClose }) {
   const openApp = tab => { setApp({ tab, from: null }); if (view !== 'tablette') { setView('tablette'); sceneRef.current?.focus('tablette') } }
   const closeApp = () => { setApp(null); go(null) }
   const leave = () => {
+    setArrived(null); setView(null)
     const el = rootRef.current
     if (!el?.animate) { onClose(); return }
     el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: 'ease-in', fill: 'forwards' }).finished.then(onClose, onClose)
@@ -74,7 +74,6 @@ export default function Kitchen({ userId, onClose }) {
 
   return (
     <div className={'kitchen' + (view ? ' focused' : '') + (app ? ' app-open' : '')} ref={rootRef}>
-      <div className="kitchen-host" ref={hostRef} />
 
       <header className="kt-top">
         <button type="button" className="kt-back" onClick={view && !app ? back : leave}>

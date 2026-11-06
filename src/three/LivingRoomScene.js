@@ -24,6 +24,8 @@ const PC_A = 0.42   // part du trajet vers le PC passée à rejoindre la chaise
 const AZ_MIN = 0.18, AZ_MAX = 1.2, AZ0 = 0.62
 const EL_MIN = 0.3, EL_MAX = 0.82, EL0 = 0.58
 const TARGET0 = new THREE.Vector3(0, 0.95, 0)
+/** La vue habituelle du salon (pour le carrousel des pièces). */
+export const SALON_VIEW = { az: AZ0, el: EL0 }
 
 // emplacements (repère de la pièce)
 const BOOKCASE = { x: -1.05, z: -R + 0.2, w: 1.62, h: 2.18, d: 0.38 }   // mur du fond, à gauche (face à la caméra)
@@ -1394,7 +1396,7 @@ export class LivingRoomScene {
   _placeBubbles(dt) {
     if (!this.bubbles?.tv) this._setBubble('tv', 'Films & séries')
     this.bornAt ||= performance.now()
-    const free = !this.fly && !this.tvZoom && performance.now() - this.bornAt > 1200
+    const free = !this.fly && !this.tvZoom && !this.carousel && performance.now() - this.bornAt > 1200
     const f = 1 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))
     const px = 40     // hauteur à l'écran (px) de la pastille
     for (const [kind, pos, on] of [
@@ -1403,6 +1405,7 @@ export class LivingRoomScene {
       const b = this.bubbles?.[kind]
       if (!b) continue
       b.op.t = on ? 1 : 0
+      if (this.carousel) b.op.snap(0)     // la pièce s'en va : la bulle disparaît tout de suite
       b.op.step(dt)
       const o = clamp(b.op.v, 0, 1)
       b.mat.opacity = o
@@ -1683,6 +1686,12 @@ export class LivingRoomScene {
 
   /** Distance qui fait tenir toute la maquette à l'écran, quel que soit l'angle. */
   _fitDistance() {
+    // (sur le carrousel, la caméra est décalée : on mesure sans ce décalage)
+    const view = this.camera.view, shifted = !!view?.enabled
+    if (shifted) { view.enabled = false; this.camera.updateProjectionMatrix() }
+    try { return this._fitDistanceRaw() } finally { if (shifted) { view.enabled = true; this.camera.updateProjectionMatrix() } }
+  }
+  _fitDistanceRaw() {
     const pts = []
     for (const x of [-R - T, R + T]) for (const y of [-FT, H + 0.05]) for (const z of [-R - T, R + T]) pts.push(new THREE.Vector3(x, y, z))
     const margin = this.cb.margins?.() || { top: 0.12, bottom: 0.14, side: 0.06 }
@@ -1701,6 +1710,35 @@ export class LivingRoomScene {
     for (let i = 0; i < 22; i++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid }
     return hi
   }
+
+  /**
+   * Le carrousel des pièces : une pose de caméra imposée ({ az, el, scale, ox, oy, spin }), ou null
+   * pour reprendre la main (la vue habituelle du salon).
+   */
+  setCarousel(p) {
+    if (!p) {
+      if (this.carousel) {
+        this.camera.far = 80
+        this.camera.clearViewOffset()
+        this.az.snap(AZ0); this.el.snap(EL0); this.target.copy(TARGET0)
+        this.idleAt = this.time
+      }
+      this.carousel = null
+      return
+    }
+    if (!this.carousel) {
+      // on quitte la pièce : debout, sans survol
+      if (this.seat?.on || this.seat?.k.v > 0) { this.seat.on = false; this.seat.k.snap(0); this.seat.then = null }
+      // (au fond du carrousel, la pièce est loin : la caméra doit voir plus loin)
+      this.camera.fov = FOV; this.camera.far = 600; this.camera.updateProjectionMatrix()
+      this.hover = null; this.cb.onHover?.(null)
+    }
+    if (!p.spin) this.cSpin = 0
+    this.cSpin ??= 0
+    this.carousel = p
+  }
+  currentAz() { return this.az.v + (this.lastDrift || 0) }
+  carouselSpin() { return this.cSpin || 0 }
 
   _placeCamera(az, el, dist, target) {
     const c = this.camera
@@ -2168,7 +2206,15 @@ export class LivingRoomScene {
     // le mur de la bibliothèque, recopié
     this._syncMirror()
     // caméra
-    if (this.fly) {
+    if (this.carousel) {
+      // sur le carrousel des pièces : la caméra suit la pose donnée (et tourne lentement au fond)
+      const p = this.carousel
+      if (p.spin) this.cSpin += p.spin * dt
+      const cam = this.camera
+      if (cam.fov !== FOV) cam.fov = FOV
+      this._placeCamera(p.az + this.cSpin, p.el, this.dist / p.scale, TARGET0)
+      cam.setViewOffset(this.w, this.h, -p.ox, -p.oy, this.w, this.h)
+    } else if (this.fly) {
       this._stepFly(dt)
     } else if (this.tvZoom) {
       this._stepTvZoom(dt)

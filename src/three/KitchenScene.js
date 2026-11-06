@@ -30,6 +30,8 @@ const ROOT_OFF = new THREE.Vector3(-0.2, 0, -R)
 const AZ0 = 0.5, EL0 = 0.52, AZ_LIM = [-1.05, 1.05], EL_LIM = [0.32, 0.92]
 const TARGET0 = new THREE.Vector3(0, 0.85, 0)
 const FOV_ROOM = 30
+/** La vue habituelle de la cuisine (pour le carrousel des pièces). */
+export const KITCHEN_VIEW = { az: AZ0, el: EL0 }
 
 class Spring {
   constructor(v = 0, k = 90, damp = 1) { this.v = v; this.t = v; this.vel = 0; this.k = k; this.c = 2 * Math.sqrt(k) * damp }
@@ -131,7 +133,8 @@ export default class KitchenScene {
     this.container = container
     this.mobile = matchMedia('(max-width: 767px)').matches
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2)
+    r.setPixelRatio(this.dpr)
     r.outputColorSpace = THREE.SRGBColorSpace
     r.toneMapping = THREE.ACESFilmicToneMapping
     r.toneMappingExposure = 1.05
@@ -669,8 +672,7 @@ export default class KitchenScene {
     return { pos: new THREE.Vector3(tx, ty + lift, d + 0.1).add(ROOT_OFF), target: new THREE.Vector3(tx, ty, 0.1).add(ROOT_OFF), fov }
   }
   /** Toute la maquette, vue de trois quarts (on tourne autour en glissant). */
-  _orbit(az = this.az.v, el = this.el.v) {
-    const d = this.dist
+  _orbit(az = this.az.v, el = this.el.v, d = this.dist) {
     const t = TARGET0
     return { pos: new THREE.Vector3(t.x + Math.sin(az) * Math.cos(el) * d, t.y + Math.sin(el) * d, t.z + Math.cos(az) * Math.cos(el) * d), target: t.clone(), fov: FOV_ROOM }
   }
@@ -705,6 +707,43 @@ export default class KitchenScene {
     this.camera.position.copy(this.cam.pos); this.camera.lookAt(this.cam.target)
     if (Math.abs(this.camera.fov - this.cam.fov) > 1e-3) { this.camera.fov = this.cam.fov; this.camera.updateProjectionMatrix() }
   }
+
+  /**
+   * Le carrousel des pièces : une pose de caméra imposée ({ az, el, scale, ox, oy, spin }), ou null
+   * pour reprendre la main (la vue habituelle de la cuisine). Au fond, on dessine plus léger.
+   */
+  setCarousel(p) {
+    if (!p) {
+      if (this.carousel) {
+        this.carousel = null
+        this.camera.far = 80
+        this.camera.clearViewOffset()
+        this.az.snap(AZ0); this.el.snap(EL0)
+        this.renderer.setPixelRatio(this.dpr)
+        this.w = 0; this.resize()
+        this._place(this._orbit(), true)
+      }
+      this.kick()
+      return
+    }
+    if (!this.carousel) {
+      // on quitte la pièce : portes fermées, vue d'ensemble, image plus légère
+      this.view = null; this.fly = null
+      this.fridgeDoor.spring.t = 0
+      for (const a of this.anims) if (a.cab) a.spring.t = 0
+      this.leftWall.decor.visible = this.leftWall.cut.v > 0.6
+      this._setHover(null)
+      this.renderer.setPixelRatio(1)
+      this.camera.far = 600   // (au fond du carrousel, la pièce est loin)
+      this.w = 0; this.resize()
+    }
+    if (!p.spin) this.cSpin = 0
+    this.cSpin ??= 0
+    this.carousel = p
+    this.kick()
+  }
+  currentAz() { return this.az.v }
+  carouselSpin() { return this.cSpin || 0 }
 
   /** Aller vers une partie de la cuisine (null : revenir à toute la maquette). */
   focus(kind) {
@@ -790,7 +829,15 @@ export default class KitchenScene {
     const dt = Math.min(0.25, (now - this.last) / 1000); this.last = now
     const sub = Math.max(1, Math.ceil(dt * 60))   // les ressorts avancent par petits pas, même si l'image est lente
     let busy = false
-    if (this.fly) {
+    if (this.carousel) {
+      // sur le carrousel des pièces : la caméra suit la pose donnée (et tourne lentement au fond)
+      const p = this.carousel
+      if (p.spin) { this.cSpin += p.spin * dt; busy = true }
+      const f = this._orbit(p.az + this.cSpin, p.el, this.dist / p.scale)
+      this.cam.pos.copy(f.pos); this.cam.target.copy(f.target); this.cam.fov = FOV_ROOM
+      this._applyCam()
+      this.camera.setViewOffset(this.w, this.h, -p.ox, -p.oy, this.w, this.h)
+    } else if (this.fly) {
       const f = this.fly
       f.start ??= now
       f.t = Math.min(1, (now - f.start) / 1000 / f.dur)   // à l'horloge : même lent, le trajet dure ce qu'il doit
@@ -807,7 +854,7 @@ export default class KitchenScene {
       }
       const f = this._orbit(); this.cam.pos.copy(f.pos); this.cam.target.copy(f.target); this.cam.fov = f.fov
     }
-    this._applyCam()
+    if (!this.carousel) this._applyCam()
     // les murs : celui qui est entre la caméra et la pièce s'abaisse, les autres se relèvent
     // (pendant qu'on regarde le frigo ou les placards, ils restent comme ils sont)
     if (!this.view || this.fly) {

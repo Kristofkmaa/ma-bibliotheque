@@ -4012,7 +4012,8 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
    ========================================================================== */
 .kitchen { --k-ink: #23201C; --k-mute: #7A7268; --k-cream: #FBF7F0; --k-paper: #F4EEE4; --k-line: rgba(35, 32, 28, 0.1);
   --k-sage: #5F7A6A; --k-terra: #B4573A; --k-ok: #4E7D5B;
-  position: fixed; inset: 0; z-index: 80; background: radial-gradient(ellipse 90% 70% at 50% 42%, #F7F2EA 0%, #ECE4D7 62%, #DFD4C3 100%); color: var(--k-ink); font-family: var(--sans); overflow: hidden; }
+  position: fixed; inset: 0; z-index: 80; color: var(--k-ink); font-family: var(--sans); overflow: hidden; pointer-events: none; }
+.kitchen .kt-dock, .kitchen .kt-panel, .kitchen .kt-app { pointer-events: auto; }
 .kitchen-host { position: absolute; inset: 0; }
 .kitchen-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; -webkit-tap-highlight-color: transparent; }
 .kitchen button { -webkit-tap-highlight-color: transparent; }
@@ -4251,3 +4252,11 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
   .ka-steps li button { font-size: 16.5px; }
   .ka-sep { display: none; }
 }
+
+/* le carrousel des pièces : les maquettes se superposent, l'interface de la pièce de devant au-dessus */
+.salon-rooms { position: absolute; inset: 0; z-index: 0; }
+.salon-rooms > .salon-stage { position: absolute; inset: 0; }
+.room-turning { position: absolute; inset: 0; z-index: 70; }
+.salon .salon-top, .salon .salon-ctrls, .salon .salon-bottom, .salon .salon-tabs, .salon .salon-stand { transition: opacity 0.45s ease; }
+.salon.room-away .salon-top, .salon.room-away .salon-ctrls, .salon.room-away .salon-bottom,
+.salon.room-away .salon-tabs, .salon.room-away .salon-stand, .salon.room-away .salon-chip { opacity: 0; pointer-events: none; }

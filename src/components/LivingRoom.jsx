@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { LivingRoomScene, dayMode } from '../three/LivingRoomScene'
+import { LivingRoomScene, dayMode, SALON_VIEW } from '../three/LivingRoomScene'
+import KitchenScene, { KITCHEN_VIEW } from '../three/KitchenScene'
+import { RoomCarousel } from '../three/carousel'
 import { useIsMobile } from '../hooks/useIsMobile'
 import SeriesTV from './SeriesTV'
 import ShowcasePanel from './ShowcasePanel'
@@ -88,6 +90,9 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   const topRef = useRef(null)
   const bottomRef = useRef(null)
   const sceneRef = useRef(null)
+  const kitchenHostRef = useRef(null)   // la cuisine : une autre maquette, sur le même carrousel
+  const kitchenRef = useRef(null)
+  const carouselRef = useRef(null)
   const [hover, setHover] = useState(null)
   const [going, setGoing] = useState(from === 'back')
   const [tv, setTv] = useState(false)           // zoom sur la télé (en cours ou fini)
@@ -158,13 +163,24 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
     })
     sceneRef.current = s
     if (import.meta.env.DEV || location.search.includes('debug')) window.__salon = s
+    // le carrousel des pièces : le salon devant, la cuisine au fond qui tourne doucement
+    const k = new KitchenScene(kitchenHostRef.current, {})
+    kitchenRef.current = k
+    if (import.meta.env.DEV || location.search.includes('debug')) window.__kitchen = k
+    const car = new RoomCarousel([
+      { id: 'salon', scene: s, host, az0: SALON_VIEW.az, el0: SALON_VIEW.el },
+      { id: 'cuisine', scene: k, host: kitchenHostRef.current, az0: KITCHEN_VIEW.az, el0: KITCHEN_VIEW.el },
+    ], 'salon')
+    carouselRef.current = car
+    const onResize = () => car.resize()
+    window.addEventListener('resize', onResize)
     let t
     if (from === 'back') {
       s.arriveFromLibrary()
       rootRef.current?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease-in-out' })
       t = setTimeout(() => setGoing(false), 1100)
     }
-    return () => { clearTimeout(t); s.dispose(); sceneRef.current = null }
+    return () => { clearTimeout(t); window.removeEventListener('resize', onResize); car.dispose(); k.dispose(); s.dispose(); sceneRef.current = null; kitchenRef.current = null }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { sceneRef.current?.setTvBubble(!bubbleOff) }, [bubbleOff])
@@ -184,8 +200,16 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   // le son de la télé : on le baisse dès qu'on part (vers la bibliothèque, le PC, les films…) et on
   // le remonte dès qu'on revient (pendant l'animation du retour)
   const [leaving, setLeaving] = useState(false)
-  const [kitchen, setKitchen] = useState(false)   // la cuisine, par-dessus le salon
-  useEffect(() => { setWall(!tv && !leaving && !kitchen) }, [tv, leaving, kitchen]) // eslint-disable-line react-hooks/exhaustive-deps
+  // la pièce de devant sur le carrousel ('salon' ou 'cuisine'), et le tour en cours
+  const [room, setRoom] = useState('salon')
+  const [turning, setTurning] = useState(false)
+  const goRoom = id => {
+    if (turning || id === room || !carouselRef.current) return
+    setTurning(true); setHover(null)
+    carouselRef.current.turnTo(id, () => { setRoom(id); setTurning(false) })
+  }
+  const away = room !== 'salon' || turning
+  useEffect(() => { setWall(!tv && !leaving && !away) }, [tv, leaving, away]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { setWall(false); tvVideo.current?.setAttribute('data-off', '') }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Échap pendant le zoom : on ressort (une fois dans la télé, c'est le module qui s'en charge)
@@ -218,8 +242,13 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
     : 'Ta bibliothèque t’attend'
 
   return (
-    <div className={`salon mood-${mode}` + (going || tv ? ' going' : '') + (tv ? ' tv-mode' : '') + (cinema ? ' cinema' : '')} ref={rootRef}>
-      <div className="salon-stage" ref={hostRef} />
+    <div className={`salon mood-${mode}` + (going || tv ? ' going' : '') + (tv ? ' tv-mode' : '') + (cinema ? ' cinema' : '') + (away ? ' room-away' : '')} ref={rootRef}>
+      {/* les maquettes, chacune sa toile : celle de devant passe au-dessus (le carrousel s'en charge) */}
+      <div className="salon-rooms">
+        <div className="salon-stage" ref={hostRef} />
+        <div className="salon-stage room-stage" ref={kitchenHostRef} />
+      </div>
+      {turning && <div className="room-turning" aria-hidden="true" />}
       {/* les génériques, en fond sur la télé (posés sur l'écran 3D par la scène) */}
       {/* assis dans le canapé : un bouton pour se lever */}
       {seated && !tv && !going && (
@@ -279,7 +308,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       )}
 
       {/* la cuisine : une autre pièce, ouverte par-dessus le salon */}
-      {kitchen && <Kitchen userId={userId} onClose={() => setKitchen(false)} />}
+      {room === 'cuisine' && !turning && kitchenRef.current && <Kitchen userId={userId} scene={kitchenRef.current} onClose={() => goRoom('salon')} />}
 
       <div className="salon-top" ref={topRef}>
         <div className="logo">
@@ -311,7 +340,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5h9a4 4 0 0 1 3.9 4.8l-.8 3.6a2.2 2.2 0 0 1-3.7 1.1L13.8 16h-3.6l-2.1 2a2.2 2.2 0 0 1-3.7-1.1l-.8-3.6A4 4 0 0 1 7.5 8.5zM8 11.2v3M6.5 12.7h3" /><circle cx="15.8" cy="12" r=".6" /><circle cx="17.3" cy="13.8" r=".6" /></svg>
             <span>Jeux</span>
           </button>
-          <button type="button" className="tab" onClick={() => setKitchen(true)} disabled={going}>
+          <button type="button" className="tab" onClick={() => goRoom('cuisine')} disabled={going || turning}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v7.5a2 2 0 0 0 2 2M11 3v7.5a2 2 0 0 1-2 2V21M9 3v6M16.5 21V3c-2 1.4-3 4-3 7.5h3" /></svg>
             <span>Cuisine</span>
           </button>
@@ -328,7 +357,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
             <button type="button" className="lbl box salon-go" onClick={() => sceneRef.current?.tap('pc')} disabled={going}>
               Le PC · Jeux <span aria-hidden="true">◆</span>
             </button>
-            <button type="button" className="lbl box salon-go" onClick={() => setKitchen(true)} disabled={going}>
+            <button type="button" className="lbl box salon-go" onClick={() => goRoom('cuisine')} disabled={going || turning}>
               La cuisine <span aria-hidden="true">✦</span>
             </button>
           </div>
