@@ -1004,7 +1004,8 @@ export class LivingRoomScene {
   _placeTvVideo() {
     const el = this.cb.tvVideo?.()
     if (!el) return
-    const hide = () => { if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden' }
+    // caché : garé en tout petit, presque transparent (l'iPhone met en pause une vidéo tout à fait invisible)
+    const hide = () => { if (!el.hasAttribute('data-off')) el.setAttribute('data-off', '') }
     if (this.fly || this.tvZoom || (this.wallOf('left').f ?? 1) < 0.97) return hide()
     const scr = this.tvScreen
     // la caméra vient de bouger : ses matrices ne sont recalculées qu'au rendu, on le fait ici
@@ -1026,7 +1027,7 @@ export class LivingRoomScene {
     if (!m) return hide()
     const tf = `matrix3d(${m})`
     if (el.style.transform !== tf) el.style.transform = tf
-    if (el.style.visibility !== 'visible') el.style.visibility = 'visible'
+    if (el.hasAttribute('data-off')) el.removeAttribute('data-off')
   }
 
   /** Le fond d'écran du PC (adresse d'une image de jeu, ou null) : l'écran 3D le montre aussi. */

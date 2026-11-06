@@ -4,6 +4,7 @@ import { useLibrary } from './hooks/useLibrary'
 import { useShelves } from './hooks/useShelves'
 import { useSeries } from './hooks/useSeries'
 import { useGames } from './hooks/useGames'
+import TvBackdrop from './components/TvBackdrop'
 import { effectiveShelves, placeBook, moveBook } from './lib/shelfOps'
 import { useBasket } from './hooks/useBasket'
 import { SearchBasket, BasketTray } from './components/Basket'
@@ -57,6 +58,16 @@ function Library({ user, onSignOut }) {
   const { shelves, commit: commitShelves, storage } = useShelves(user.id)
   const { series, addSeries, updateSeries, removeSeries, renameCategory } = useSeries(user.id)
   const gamesApi = useGames(user.id)
+  // la télé du salon : allumée pendant toute la visite (salon, bibliothèque, PC…) ; le salon la
+  // pose sur son mur quand on le voit, et elle n'a le son que là
+  const tvEl = useRef(null)
+  const [tvVol, setTvVol] = useState(0)          // le volume (0 : coupé, comme à chaque arrivée)
+  const [tvOnAir, setTvOnAir] = useState(false)
+  const [tvNow, setTvNow] = useState(null)
+  const [tvSkip, setTvSkip] = useState(0)
+  const [tvWall, setTvWall] = useState(false)
+  const tvSeries = useMemo(() => [...(series || [])].sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.added_at || '').localeCompare(a.added_at || '')), [series])
+  const tvBus = { el: tvEl, volume: tvVol, setVolume: setTvVol, onAir: tvOnAir, nowId: tvNow, setSkip: setTvSkip, setWall: setTvWall }
   const [sort, setSortState] = useState(() => readPref('levana.sort2', 'manual'))
   const [newShelfSignal] = useState(0)
   const [shelvesOpen, setShelvesOpen] = useState(null)   // null : fermé ; sinon { id } de l'étagère à montrer
@@ -373,9 +384,14 @@ function Library({ user, onSignOut }) {
         <MyShelves eff={effShelves} commit={commitShelves} onDeleteBooks={removeBooks} initialId={shelvesOpen.id} onClose={() => setShelvesOpen(null)} />
       )}
 
+      <div className="salon-layer">
+      {/* la télé : son lecteur ne s'arrête jamais (seulement caché quand on n'est pas devant) */}
+      <div className="tv-video" ref={tvEl} aria-hidden="true" data-off="">
+        {HAS_WEBGL && tvSeries.length > 0 && <TvBackdrop series={tvSeries} volume={tvWall ? tvVol : 0} skip={tvSkip} onPlaying={setTvOnAir} onNow={setTvNow} />}
+      </div>
       {salon && (
         <Suspense fallback={<div className="salon" />}>
-          <LivingRoom
+          <LivingRoom tv={tvBus}
             from={salon} books={books} shelves={effShelves} basketItems={basket.items}
             series={series} onAddSeries={addSeries} onUpdateSeries={updateSeries} onRemoveSeries={removeSeries} onRenameCategory={renameCategory}
             gamesApi={gamesApi} holder={user.user_metadata?.full_name || user.user_metadata?.name || ''}
@@ -387,6 +403,7 @@ function Library({ user, onSignOut }) {
           />
         </Suspense>
       )}
+      </div>
 
       {scanner && <Suspense fallback={null}><Scanner onBookFound={onScanFound} onClose={() => setScanner(false)} /></Suspense>}
     </div>

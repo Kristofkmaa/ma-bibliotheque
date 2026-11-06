@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import BluRayShelf, { canWebGL } from './BluRayShelf'
 import { tmdbImg, searchSeries, seriesDetails, seriesVideos, seriesImages, year, isMovie, workKey, runtimeLabel, publicRating, fmtVote, fmtVotes, seriesProviders, providerUrl } from '../lib/tmdb'
 
 /** Un titre dont les mots montent un à un, comme sortis d'une fente. */
@@ -593,6 +594,7 @@ export default function SeriesTV({ series, initialId = null, fromRect = null, on
   const [layout, setLayoutState] = useState(() => { try { return localStorage.getItem('levana.series.vue3d') || '3d' } catch { return '3d' } })
   const setLayout = v => { setLayoutState(v); try { localStorage.setItem('levana.series.vue3d', v) } catch { /* ignore */ } }
   const [shelfId, setShelfId] = useState(null)
+  const [gl3d] = useState(canWebGL)             // de vrais boîtiers en 3D (sinon, l'étagère en CSS)
   const [drag, setDrag] = useState(null)        // on fait tourner l'étagère au doigt
   const [size, setSize] = useState({ W: 800, H: 400 })
   const stageRef = useRef(null)
@@ -762,8 +764,10 @@ export default function SeriesTV({ series, initialId = null, fromRect = null, on
                 {layout === '3d' && shelfList.length > 0 ? (
                   <div className="sx-shelf3d">
                     <div className="vx-shelfwrap" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onClickCapture={onClickCapture} onWheel={onWheel}>
-                      <Shelf list={shelfList} pos={pos} dragging={!!drag?.moved} onPick={pick} onOpen={() => shelfCur && setId(shelfCur.id)}
-                        onPlay={() => shelfCur && setPlaying(shelfCur)} canPlay={false} stageRef={stageRef} size={size} zoom={1} />
+                      {gl3d
+                        ? <BluRayShelf list={shelfList} pos={pos} dragging={!!drag?.moved} onPick={pick} onOpen={() => shelfCur && setId(shelfCur.id)} stageRef={stageRef} spineOf={spineOf} />
+                        : <Shelf list={shelfList} pos={pos} dragging={!!drag?.moved} onPick={pick} onOpen={() => shelfCur && setId(shelfCur.id)}
+                          onPlay={() => shelfCur && setPlaying(shelfCur)} canPlay={false} stageRef={stageRef} size={size} zoom={1} />}
                     </div>
                     {shelfCur && (
                       <div className="vx-caption">

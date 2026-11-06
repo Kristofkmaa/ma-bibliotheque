@@ -864,6 +864,78 @@ function Clock() {
 /* L'accueil                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * La grande fenêtre de l'accueil : notre top, un jeu après l'autre (toutes les 7 s, ou au doigt,
+ * aux flèches), et en dessous la rangée de tout le classement pour y sauter directement.
+ */
+function TopCarousel({ items, ranked, onPlay, onGame }) {
+  const n = items.length
+  const [k, setK] = useState(0)
+  const [hold, setHold] = useState(false)
+  const drag = useRef(null)
+  const strip = useRef(null)
+  const cur = Math.min(k, n - 1)
+  const g = items[cur]
+  useEffect(() => { if (k >= n) setK(0) }, [n, k])
+  useEffect(() => {
+    if (hold || n < 2) return
+    const t = setTimeout(() => setK(v => (v + 1) % n), 7000)
+    return () => clearTimeout(t)
+  }, [k, hold, n])
+  // la vignette active reste visible dans la rangée
+  useEffect(() => { strip.current?.children[cur]?.scrollIntoView?.({ block: 'nearest', inline: 'center', behavior: 'smooth' }) }, [cur])
+  const go = d => setK(v => (v + d + n) % n)   // le minuteur repart de zéro à chaque changement
+  const label = i => (ranked ? `N°${i + 1}` : i === 0 ? 'Dernier ajouté' : 'Récent')
+  return (
+    <section className="cs-car" onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)}>
+      <div className="cs-hero cs-car-stage"
+        onPointerDown={e => { drag.current = { x: e.clientX, y: e.clientY } }}
+        onPointerUp={e => {
+          const d = drag.current; drag.current = null
+          if (!d) return
+          const dx = e.clientX - d.x
+          if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(e.clientY - d.y)) go(dx < 0 ? 1 : -1)
+        }}>
+        {items.map((x, i) => (Math.abs(i - cur) <= 1 || (cur === 0 && i === n - 1) || (cur === n - 1 && i === 0)) && (
+          <div key={x.id} className={'cs-car-slide' + (i === cur ? ' on' : '')} aria-hidden={i !== cur}>
+            <Art appId={x.app_id} fallback={x.img} className="cs-hero-art" />
+          </div>
+        ))}
+        <div className="cs-hero-txt" key={g.id}>
+          <span className="cs-hero-kick">{ranked ? (cur === 0 ? 'Ton n°1' : `N°${cur + 1} de ton top`) : 'Ajouté récemment'}</span>
+          <b>{g.name}</b>
+          <span className="cs-car-meta">
+            {g.rating ? <Stars n={g.rating} /> : null}
+            <em>{g.genres?.slice(0, 2).join(' · ')}</em>
+          </span>
+          <span className="cs-hero-act">
+            <button type="button" className="st-btn go big" onClick={() => onPlay(g.app_id)}>▶ Jouer</button>
+            <button type="button" className="st-btn ghost" onClick={() => onGame(g.id)}>Voir le jeu</button>
+          </span>
+        </div>
+        {n > 1 && <>
+          <button type="button" className="cs-car-arrow prev" onClick={() => go(-1)} aria-label="Jeu précédent"><Back /></button>
+          <button type="button" className="cs-car-arrow next" onClick={() => go(1)} aria-label="Jeu suivant"><Back /></button>
+          <span className="cs-car-count">{cur + 1} / {n}</span>
+          {!hold && <span className="cs-car-timer" key={'t' + cur} />}
+        </>}
+      </div>
+      {n > 1 && (
+        <div className="cs-car-strip" ref={strip} role="tablist" aria-label={ranked ? 'Mon top' : 'Mes jeux'}>
+          {items.map((x, i) => (
+            <button type="button" key={x.id} role="tab" aria-selected={i === cur} className={'cs-car-thumb' + (i === cur ? ' on' : '') + (ranked && i < 3 ? ' r' + (i + 1) : '')}
+              onClick={() => setK(i)}>
+              {x.img && <img src={x.img} alt="" loading="lazy" draggable="false" />}
+              <span className="cs-car-rank">{ranked ? i + 1 : ''}</span>
+              <span className="cs-car-name">{x.name}<em>{label(i)}</em></span>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function greeting() { const h = new Date().getHours(); return h >= 5 && h < 18 ? 'Bonjour' : 'Bonsoir' }
 
 function Home({ holder, games, top, balance, onPlay, onGame, go, openWallet }) {
@@ -880,17 +952,7 @@ function Home({ holder, games, top, balance, onPlay, onGame, go, openWallet }) {
     <div className="cs-home">
       <p className="cs-hello">{greeting()}{first ? `, ${first}` : ''}.</p>
       {star ? (
-        <section className="cs-hero">
-          <Art appId={star.app_id} fallback={star.img} className="cs-hero-art" />
-          <div className="cs-hero-txt">
-            <span className="cs-hero-kick">{star.favorite ? 'Ton n°1' : 'Dernier jeu ajouté'}</span>
-            <b>{star.name}</b>
-            <span className="cs-hero-act">
-              <button type="button" className="st-btn go big" onClick={() => onPlay(star.app_id)}>▶ Jouer</button>
-              <button type="button" className="st-btn ghost" onClick={() => onGame(star.id)}>Voir le jeu</button>
-            </span>
-          </div>
-        </section>
+        <TopCarousel items={top.length ? top : recent.slice(0, 6)} ranked={top.length > 0} onPlay={onPlay} onGame={onGame} />
       ) : (
         <section className="cs-hero empty">
           <div className="cs-hero-txt">

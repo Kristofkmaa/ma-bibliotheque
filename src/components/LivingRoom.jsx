@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { LivingRoomScene, dayMode } from '../three/LivingRoomScene'
 import { useIsMobile } from '../hooks/useIsMobile'
 import SeriesTV from './SeriesTV'
-import TvBackdrop from './TvBackdrop'
 import Vitrine from './Vitrine'
 import PcOS from './PcOS'
 import { applyTheme } from '../lib/theme'
@@ -15,6 +14,63 @@ const BUBBLE_KEY = 'levana.series.bulle'
 
 const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`
 
+function SpeakerIcon({ level }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 9h4l5-4v14l-5-4H4z" className="fill" />
+      {level <= 0 ? <path d="M16.5 9.5l5 5M21.5 9.5l-5 5" />
+        : <>
+          <path d="M16 9.5a3.5 3.5 0 0 1 0 5" />
+          {level > 40 && <path d="M18.5 7a7 7 0 0 1 0 10" />}
+          {level > 75 && <path d="M21 4.5a10.5 10.5 0 0 1 0 15" />}
+        </>}
+    </svg>
+  )
+}
+
+const VOL_KEY = 'levana.tv.volume'
+/**
+ * La barre de volume de la télé : on la monte ou on la baisse du doigt (ou de la souris, des
+ * flèches) ; le petit haut-parleur dessous coupe le son ou le remet au dernier niveau.
+ */
+function VolumePop({ value, onChange, onClose }) {
+  const track = useRef(null)
+  const box = useRef(null)
+  const drag = useRef(false)
+  const last = () => { try { return +localStorage.getItem(VOL_KEY) || 60 } catch { return 60 } }
+  const set = v => {
+    v = Math.round(Math.max(0, Math.min(100, v)))
+    onChange(v)
+    if (v > 0) { try { localStorage.setItem(VOL_KEY, String(v)) } catch { /* ignore */ } }
+  }
+  const fromY = y => { const r = track.current.getBoundingClientRect(); set(((r.bottom - y) / r.height) * 100) }
+  // un toucher ailleurs ferme la barre
+  useEffect(() => {
+    const out = e => { if (!box.current?.contains(e.target) && !e.target.closest?.('.salon-vol')) onClose() }
+    window.addEventListener('pointerdown', out)
+    return () => window.removeEventListener('pointerdown', out)
+  }, [onClose])
+  return (
+    <div className="salon-vol-pop" ref={box}>
+      <span className="salon-vol-num">{value}</span>
+      <div className="salon-vol-track" ref={track} role="slider" tabIndex={0} aria-label="Volume" aria-valuemin={0} aria-valuemax={100} aria-valuenow={value} aria-orientation="vertical"
+        onPointerDown={e => { drag.current = true; e.currentTarget.setPointerCapture?.(e.pointerId); fromY(e.clientY) }}
+        onPointerMove={e => { if (drag.current) fromY(e.clientY) }}
+        onPointerUp={() => { drag.current = false }} onPointerCancel={() => { drag.current = false }}
+        onKeyDown={e => {
+          const d = { ArrowUp: 10, ArrowRight: 10, ArrowDown: -10, ArrowLeft: -10, PageUp: 25, PageDown: -25 }[e.key]
+          if (d) { e.preventDefault(); set(value + d) } else if (e.key === 'Escape') onClose()
+        }}>
+        <span className="salon-vol-fill" style={{ height: value + '%' }} />
+        <span className="salon-vol-knob" style={{ bottom: value + '%' }} />
+      </div>
+      <button type="button" className="salon-vol-mute" onClick={() => set(value > 0 ? 0 : last())} aria-label={value > 0 ? 'Couper le son' : 'Remettre le son'}>
+        <SpeakerIcon level={value > 0 ? 0 : 50} />
+      </button>
+    </div>
+  )
+}
+
 function greeting(hour) {
   if (hour >= 5 && hour < 18) return 'Bonjour'
   return 'Bonsoir'
@@ -24,7 +80,7 @@ function greeting(hour) {
  * L'accueil : le salon. La bibliothèque du salon mène au mur de livres ;
  * l'image projetée passe nos films et séries (on la touche : on entre dedans).
  */
-export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, gamesApi, holder, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
+export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, gamesApi, holder, tv: tvBus, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
   const rootRef = useRef(null)
   const hostRef = useRef(null)
   const topRef = useRef(null)
@@ -36,10 +92,9 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   const [inside, setInside] = useState(false)   // zoom fini : 'tv' (dans l'image projetée), 'cab' (devant la vitrine) ou 'pc' (l'écran du PC)
   const [openWork, setOpenWork] = useState(null) // depuis la vitrine : la fiche ouverte (ou 'list' pour notre liste)
   const [bubbleOff, setBubbleOff] = useState(() => store.get(BUBBLE_KEY) === 'off')
-  const tvVideo = useRef(null)
-  const [sound, setSound] = useState(false)      // le son de la télé (coupé à l'arrivée)
-  const [onAir, setOnAir] = useState(false)      // un générique passe
-  const [skip, setSkip] = useState(0)            // « générique suivant »
+  // la télé (son lecteur vit au-dessus du salon, dans l'appli : il continue quand on part)
+  const { el: tvVideo, volume, setVolume, onAir, nowId, setSkip, setWall } = tvBus
+  const [volOpen, setVolOpen] = useState(false)
   const [seated, setSeated] = useState(false)    // assis dans le canapé
   // rideaux fermés : tout le salon passe en sombre (mode cinéma)
   const [cinema, setCinema] = useState(() => { try { return localStorage.getItem('levana.salon.rideaux') === '1' } catch { return false } })
@@ -117,6 +172,11 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   // nos séries sur l'écran : les mieux notées d'abord
   const tvSeries = useMemo(() => [...(series || [])].sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.added_at || '').localeCompare(a.added_at || '')), [series])
   useEffect(() => { sceneRef.current?.setSeries(tvSeries) }, [tvSeries])
+  // ce qui passe à la télé : l'image projetée suit, et le lecteur n'a le son que si on voit le mur
+  useEffect(() => { sceneRef.current?.setVideoOn(onAir) }, [onAir])
+  useEffect(() => { if (nowId) sceneRef.current?.showWork(nowId) }, [nowId])
+  useEffect(() => { setWall(!tv && !going) }, [tv, going]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { setWall(false); tvVideo.current?.setAttribute('data-off', '') }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Échap pendant le zoom : on ressort (une fois dans la télé, c'est le module qui s'en charge)
   useEffect(() => {
@@ -151,9 +211,6 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
     <div className={`salon mood-${mode}` + (going || tv ? ' going' : '') + (tv ? ' tv-mode' : '') + (cinema ? ' cinema' : '')} ref={rootRef}>
       <div className="salon-stage" ref={hostRef} />
       {/* les génériques, en fond sur la télé (posés sur l'écran 3D par la scène) */}
-      <div className="tv-video" ref={tvVideo} aria-hidden="true">
-        {!tv && !going && tvSeries.length > 0 && <TvBackdrop series={tvSeries} sound={sound} skip={skip} onPlaying={on => { setOnAir(on); sceneRef.current?.setVideoOn(on) }} onNow={id => sceneRef.current?.showWork(id)} />}
-      </div>
       {/* assis dans le canapé : un bouton pour se lever */}
       {seated && !tv && !going && (
         <button type="button" className="salon-stand" onClick={() => sceneRef.current?.stand()}>
@@ -166,15 +223,13 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       {!tv && !going && (
         <div className="salon-ctrls" role="toolbar" aria-label="Le salon">
           {onAir && (
-            <button type="button" className={'salon-ctrl' + (sound ? ' on' : '')} onClick={() => setSound(v => !v)}
-              aria-pressed={sound} aria-label={sound ? 'Couper le son' : 'Mettre le son'} title={sound ? 'Couper le son' : 'Mettre le son'}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 9h4l5-4v14l-5-4H4z" className="fill" />
-                {sound
-                  ? <path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" />
-                  : <path d="M16.5 9.5l5 5M21.5 9.5l-5 5" />}
-              </svg>
-            </button>
+            <div className="salon-vol">
+              <button type="button" className={'salon-ctrl' + (volume > 0 ? ' on' : '') + (volOpen ? ' open' : '')} onClick={() => setVolOpen(o => !o)}
+                aria-expanded={volOpen} aria-label="Volume de la télé" title="Volume de la télé">
+                <SpeakerIcon level={volume} />
+              </button>
+              {volOpen && <VolumePop value={volume} onChange={setVolume} onClose={() => setVolOpen(false)} />}
+            </div>
           )}
           {tvSeries.length > 1 && (
             <button type="button" className="salon-ctrl" onClick={() => setSkip(n => n + 1)} aria-label="Générique suivant" title="Générique suivant">
