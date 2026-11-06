@@ -4,6 +4,7 @@ import { useIsMobile } from '../hooks/useIsMobile'
 import SeriesTV from './SeriesTV'
 import TvBackdrop from './TvBackdrop'
 import Vitrine from './Vitrine'
+import { applyTheme } from '../lib/theme'
 
 const store = {
   get: k => { try { return localStorage.getItem(k) } catch { return null } },
@@ -41,6 +42,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   const [seated, setSeated] = useState(false)    // assis dans le canapé
   // rideaux fermés : tout le salon passe en sombre (mode cinéma)
   const [cinema, setCinema] = useState(() => { try { return localStorage.getItem('levana.salon.rideaux') === '1' } catch { return false } })
+  useEffect(() => { applyTheme(cinema) }, [cinema])   // tout le site suit les rideaux
   const mobile = useIsMobile()
   const cb = useRef({})
   const hour = useMemo(() => {

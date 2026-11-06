@@ -2408,3 +2408,24 @@ body.immersive .scene { padding: 0 !important; }
 .sx-prov img { width: 34px; height: 34px; border-radius: 8px; display: block; }
 .sx-prov-noimg { width: 34px; height: 34px; border-radius: 8px; background: #333; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
 .sx-where-credit { font-family: var(--sans); font-size: 11px; color: var(--sx-muted); line-height: 1.4; }
+
+/* ==========================================================================================
+   Thème sombre (rideaux fermés dans le salon) : tout le site, bibliothèque comprise
+   ========================================================================================== */
+:root[data-theme="dark"] {
+  --paper: #121110;
+  --sheet: #1B1A18;
+  --ink: #EFEAE2;
+  --muted: #A39D93;
+  --cobalt: #7D96FF;
+  --rule: rgba(239, 234, 226, 0.75);
+  --rule-soft: rgba(239, 234, 226, 0.16);
+}
+:root[data-theme="dark"] body {
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.035 0"/></filter><rect width="100%" height="100%" filter="url(%23g)"/></svg>');
+}
+html, body { transition: background-color 0.6s ease, color 0.6s ease; }
+/* sombre : les indications des champs restent lisibles, la bibliothèque 3D s'éclaire comme le soir */
+:root[data-theme="dark"] .search-input::placeholder { color: rgba(239, 234, 226, 0.38); }
+:root[data-theme="dark"] .shelf-canvas { filter: brightness(0.82) saturate(0.95); transition: filter 0.6s ease; }
+.shelf-canvas { transition: filter 0.6s ease; }
