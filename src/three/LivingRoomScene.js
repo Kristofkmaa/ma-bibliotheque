@@ -2465,34 +2465,44 @@ function drawPcDesktop(c, img = null) {
   shade.addColorStop(0, 'rgba(8,7,14,0.5)'); shade.addColorStop(0.25, 'rgba(8,7,14,0)'); shade.addColorStop(0.6, 'rgba(8,7,14,0.05)'); shade.addColorStop(1, 'rgba(8,7,14,0.7)')
   g.fillStyle = shade; g.fillRect(0, 0, W, H)
   const SANS = '"Inter Tight", system-ui, sans-serif'
-  // la barre d'état
-  g.fillStyle = 'rgba(10,9,18,0.55)'; rr(28, 18, 120, 40, 20); g.fill()
-  g.fillStyle = '#fff'; g.font = `600 18px ${SANS}`; g.textAlign = 'left'; g.fillText('⏻  Éteindre', 46, 45)
-  g.textAlign = 'center'; g.font = `700 20px ${SANS}`; g.fillText('Maruchime OS', W / 2, 45)
-  g.fillStyle = 'rgba(10,30,20,0.6)'; rr(W - 150, 18, 122, 40, 20); g.fill()
-  g.fillStyle = '#8FF0C0'; g.font = `700 18px ${SANS}`; g.fillText('Stim', W - 89, 45)
-  // bonjour, et le n°1 en grand
-  g.textAlign = 'left'; g.fillStyle = '#fff'; g.font = 'italic 400 34px "Newsreader", Georgia, serif'; g.fillText('Bonjour.', 120, 112)
-  rr(120, 130, W - 240, 290, 26); g.save(); g.clip()
-  const hero = g.createLinearGradient(120, 0, W - 120, 0)
-  hero.addColorStop(0, 'rgba(10,8,18,0.85)'); hero.addColorStop(1, 'rgba(10,8,18,0.25)')
-  g.fillStyle = hero; g.fillRect(120, 130, W - 240, 290); g.restore()
-  g.fillStyle = '#F6C766'; g.font = `800 15px ${SANS}`; g.fillText('T O N   N ° 1', 160, 330)
-  g.fillStyle = '#fff'; g.font = `800 44px ${SANS}`; g.fillText('Mes jeux', 160, 378)
-  g.fillStyle = '#33C27F'; rr(160, 392, 120, 18, 9); g.fill()
-  // les tuiles
-  const tiles = [['#F6C766', 'Mes jeux'], ['#4B86FF', 'Magasin'], ['#FF8FB8', 'Personnaliser'], ['#4BD99A', 'Porte-monnaie']]
-  const tw = (W - 240 - 3 * 18) / 4
-  tiles.forEach(([col, t], k) => {
-    const x = 120 + k * (tw + 18), y = 444
-    g.fillStyle = 'rgba(16,14,30,0.7)'; rr(x, y, tw, 92, 20); g.fill()
-    g.fillStyle = col; rr(x + 16, y + 20, 52, 52, 15); g.fill()
-    g.fillStyle = '#fff'; g.font = `700 20px ${SANS}`; g.fillText(t, x + 82, y + 54)
+  // le logiciel : la barre du haut (← →, Magasin, Bibliothèque, Personnaliser)
+  g.fillStyle = 'rgba(14,13,24,0.84)'; g.fillRect(0, 0, W, H)
+  g.fillStyle = 'rgba(10,9,18,0.9)'; g.fillRect(0, 0, W, 64)
+  g.fillStyle = 'rgba(242,240,250,0.8)'; g.font = `700 26px ${SANS}`; g.textAlign = 'left'; g.textBaseline = 'middle'
+  g.fillText('‹   ›', 24, 33)
+  ;[['MAGASIN', 0.55], ['BIBLIOTHÈQUE', 1], ['PERSONNALISER', 0.55]].reduce((x, [t, a]) => {
+    g.globalAlpha = a; g.fillStyle = '#fff'; g.font = `800 20px ${SANS}`; g.fillText(t, x, 33)
+    const w = g.measureText(t).width
+    if (a === 1) { g.globalAlpha = 1; g.fillStyle = '#6A6CFF'; rr(x, 58, w, 5, 2); g.fill() }
+    return x + w + 30
+  }, 120)
+  g.globalAlpha = 1
+  g.fillStyle = 'rgba(10,30,20,0.8)'; rr(W - 170, 15, 110, 36, 18); g.fill()
+  g.fillStyle = '#8FF0C0'; g.font = `700 17px ${SANS}`; g.fillText('Stim', W - 140, 34)
+  // la liste à gauche
+  g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, 64, 250, H - 64)
+  g.fillStyle = 'rgba(232,176,75,0.2)'; rr(14, 80, 222, 40, 10); g.fill()
+  g.fillStyle = '#F6E3B8'; g.font = `800 17px ${SANS}`; g.fillText('Ma ludothèque', 30, 101)
+  for (let k = 0; k < 11; k++) {
+    const y = 150 + k * 44
+    g.fillStyle = ['#7A4BD0', '#3C8A5A', '#B5683A', '#2F6BFF', '#9A3B5C'][k % 5]; rr(18, y, 48, 26, 4); g.fill()
+    g.fillStyle = 'rgba(242,240,250,0.75)'; rr(78, y + 8, 90 + (k * 37) % 70, 10, 5); g.fill()
+  }
+  // à droite : notre top en grand, puis les jaquettes
+  const hero = g.createLinearGradient(270, 0, W - 20, 0)
+  hero.addColorStop(0, 'rgba(60,30,90,0.95)'); hero.addColorStop(1, 'rgba(30,50,110,0.6)')
+  g.fillStyle = hero; rr(270, 84, W - 290, 250, 22); g.fill()
+  g.fillStyle = '#F6C766'; g.font = `800 15px ${SANS}`; g.fillText('T O N   N ° 1', 300, 230)
+  g.fillStyle = '#fff'; g.font = `800 42px ${SANS}`; g.fillText('Mon top', 300, 272)
+  g.fillStyle = '#33C27F'; rr(300, 296, 120, 20, 10); g.fill()
+  const cw = 132, ch = 198
+  ;['#B5683A', '#3C8A5A', '#7A4BD0', '#2F6BFF', '#9A3B5C', '#C9A33A', '#3A7F9A'].forEach((col, k) => {
+    const x = 270 + k * (cw + 14)
+    if (x + cw > W - 10) return
+    g.fillStyle = col; rr(x, 380, cw, ch, 10); g.fill()
+    g.fillStyle = 'rgba(255,255,255,0.14)'; rr(x, 380, cw, ch * 0.4, 10); g.fill()
   })
-  // la barre d'onglets
-  g.fillStyle = 'rgba(14,12,26,0.85)'; rr(W / 2 - 250, H - 84, 500, 58, 24); g.fill()
-  g.fillStyle = 'rgba(255,255,255,0.14)'; rr(W / 2 - 242, H - 77, 118, 44, 17); g.fill()
-  ;['#9C86FF', '#4B86FF', '#F6C766', '#FF8FB8'].forEach((col, k) => { g.fillStyle = col; rr(W / 2 - 230 + k * 122, H - 68, 26, 26, 8); g.fill() })
+  g.fillStyle = 'rgba(242,240,250,0.6)'; g.font = `800 14px ${SANS}`; g.fillText('M O N   T O P', 270, 360)
 }
 
 function towerGlassTexture() {

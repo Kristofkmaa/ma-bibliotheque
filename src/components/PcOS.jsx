@@ -805,16 +805,7 @@ function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore }) {
   return (
     <div className="ld-home">
       {first ? (
-        <section className="ld-banner" onClick={() => onOpen(first.id)}>
-          <Art appId={first.app_id} fallback={first.img} className="ld-banner-art" />
-          <div className="ld-banner-txt">
-            <span className="cs-hero-kick">Ton n°1</span>
-            <Logo g={first} />
-            <span className="cs-hero-act" onClick={e => e.stopPropagation()}>
-              <button type="button" className="st-btn go big" onClick={() => onPlay(first.app_id)}>▶ Jouer</button>
-            </span>
-          </div>
-        </section>
+        <TopCarousel items={top} ranked onPlay={onPlay} onGame={onOpen} strip={false} />
       ) : (
         <section className="ld-banner empty">
           <div className="ld-banner-txt">
@@ -971,7 +962,7 @@ function Ludo({ games, top, selId, onSelect, onHome, mobile, setFavorite, reorde
  * La grande fenêtre de l'accueil : notre top, un jeu après l'autre (toutes les 7 s, ou au doigt,
  * aux flèches), et en dessous la rangée de tout le classement pour y sauter directement.
  */
-function TopCarousel({ items, ranked, onPlay, onGame }) {
+function TopCarousel({ items, ranked, onPlay, onGame, strip: showStrip = true }) {
   const n = items.length
   const [k, setK] = useState(0)
   const [hold, setHold] = useState(false)
@@ -1006,7 +997,7 @@ function TopCarousel({ items, ranked, onPlay, onGame }) {
         ))}
         <div className="cs-hero-txt" key={g.id}>
           <span className="cs-hero-kick">{ranked ? (cur === 0 ? 'Ton n°1' : `N°${cur + 1} de ton top`) : 'Ajouté récemment'}</span>
-          <b>{g.name}</b>
+          <Logo g={g} />
           <span className="cs-car-meta">
             {g.rating ? <Stars n={g.rating} /> : null}
             <em>{g.genres?.slice(0, 2).join(' · ')}</em>
@@ -1023,7 +1014,7 @@ function TopCarousel({ items, ranked, onPlay, onGame }) {
           {!hold && <span className="cs-car-timer" key={'t' + cur} />}
         </>}
       </div>
-      {n > 1 && (
+      {n > 1 && showStrip && (
         <div className="cs-car-strip" ref={strip} role="tablist" aria-label={ranked ? 'Mon top' : 'Mes jeux'}>
           {items.map((x, i) => (
             <button type="button" key={x.id} role="tab" aria-selected={i === cur} className={'cs-car-thumb' + (i === cur ? ' on' : '') + (ranked && i < 3 ? ' r' + (i + 1) : '')}
@@ -1039,80 +1030,27 @@ function TopCarousel({ items, ranked, onPlay, onGame }) {
   )
 }
 
-function greeting() { const h = new Date().getHours(); return h >= 5 && h < 18 ? 'Bonjour' : 'Bonsoir' }
-
-function Home({ holder, games, top, balance, onPlay, onGame, go, openWallet }) {
-  const star = top[0] || [...games].sort((a, b) => b.added_at.localeCompare(a.added_at))[0] || null
-  const recent = useMemo(() => [...games].sort((a, b) => b.added_at.localeCompare(a.added_at)).slice(0, 10), [games])
-  const first = (holder || '').split(' ')[0]
-  const tile = (key, label, sub, Icon, onClick) => (
-    <button type="button" className={'cs-tile ' + key} onClick={e => onClick(e.currentTarget.getBoundingClientRect())}>
-      <span className="cs-tile-ico"><Icon /></span>
-      <span className="cs-tile-txt"><b>{label}</b><em>{sub}</em></span>
-    </button>
-  )
-  return (
-    <div className="cs-home">
-      <p className="cs-hello">{greeting()}{first ? `, ${first}` : ''}.</p>
-      {star ? (
-        <TopCarousel items={top.length ? top : recent.slice(0, 6)} ranked={top.length > 0} onPlay={onPlay} onGame={onGame} />
-      ) : (
-        <section className="cs-hero empty">
-          <div className="cs-hero-txt">
-            <span className="cs-hero-kick">Bienvenue sur Maruchime OS</span>
-            <b>Ta ludothèque t’attend</b>
-            <span className="cs-hero-sub">Ajoute des fonds, choisis tes jeux dans le magasin, puis range-les dans ton top.</span>
-            <span className="cs-hero-act">
-              <button type="button" className="st-btn buy big" onClick={() => go('stim')}>Ouvrir le magasin</button>
-              <button type="button" className="st-btn ghost" onClick={openWallet}>Ajouter des fonds</button>
-            </span>
-          </div>
-        </section>
-      )}
-      <div className="cs-tiles">
-        {tile('games', 'Mes jeux', `${games.length} jeu${games.length > 1 ? 'x' : ''}${top.length ? ` · top ${top.length}` : ''}`, GamesGlyph, r => go('games', r))}
-        {tile('stim', 'Magasin', 'Promos et nouveautés', StimGlyph, r => go('stim', r))}
-        {tile('custom', 'Personnaliser', 'Fond d’écran, lumières', PictureGlyph, r => go('custom', r))}
-        {tile('wallet', 'Porte-monnaie', money(balance), BankGlyph, openWallet)}
-      </div>
-      {recent.length > 0 && (
-        <section className="cs-recent">
-          <h3 className="cs-h3">Ajoutés récemment</h3>
-          <div className="cs-recent-row">
-            {recent.map(g => (
-              <button type="button" key={g.id} className="cs-recent-card" onClick={() => onGame(g.id)}>
-                {g.img && <img src={g.img} alt="" loading="lazy" />}
-                <span>{g.name}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-    </div>
-  )
-}
-
 /* -------------------------------------------------------------------------- */
-/* La console                                                                 */
+/* Le logiciel : une barre en haut (← →, Magasin, Bibliothèque, Personnaliser)  */
 /* -------------------------------------------------------------------------- */
 
-const TABS = [['home', 'Accueil', HomeGlyph], ['stim', 'Magasin', StimGlyph], ['games', 'Mes jeux', GamesGlyph], ['custom', 'Personnaliser', PictureGlyph]]
+const NAV = [['stim', 'Magasin'], ['games', 'Bibliothèque'], ['custom', 'Personnaliser']]
 const ROOT = { stim: { v: 'store' }, games: { v: 'list' }, custom: { v: 'main' } }
+const Fwd = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 
 export default function PcOS({ games, balance, addFunds, buy, updateGame, removeGame, setFavorite, reorderTop, wallpaper, setWallpaper, setup, setSetup, holder, fromRect, onClose }) {
   const mobile = useIsMobile()
   const rootRef = useRef(null)
-  const appRef = useRef(null)
   const [closing, setClosing] = useState(false)
-  const [tab, setTab] = useState('home')
-  const [stacks, setStacks] = useState({ stim: [ROOT.stim], games: [ROOT.games], custom: [ROOT.custom] })
-  const [dir, setDir] = useState('tab')           // l'animation d'entrée : 'fwd', 'back' ou 'tab'
-  const [sheet, setSheet] = useState(null)        // 'wallet' | 'bank'
+  // où l'on est, et l'historique (les flèches ← →), comme un navigateur
+  const [nav, setNav] = useState({ cur: { tab: 'games', e: ROOT.games }, past: [], future: [] })
+  const [last, setLast] = useState({ ...ROOT })        // le dernier écran vu dans chaque onglet
+  const [dir, setDir] = useState('tab')
+  const [sheet, setSheet] = useState(null)              // 'wallet' | 'bank'
   const [playId, setPlayId] = useState(null)
   const [toast, setToast] = useState(null)
   const [customTab, setCustomTab] = useState('wall')
   const [wallFor, setWallFor] = useState(null)
-  const [openFrom, setOpenFrom] = useState(null)
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t) }, [toast])
 
   // l'écran s'agrandit depuis le moniteur 3D (et s'y range en partant)
@@ -1134,54 +1072,48 @@ export default function PcOS({ games, balance, addFunds, buy, updateGame, remove
     else setTimeout(onClose, 300)
   }, [closing, onClose, rectInset, fromRect])
 
-  // la navigation : une pile d'écrans par onglet, un seul « Retour »
   const top = useMemo(() => games.filter(g => g.favorite).sort(byRank), [games])
   const ownedIds = useMemo(() => new Set(games.map(g => g.app_id)), [games])
   const owned = useCallback(id => ownedIds.has(id), [ownedIds])
-  const cur = tab === 'home' ? null : stacks[tab][stacks[tab].length - 1]
-  const depth = tab === 'home' ? 0 : stacks[tab].length
-  const go = (t, rect) => { setDir('tab'); if (rect) setOpenFrom(rect); setTab(t) }
-  const push = (t, entry) => { setDir('fwd'); setStacks(s => ({ ...s, [t]: [...s[t], entry] })); setTab(t) }
-  const goTab = t => {
-    setDir('tab')
-    if (t === tab && t !== 'home') setStacks(s => ({ ...s, [t]: [ROOT[t]] }))
-    setTab(t)
+  const { tab, e: cur } = nav.cur
+
+  const navigate = (t, e, d = 'fwd') => {
+    setDir(d)
+    setNav(n => ({ cur: { tab: t, e }, past: [...n.past, n.cur].slice(-40), future: [] }))
+    setLast(l => ({ ...l, [t]: e }))
   }
+  const goTab = t => navigate(t, t === tab ? ROOT[t] : last[t] || ROOT[t], 'tab')
   const back = useCallback(() => {
     if (sheet) { setSheet(null); return true }
     if (playId) { setPlayId(null); return true }
-    if (tab === 'home') return false
+    if (!nav.past.length) return false
     setDir('back')
-    if (stacks[tab].length > 1) setStacks(s => ({ ...s, [tab]: s[tab].slice(0, -1) }))
-    else setTab('home')
+    setNav(n => { const p = n.past[n.past.length - 1]; setLast(l => ({ ...l, [p.tab]: p.e })); return { cur: p, past: n.past.slice(0, -1), future: [n.cur, ...n.future] } })
     return true
-  }, [sheet, playId, tab, stacks])
-  const play = id => { setPlayId(id) }
-  const openGame = id => { setDir('fwd'); setStacks(s => ({ ...s, games: [ROOT.games, { v: 'game', id }] })); setTab('games') }
-  const openStoreGame = id => push('stim', { v: 'game', id })
-  const chooseWall = g => { setWallFor(g ? { app_id: g.app_id, name: g.name } : null); setCustomTab('wall'); push('custom', { v: 'main', k: Date.now() }) }
+  }, [sheet, playId, nav.past.length])
+  const forward = () => {
+    if (!nav.future.length) return
+    setDir('fwd')
+    setNav(n => { const f = n.future[0]; setLast(l => ({ ...l, [f.tab]: f.e })); return { cur: f, past: [...n.past, n.cur], future: n.future.slice(1) } })
+  }
+  const play = id => setPlayId(id)
+  const openGame = id => navigate('games', { v: 'game', id })
+  const openStoreGame = id => navigate('stim', { v: 'game', id })
+  const chooseWall = g => { setWallFor(g ? { app_id: g.app_id, name: g.name } : null); setCustomTab('wall'); navigate('custom', { v: 'main', k: Date.now() }) }
   const quickWall = w => { setWallpaper(w); setToast(`Nouveau fond d’écran : ${w.name}`) }
 
   useEffect(() => {
     const k = e => {
-      if (e.key !== 'Escape' || e.target?.tagName === 'INPUT') return
-      if (!back()) close()
+      if (e.target?.tagName === 'INPUT') return
+      if (e.key === 'Escape') { if (!back()) close() }
+      else if (e.altKey && e.key === 'ArrowLeft') back()
+      else if (e.altKey && e.key === 'ArrowRight') forward()
     }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
-  }, [back, close])
+  }) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // une appli s'ouvre en grandissant depuis sa tuile
-  useLayoutEffect(() => {
-    const el = appRef.current
-    if (!openFrom || !el?.animate) return
-    const r = el.getBoundingClientRect()
-    const ins = `inset(${Math.max(0, openFrom.top - r.top)}px ${Math.max(0, r.right - openFrom.right)}px ${Math.max(0, r.bottom - openFrom.bottom)}px ${Math.max(0, openFrom.left - r.left)}px round 18px)`
-    el.animate([{ clipPath: ins, opacity: 0.6 }, { clipPath: 'inset(0px 0px 0px 0px round 18px)', opacity: 1 }], { duration: 420, easing: 'cubic-bezier(.2, .8, .2, 1)' })
-    setOpenFrom(null)
-  }, [tab, openFrom])
-
-  // au doigt : glisser depuis le bord gauche = Retour ; sur l'accueil, glisser vers le bas = éteindre
+  // au doigt : glisser depuis le bord gauche = Retour
   const touch = useRef(null)
   const onTouchStart = e => { const t = e.touches[0]; touch.current = { x: t.clientX, y: t.clientY, edge: t.clientX < 24 } }
   const onTouchEnd = e => {
@@ -1189,61 +1121,51 @@ export default function PcOS({ games, balance, addFunds, buy, updateGame, remove
     if (!s) return
     const t = e.changedTouches[0], dx = t.clientX - s.x, dy = t.clientY - s.y
     if (s.edge && dx > 70 && Math.abs(dy) < 60) back()
-    else if (tab === 'home' && !sheet && dy > 150 && Math.abs(dx) < 60 && (appRef.current?.scrollTop || 0) <= 0 && s.y < window.innerHeight * 0.5) close()
   }
 
-  const title = tab === 'stim' ? (cur.v === 'search' ? 'Recherche' : 'Magasin') : tab === 'games' ? (cur.v === 'game' && mobile ? (games.find(g => g.id === cur.id)?.name || 'Mes jeux') : 'Mes jeux') : tab === 'custom' ? 'Personnaliser' : ''
   const playing = playId ? games.find(g => g.app_id === playId) : null
-
+  const ld = tab === 'games' && !mobile
   let body = null
   if (tab === 'stim') {
-    if (cur.v === 'store') body = <StoreHome owned={owned} onOpen={openStoreGame} onSearch={q => push('stim', { v: 'search', q })} />
+    if (cur.v === 'store') body = <StoreHome owned={owned} onOpen={openStoreGame} onSearch={q => navigate('stim', { v: 'search', q })} />
     else if (cur.v === 'search') body = <StoreSearch q={cur.q} owned={owned} onOpen={openStoreGame} />
     else body = <GamePage id={cur.id} owned={owned} balance={balance} onBuy={buy} onPlay={play} onFunds={() => setSheet('bank')} onWallpaper={quickWall}
       favOf={appId => games.find(x => x.app_id === appId)} onFav={appId => { const r = games.find(x => x.app_id === appId); if (r) { const n = setFavorite(r.id, !r.favorite); setToast(n ? `${r.name} entre dans ton top · n°${n}` : `${r.name} sort de ton top`) } }} />
   } else if (tab === 'games') {
-    body = <Ludo games={games} top={top} selId={cur.v === 'game' ? cur.id : null} onSelect={openGame} onHome={() => { setDir('back'); setStacks(s => ({ ...s, games: [ROOT.games] })) }} mobile={mobile}
-      setFavorite={setFavorite} reorderTop={reorderTop} updateGame={updateGame} removeGame={removeGame} onPlay={play} onWallpaper={chooseWall} onStore={openStoreGame} quickWall={quickWall} openStore={() => go('stim')} notify={setToast} />
-  } else if (tab === 'custom') {
+    body = <Ludo games={games} top={top} selId={cur.v === 'game' ? cur.id : null} onSelect={openGame} onHome={() => navigate('games', ROOT.games, 'back')} mobile={mobile}
+      setFavorite={setFavorite} reorderTop={reorderTop} updateGame={updateGame} removeGame={removeGame} onPlay={play} onWallpaper={chooseWall} onStore={openStoreGame} quickWall={quickWall} openStore={() => goTab('stim')} notify={setToast} />
+  } else {
     body = <Custom tab={customTab} setTab={setCustomTab} games={games} wallpaper={wallpaper} setWallpaper={setWallpaper} request={wallFor} setup={setup} setSetup={setSetup} />
   }
 
   return (
-    <div ref={rootRef} className={'pcos cs' + (closing ? ' closing' : '') + (mobile ? ' mobile' : '') + (tab === 'home' ? ' at-home' : ' in-app')} role="application" aria-label="Le PC"
+    <div ref={rootRef} className={'pcos cs cl in-app' + (closing ? ' closing' : '') + (mobile ? ' mobile' : '')} role="application" aria-label="Le PC"
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div className="cs-bg" aria-hidden="true">
         {wallpaper?.url ? <img key={wallpaper.url} src={wallpaper.url} alt="" /> : <div className="pc-wall"><i /><i /><i /></div>}
       </div>
 
-      <header className="cs-status">
-        <button type="button" className="cs-power" onClick={close} aria-label="Éteindre et revenir au salon" title="Éteindre et revenir au salon"><PowerGlyph /><span>Éteindre</span></button>
-        <span className="cs-brand"><span className="pc-orb" />Maruchime OS</span>
-        <span className="cs-status-r">
+      <header className="cl-top">
+        <div className="cl-arrows">
+          <button type="button" onClick={back} disabled={!nav.past.length && !sheet && !playId} aria-label="Retour" title="Retour"><Back /></button>
+          <button type="button" onClick={forward} disabled={!nav.future.length} aria-label="Suivant" title="Suivant"><Fwd /></button>
+        </div>
+        <nav className="cl-nav" aria-label="Maruchime OS">
+          {NAV.map(([k, label]) => (
+            <button type="button" key={k} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined} onClick={() => goTab(k)}>{label}</button>
+          ))}
+        </nav>
+        <div className="cl-right">
           {!mobile && <Clock />}
           <button type="button" className="pc-task-bal" onClick={() => setSheet('wallet')} title="Porte-monnaie Stim"><Wallet /> {money(balance)}</button>
-        </span>
+          {!mobile && holder && <span className="cl-user"><span className="pc-orb" />{holder.split(' ')[0]}</span>}
+          <button type="button" className="cl-power" onClick={close} aria-label="Éteindre et revenir au salon" title="Éteindre et revenir au salon"><PowerGlyph /></button>
+        </div>
       </header>
 
-      <main className="cs-main" ref={tab === 'home' ? appRef : null}>
-        {tab === 'home' && <Home holder={holder} games={games} top={top} balance={balance} onPlay={play} onGame={openGame} go={go} openWallet={() => setSheet('wallet')} />}
-        {tab !== 'home' && (
-          <section className="cs-app" ref={appRef}>
-            <div className="cs-head">
-              <button type="button" className="cs-back" onClick={back} aria-label="Retour"><Back /><span>Retour</span></button>
-              <h2>{title}</h2>
-            </div>
-            <div className={'cs-body st-body ' + (tab === 'games' && !mobile ? 'ld-body enter-tab' : 'enter-' + dir)} key={tab === 'games' && !mobile ? 'games' : tab + ':' + depth + ':' + (cur.id || cur.q || cur.k || '')}>{body}</div>
-          </section>
-        )}
+      <main className="cl-main">
+        <div className={'cs-body st-body ' + (ld ? 'ld-body enter-tab' : 'enter-' + dir)} key={ld ? 'games' : tab + ':' + JSON.stringify(cur)}>{body}</div>
       </main>
-
-      <nav className="cs-tabs" aria-label="Maruchime OS">
-        {TABS.map(([k, label, Icon]) => (
-          <button type="button" key={k} className={'cs-tab ' + k + (tab === k ? ' on' : '')} aria-current={tab === k ? 'page' : undefined} onClick={() => goTab(k)}>
-            <span className="cs-tab-ico"><Icon /></span><span className="cs-tab-lbl">{label}</span>
-          </button>
-        ))}
-      </nav>
 
       {sheet === 'wallet' && <WalletSheet games={games} balance={balance} onFunds={() => setSheet('bank')} onClose={() => setSheet(null)} />}
       {sheet === 'bank' && <BankSheet holder={holder} balance={balance} addFunds={addFunds} onClose={() => setSheet(null)} />}
