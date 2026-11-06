@@ -3951,3 +3951,53 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
   .cn-mini { width: 96px; }
   .cn-page { margin: -12px -12px -30px; }
 }
+
+/* =============================================================================
+   La barre du PC : deux grands volets (Mes jeux | Ajouter), le rouage à droite
+   ========================================================================== */
+.cl .cl-top { height: calc(78px + env(safe-area-inset-top)); display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; padding: env(safe-area-inset-top) 16px 0; }
+.cl .cl-main { top: calc(78px + env(safe-area-inset-top)); }
+.cl .cl-right { justify-self: end; }
+.cl-dual { position: relative; display: grid; grid-template-columns: 1fr 1fr; width: 480px; height: 56px; padding: 4px; border-radius: 16px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.22)); border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.05); }
+.cl-dual-thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 12px; pointer-events: none;
+  background: linear-gradient(180deg, #FCFBF7 0%, #ECE9E1 100%);
+  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 22px -10px rgba(0, 0, 0, 0.85);
+  transform: translateX(calc(var(--i, 0) * 100%)); transition: transform 0.42s cubic-bezier(0.22, 1, 0.3, 1), opacity 0.25s, scale 0.25s; }
+.cl-dual.none .cl-dual-thumb { opacity: 0; scale: 0.94; }
+.cl-dual button { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; border-radius: 11px;
+  color: rgba(242, 240, 250, 0.6); transition: color 0.3s, transform 0.12s; -webkit-tap-highlight-color: transparent; }
+.cl-dual button:hover:not(.on) { color: #fff; }
+.cl-dual button:active { transform: scale(0.97); }
+.cl-dual button:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 2px; }
+.cl-dual button.on { color: #121118; }
+.cl-dual svg { width: 19px; height: 19px; flex: none; }
+.cl-dual b { font: 800 14px/1 var(--sans); letter-spacing: 0.17em; text-transform: uppercase; white-space: nowrap; }
+.cl-dual em { font: 700 11px/1 var(--sans); font-style: normal; font-variant-numeric: tabular-nums; padding: 4px 6px; border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08); color: rgba(242, 240, 250, 0.6); transition: background 0.3s, color 0.3s; }
+.cl-dual button.on em { background: rgba(18, 17, 24, 0.08); color: rgba(18, 17, 24, 0.55); }
+.cl-gear { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: rgba(242, 240, 250, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.09); transition: background 0.2s, color 0.2s, border-color 0.2s; }
+.cl-gear svg { width: 19px; height: 19px; transition: transform 0.6s cubic-bezier(0.22, 1, 0.3, 1); }
+.cl-gear:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.cl-gear:hover svg, .cl-gear.on svg { transform: rotate(60deg); }
+.cl-gear.on { background: linear-gradient(180deg, #FCFBF7, #ECE9E1); color: #121118; border-color: transparent; box-shadow: inset 0 1px 0 #fff, 0 6px 14px -8px rgba(0, 0, 0, 0.8); }
+/* la Switch est claire : les volets s'inversent */
+.pfx-switch .cl-dual { background: rgba(0, 0, 0, 0.06); border-color: rgba(0, 0, 0, 0.06); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12); }
+.pfx-switch .cl-dual-thumb { background: linear-gradient(180deg, #2A2A31, #17171C); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 8px 18px -10px rgba(0, 0, 0, 0.6); }
+.pfx-switch .cl-dual button { color: rgba(30, 30, 36, 0.55); }
+.pfx-switch .cl-dual button:hover:not(.on) { color: #18181C; }
+.pfx-switch .cl-dual button.on { color: #fff; }
+.pfx-switch .cl-dual em { background: rgba(0, 0, 0, 0.06); color: rgba(30, 30, 36, 0.55); }
+.pfx-switch .cl-dual button.on em { background: rgba(255, 255, 255, 0.14); color: rgba(255, 255, 255, 0.7); }
+.pfx-switch .cl-gear { color: #333; border-color: rgba(0, 0, 0, 0.12); }
+.pfx-switch .cl-gear.on { background: #18181C; color: #fff; }
+@media (max-width: 767px) {
+  .cl .cl-top { height: calc(112px + env(safe-area-inset-top)); grid-template-columns: auto 1fr; grid-template-rows: 52px 54px; gap: 0 8px; padding: env(safe-area-inset-top) 10px 0; }
+  .cl .cl-main { top: calc(112px + env(safe-area-inset-top)); }
+  .cl .cl-right { height: 52px; }
+  .cl-dual { grid-column: 1 / -1; grid-row: 2; width: auto; height: 48px; align-self: start; }
+  .cl-dual b { font-size: 12.5px; letter-spacing: 0.14em; }
+  .cl-dual svg { width: 17px; height: 17px; }
+}

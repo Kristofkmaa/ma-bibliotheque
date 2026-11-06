@@ -6,7 +6,7 @@ import { searchCatalog, featuredCatalog, catalogGame, catalogSource, STATUSES, s
 
 /**
  * Le PC du bureau gamer : notre ludothèque, dans l'esprit d'un logiciel de jeux. Une barre en
- * haut (← →, Découvrir, Bibliothèque, Personnaliser) ; la bibliothèque : la liste de nos jeux à
+ * haut (← →, Mes jeux | Ajouter, le rouage) ; la bibliothèque : la liste de nos jeux à
  * gauche, à droite notre top ou la fiche du jeu choisi. Le catalogue vient d'IGDB (toutes les
  * plateformes ; Steam en attendant ses clés). Pas d'argent : on ajoute un jeu à sa
  * bibliothèque comme un livre ou un film, avec où on en est (à jouer, en cours, terminé…).
@@ -127,7 +127,7 @@ function Trailer({ t, onClose }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Découvrir : le catalogue                                                   */
+/* Ajouter : le catalogue                                                     */
 /* -------------------------------------------------------------------------- */
 
 // la famille de plateformes choisie (gardée d'une visite à l'autre)
@@ -704,8 +704,8 @@ function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filt
       <div className="gm-empty ld-empty">
         <span className="gm-empty-ico"><GamesGlyph /></span>
         <b>Ta ludothèque est vide</b>
-        <p>Cherche tes jeux dans Découvrir — sur toutes les plateformes — et ajoute-les à ta bibliothèque, comme tes livres et tes films.</p>
-        <button type="button" className="st-btn buy" onClick={openStore}>Découvrir des jeux</button>
+        <p>Touche « Ajouter » pour chercher tes jeux — sur toutes les plateformes — et les ranger ici, comme tes livres et tes films.</p>
+        <button type="button" className="st-btn buy" onClick={openStore}>Ajouter des jeux</button>
       </div>
     )
   }
@@ -860,8 +860,8 @@ function ConsoleLib({ games, top, selId, onSelect, onHome, setFavorite, reorderT
       <div className="gm-empty ld-empty">
         <span className="gm-empty-ico"><GamesGlyph /></span>
         <b>Ta ludothèque est vide</b>
-        <p>Cherche tes jeux dans Découvrir — sur toutes les plateformes — et ajoute-les à ta bibliothèque, comme tes livres et tes films.</p>
-        <button type="button" className="st-btn buy" onClick={openStore}>Découvrir des jeux</button>
+        <p>Touche « Ajouter » pour chercher tes jeux — sur toutes les plateformes — et les ranger ici, comme tes livres et tes films.</p>
+        <button type="button" className="st-btn buy" onClick={openStore}>Ajouter des jeux</button>
       </div>
     )
   }
@@ -1134,10 +1134,13 @@ function Clock() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Le logiciel : une barre en haut (← →, Découvrir, Bibliothèque, Personnaliser) */
+/* Le logiciel : une barre en haut (← →, Mes jeux | Ajouter, le rouage)          */
 /* -------------------------------------------------------------------------- */
 
-const NAV = [['stim', 'Découvrir'], ['games', 'Bibliothèque'], ['custom', 'Personnaliser']]
+// les deux volets : nos jeux, et le catalogue pour en ajouter ; Personnaliser passe par le rouage
+const ShelfGlyph = () => <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="4.5" height="16" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.8" /><rect x="10" y="4" width="4.5" height="16" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="M17.2 5.6l3.3.9-3.6 13.4-3.2-.9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+const GearGlyph = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3h3.4l.5 2.4 1.7.9 2.3-.9 1.7 2.9-1.8 1.6v2.2l1.8 1.6-1.7 2.9-2.3-.9-1.7.9-.5 2.4h-3.4l-.5-2.4-1.7-.9-2.3.9-1.7-2.9 1.8-1.6v-2.2L4.1 8.3l1.7-2.9 2.3.9 1.7-.9z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.7" /></svg>
+const NAV = [['games', 'Mes jeux', ShelfGlyph], ['stim', 'Ajouter', PlusGlyph]]
 const ROOT = { stim: { v: 'store' }, games: { v: 'list' }, custom: { v: 'main' } }
 const Fwd = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 const entryKey = e => (e.item ? e.v + ':' + e.item.key : JSON.stringify(e))
@@ -1288,14 +1291,18 @@ export default function PcOS({ games, addGame, findGame, updateGame, removeGame,
           <button type="button" onClick={back} disabled={!nav.past.length && !trailer} aria-label="Retour" title="Retour"><Back /></button>
           <button type="button" onClick={forward} disabled={!nav.future.length} aria-label="Suivant" title="Suivant"><Fwd /></button>
         </div>
-        <nav className="cl-nav" aria-label="Maruchime OS">
-          {NAV.map(([k, label]) => (
-            <button type="button" key={k} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined} onClick={() => goTab(k)}>{label}</button>
+        <nav className={'cl-dual' + (tab === 'custom' ? ' none' : '')} style={{ '--i': tab === 'stim' ? 1 : 0 }} aria-label="Maruchime OS">
+          <span className="cl-dual-thumb" aria-hidden="true" />
+          {NAV.map(([k, label, Icon]) => (
+            <button type="button" key={k} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined} onClick={() => goTab(k)}>
+              <Icon /><b>{label}</b>{k === 'games' && games.length > 0 && <em>{games.length}</em>}
+            </button>
           ))}
         </nav>
         <div className="cl-right">
           {!mobile && <Clock />}
           {!mobile && holder && <span className="cl-user"><span className="pc-orb" />{holder.split(' ')[0]}</span>}
+          <button type="button" className={'cl-gear' + (tab === 'custom' ? ' on' : '')} onClick={() => goTab('custom')} aria-label="Personnaliser" title="Personnaliser" aria-current={tab === 'custom' ? 'page' : undefined}><GearGlyph /></button>
           <button type="button" className="cl-power" onClick={shutDown} aria-label="Éteindre et revenir au salon" title="Éteindre et revenir au salon"><PowerGlyph /></button>
         </div>
       </header>
