@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useIsMobile } from '../hooks/useIsMobile'
-import { searchCatalog, featuredCatalog, catalogGame, catalogSource, STATUSES, statusLabel, PLATFORM_GROUPS, onPlatform } from '../lib/games'
+import { searchCatalog, featuredCatalog, catalogGame, catalogSource, STATUSES, statusLabel, PLATFORM_GROUPS, PC_STORES, storeLabel, pfLabel, pfFamily, onPlatform, playOptions, platformFor } from '../lib/games'
 
 /**
  * Le PC du bureau gamer : notre ludothèque, dans l'esprit d'un logiciel de jeux. Une barre en
@@ -130,21 +130,32 @@ function Trailer({ t, onClose }) {
 
 // la famille de plateformes choisie (gardée d'une visite à l'autre)
 const PF_KEY = 'levana.jeux.plateforme'
-const readPf = () => { try { return localStorage.getItem(PF_KEY) || 'all' } catch { return 'all' } }
+const readPf = () => { try { const v = localStorage.getItem(PF_KEY) || 'all'; return v === 'other' ? 'retro' : v } catch { return 'all' } }
 const savePf = v => { try { localStorage.setItem(PF_KEY, v) } catch { /* ignore */ } }
 
-/** Trier par plateforme : Toutes, PlayStation, Xbox, Switch, PC, Autres (avec, s'il y a lieu, combien). */
-function PlatformChips({ value, onChange, counts, small }) {
+/**
+ * Trier par plateforme : Toutes, PlayStation, Xbox, Switch, PC, Mobile, Rétro ; et pour le PC,
+ * une seconde rangée : ses boutiques (Steam, Epic Games, GOG, Battle.net, EA app, Ubisoft, itch.io).
+ */
+function PlatformChips({ value, onChange, counts }) {
+  const fam = pfFamily(value)
+  const n = k => counts?.[k]
+  const chip = (k, t, on, cls) => (
+    <button type="button" key={k} role="radio" aria-checked={on} className={cls + (on ? ' on' : '')} onClick={() => onChange(k)} disabled={counts && !n(k) && k !== 'all' && !on}>
+      {t}{counts ? <b>{n(k) || 0}</b> : null}
+    </button>
+  )
   return (
-    <div className={'pf-chips' + (small ? ' small' : '')} role="radiogroup" aria-label="Plateforme">
-      {PLATFORM_GROUPS.map(([k, t]) => {
-        const n = counts?.[k]
-        return (
-          <button type="button" key={k} role="radio" aria-checked={value === k} className={'pf-' + k + (value === k ? ' on' : '')} onClick={() => onChange(k)} disabled={counts && !n && k !== 'all' && value !== k}>
-            {t}{counts ? <b>{n || 0}</b> : null}
-          </button>
-        )
-      })}
+    <div className="pf-wrap">
+      <div className="pf-chips" role="radiogroup" aria-label="Plateforme">
+        {PLATFORM_GROUPS.map(([k, t]) => chip(k, t, fam === k, 'pf-' + k))}
+      </div>
+      {fam === 'pc' && (
+        <div className="pf-chips pf-stores" role="radiogroup" aria-label="Boutique PC">
+          {chip('pc', 'Tout le PC', value === 'pc', 'pf-pcall')}
+          {PC_STORES.map(([k, t]) => chip('pc:' + k, t, value === 'pc:' + k, 'pf-st pf-st-' + k))}
+        </div>
+      )}
     </div>
   )
 }
@@ -204,9 +215,10 @@ function Discover({ mine, onOpen, onSearch, pf, setPf }) {
                 </span>
               </button>
             )}
-            <CatalogRow title={igdb ? 'Populaires en ce moment' : 'Les plus joués'} list={feat.hot?.slice(lead ? 1 : 0)} mine={mine} onOpen={onOpen} />
-            <CatalogRow title={igdb ? 'Les mieux notés de tous les temps' : 'En vedette'} list={feat.best} mine={mine} onOpen={onOpen} />
-            <CatalogRow title={igdb ? 'Bientôt' : 'Nouveautés'} list={feat.soon} mine={mine} onOpen={onOpen} />
+            {feat.approx && <p className="ct-note">IGDB ne sait pas encore trier par cette boutique : voici les jeux PC en général.</p>}
+            <CatalogRow title={igdb ? `Populaires en ce moment${pf !== 'all' ? ' · ' + pfLabel(pf) : ''}` : 'Les plus joués'} list={feat.hot?.slice(lead ? 1 : 0)} mine={mine} onOpen={onOpen} />
+            <CatalogRow title={igdb ? `Les mieux notés${pf !== 'all' ? ' · ' + pfLabel(pf) : ' de tous les temps'}` : 'En vedette'} list={feat.best} mine={mine} onOpen={onOpen} />
+            <CatalogRow title={igdb ? `Bientôt${pf !== 'all' ? ' · ' + pfLabel(pf) : ''}` : 'Nouveautés'} list={feat.soon} mine={mine} onOpen={onOpen} />
             {!feat.hot?.length && !feat.best?.length && !feat.soon?.length && <div className="st-empty"><p>{igdb ? 'Rien à montrer pour cette plateforme.' : 'Le catalogue Steam n’a que des jeux PC.'}</p></div>}
             {!igdb && <p className="ct-note">Catalogue Steam (PC) pour l’instant : avec les clés IGDB dans Vercel, toutes les plateformes arrivent.</p>}
           </>}
@@ -234,7 +246,7 @@ function CatalogSearch({ q, mine, onOpen, pf, setPf }) {
 }
 
 /** La fiche d'un jeu du catalogue : l'ajouter à notre bibliothèque, à notre top, voir sa bande-annonce. */
-function CatalogPage({ item, games, findGame, addGame, updateGame, setFavorite, onTrailer, quickWall, openMine, notify }) {
+function CatalogPage({ item, games, findGame, addGame, updateGame, setFavorite, onTrailer, quickWall, openMine, notify, pf }) {
   const [g, setG] = useState(null)
   const [err, setErr] = useState(null)
   useEffect(() => {
@@ -245,7 +257,12 @@ function CatalogPage({ item, games, findGame, addGame, updateGame, setFavorite, 
   }, [item.key]) // eslint-disable-line react-hooks/exhaustive-deps
   const cur = g || item
   const row = findGame(cur) && games.find(x => x.id === findGame(cur).id)
-  const add = (extra = {}) => { const r = addGame(cur, extra); notify(`${cur.name} ajouté à ta bibliothèque`); return r }
+  const add = (extra = {}) => {
+    const plat = platformFor(cur, pf)
+    const r = addGame(cur, { ...(plat ? { platform: plat } : {}), ...extra })
+    notify(`${cur.name} ajouté à ta bibliothèque${plat ? ' · ' + plat : ''}`)
+    return r
+  }
   const top = () => {
     const r = row || add()
     const n = setFavorite(r.id, !r.favorite)
@@ -317,6 +334,7 @@ function Facts({ g, row }) {
       <h3 className="cs-h3">Infos</h3>
       <dl className="st-facts">
         {g.platforms?.length > 0 && <><dt>Plateformes</dt><dd>{g.platforms.join(', ')}</dd></>}
+        {g.stores?.length > 0 && <><dt>Boutiques PC</dt><dd>{g.stores.map(storeLabel).filter(Boolean).join(', ')}</dd></>}
         {g.genres?.length > 0 && <><dt>Genres</dt><dd>{g.genres.slice(0, 4).join(', ')}</dd></>}
         {(g.date || g.year) && <><dt>Sortie</dt><dd>{g.date || g.year}</dd></>}
         {g.developers?.length > 0 && <><dt>Studio</dt><dd>{g.developers.join(', ')}</dd></>}
@@ -498,7 +516,7 @@ function TopCarousel({ items, ranked = true, onPlay, onGame, strip: showStrip = 
           </div>
         ))}
         <div className="cs-hero-txt" key={g.id}>
-          <span className="cs-hero-kick">{ranked ? (cur === 0 ? 'Ton n°1' : `N°${cur + 1} de ton top`) : 'Ajouté récemment'}</span>
+          <span className="cs-hero-kick">{ranked ? ((g.fav_rank || cur + 1) === 1 ? 'Ton n°1' : `N°${g.fav_rank || cur + 1} de ton top`) : 'Ajouté récemment'}</span>
           <Logo g={g} />
           <span className="cs-car-meta">
             {g.rating ? <Stars n={g.rating} /> : null}
@@ -557,7 +575,9 @@ const FILTERS = [['all', 'Tous'], ...STATUSES]
 function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filter, setFilter, pf, setPf }) {
   const [sort, setSort] = useState('top')
   const [ranking, setRanking] = useState(false)
-  const playingNow = useMemo(() => games.filter(g => g.status === 'en_cours'), [games])
+  const playingNow = useMemo(() => games.filter(g => g.status === 'en_cours' && onPlatform(g, pf)), [games, pf])
+  // le top et ses rangs restent ceux de toute la bibliothèque ; on n'en montre que la plateforme choisie
+  const topHere = useMemo(() => top.filter(g => onPlatform(g, pf)), [top, pf])
   const all = useMemo(() => {
     const by = {
       top: (a, b) => (b.favorite - a.favorite) || (a.fav_rank ?? 1e9) - (b.fav_rank ?? 1e9) || a.name.localeCompare(b.name, 'fr'),
@@ -567,7 +587,7 @@ function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filt
     }[sort]
     return games.filter(g => (filter === 'all' || g.status === filter) && onPlatform(g, pf)).sort(by)
   }, [games, sort, filter, pf])
-  const pfCounts = useMemo(() => Object.fromEntries(PLATFORM_GROUPS.map(([k]) => [k, games.filter(g => onPlatform(g, k)).length])), [games])
+  const pfCounts = useMemo(() => Object.fromEntries([...PLATFORM_GROUPS.map(([k]) => k), ...PC_STORES.map(([k]) => 'pc:' + k)].map(k => [k, games.filter(g => onPlatform(g, k)).length])), [games])
   if (!games.length) {
     return (
       <div className="gm-empty ld-empty">
@@ -580,8 +600,8 @@ function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filt
   }
   return (
     <div className="ld-home">
-      {top.length > 0 ? (
-        <TopCarousel items={top} onPlay={onPlay} onGame={onOpen} />
+      {topHere.length > 0 ? (
+        <TopCarousel items={topHere} onPlay={onPlay} onGame={onOpen} key={pf} />
       ) : (
         <section className="ld-banner empty">
           <div className="ld-banner-txt">
@@ -592,15 +612,15 @@ function LudoHome({ games, top, onOpen, onPlay, fav, reorderTop, openStore, filt
         </section>
       )}
 
-      {top.length > 0 && (
+      {topHere.length > 0 && (
         <section className="ld-sec">
           <div className="ld-sec-head">
-            <h3 className="cs-h3">Mon top <em>{top.length}</em></h3>
+            <h3 className="cs-h3">Mon top{pf !== 'all' ? ' · ' + pfLabel(pf) : ''} <em>{topHere.length}</em></h3>
             <button type="button" className={'st-btn ghost ld-rank-btn' + (ranking ? ' on' : '')} onClick={() => setRanking(r => !r)}>{ranking ? 'Terminé' : 'Ranger mon top'}</button>
           </div>
           {ranking
             ? <TopList top={top} onOpen={onOpen} onPlay={onPlay} onRemove={id => fav(games.find(g => g.id === id), false)} reorder={reorderTop} />
-            : <div className="ld-row">{top.map((g, i) => <CoverCard key={g.id} g={g} rank={i + 1} onOpen={onOpen} onPlay={onPlay} onFav={fav} />)}</div>}
+            : <div className="ld-row">{topHere.map(g => <CoverCard key={g.id} g={g} rank={g.fav_rank} onOpen={onOpen} onPlay={onPlay} onFav={fav} />)}</div>}
         </section>
       )}
 
@@ -659,7 +679,7 @@ function LudoGame({ g, onPlay, fav, updateGame, removeGame, onWallpaper, onCatal
             <div><dt>J’y joue sur</dt><dd>
               <select className="ld-select" value={g.platform || ''} onChange={e => updateGame(g.id, { platform: e.target.value || null })} aria-label="Plateforme">
                 <option value="">—</option>
-                {platforms.map(p => <option key={p} value={p}>{p}</option>)}
+                {[...new Set([...playOptions({ platforms }), ...(g.platform ? [g.platform] : [])])].map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </dd></div>
           )}
@@ -723,12 +743,13 @@ function Ludo({ games, top, selId, onSelect, onHome, mobile, setFavorite, reorde
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Retrouver un jeu…" aria-label="Retrouver un jeu" />
         </label>
         <select className="ld-select ld-pf" value={pf} onChange={e => setPf(e.target.value)} aria-label="Plateforme">
-          {PLATFORM_GROUPS.map(([k, t]) => <option key={k} value={k}>{k === 'all' ? 'Toutes les plateformes' : t}</option>)}
+          {PLATFORM_GROUPS.map(([k, t]) => <option key={k} value={k}>{k === 'all' ? 'Toutes les plateformes' : k === 'pc' ? 'PC (toutes boutiques)' : t}</option>)}
+          <optgroup label="Boutiques PC">{PC_STORES.map(([k, t]) => <option key={k} value={'pc:' + k}>{t}</option>)}</optgroup>
         </select>
         <div className="ld-list">
           {topShown.length > 0 && <><h4>Mon top <em>{top.length}</em></h4>{topShown.map(g => row(g, g.fav_rank))}</>}
           {nowShown.length > 0 && <><h4>En cours <em>{nowShown.length}</em></h4>{nowShown.map(g => row(g, null))}</>}
-          <h4>{pf === 'all' ? 'Tous mes jeux' : PLATFORM_GROUPS.find(x => x[0] === pf)[1]} <em>{allShown.length}</em></h4>
+          <h4>{pf === 'all' ? 'Tous mes jeux' : pfLabel(pf)} <em>{allShown.length}</em></h4>
           {allShown.map(g => row(g, null))}
           {!allShown.length && <p className="st-muted ld-none">{games.length ? 'Aucun jeu ne correspond.' : 'Aucun jeu pour l’instant.'}</p>}
         </div>
@@ -1012,7 +1033,7 @@ export default function PcOS({ games, addGame, findGame, updateGame, removeGame,
     if (cur.v === 'store') body = <Discover mine={mine} onOpen={openItem} onSearch={q => navigate('stim', { v: 'search', q })} pf={pf} setPf={setPf} />
     else if (cur.v === 'search') body = <CatalogSearch q={cur.q} mine={mine} onOpen={openItem} pf={pf} setPf={setPf} />
     else body = <CatalogPage item={cur.item} games={games} findGame={findGame} addGame={addGame} updateGame={updateGame} setFavorite={setFavorite}
-      onTrailer={setTrailer} quickWall={quickWall} openMine={openGame} notify={setToast} />
+      onTrailer={setTrailer} quickWall={quickWall} openMine={openGame} notify={setToast} pf={pf} />
   } else if (tab === 'games') {
     body = <Ludo games={games} top={top} selId={cur.v === 'game' ? cur.id : null} onSelect={openGame} onHome={() => navigate('games', ROOT.games, 'back')} mobile={mobile}
       setFavorite={setFavorite} reorderTop={reorderTop} updateGame={updateGame} removeGame={removeGame} onPlay={playTrailer} onWallpaper={chooseWall} onCatalog={toCatalog} quickWall={quickWall} openStore={() => goTab('stim')} notify={setToast} pf={pf} setPf={setPf} />
@@ -1021,7 +1042,7 @@ export default function PcOS({ games, addGame, findGame, updateGame, removeGame,
   }
 
   return (
-    <div ref={rootRef} className={'pcos cs cl' + (closing ? ' closing' : '') + (mobile ? ' mobile' : '') + ' ph-' + phase} role="application" aria-label="Le PC"
+    <div ref={rootRef} className={'pcos cs cl' + (closing ? ' closing' : '') + (mobile ? ' mobile' : '') + ' ph-' + phase + ' pfx-' + pfFamily(pf) + (pf.includes(':') ? ' pst-' + pf.split(':')[1] : '')} role="application" aria-label="Le PC"
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {/* le bureau du PC : notre fond d'écran, des icônes, la barre des tâches (on ne s'en sert pas) */}
       <div className="pd-desk" aria-hidden="true">

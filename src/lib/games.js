@@ -42,6 +42,7 @@ const fromIgdb = g => ({
   platforms: g.platforms || [], genres: g.genres || [], rating: g.rating,
   art: [...(g.artworks || []).map(a => igdbImg(a, '1080p')), ...(g.shots || []).map(a => igdbImg(a, '1080p'))],
   shots: (g.shots || []).map(a => igdbImg(a, 'screenshot_huge')),
+  stores: g.stores || (g.steam ? ['steam'] : []),
 })
 const fromSteam = g => ({
   key: 'steam:' + g.id,
@@ -55,7 +56,7 @@ const fromSteam = g => ({
 })
 
 // Steam n'a que des jeux PC : pour une autre famille de plateformes, rien
-const steamOnly = (pf, fn) => (pf && pf !== 'all' && pf !== 'pc' ? Promise.resolve(null) : fn())
+const steamOnly = (pf, fn) => (pf && pf !== 'all' && pf !== 'pc' && pf !== 'pc:steam' ? Promise.resolve(null) : fn())
 const pfParam = pf => (pf && pf !== 'all' ? { pf } : {})
 
 export const searchCatalog = (q, pf = 'all') => viaIgdb(
@@ -70,21 +71,54 @@ export const featuredCatalog = (pf = 'all') => viaIgdb(
 )
 
 /** Les familles de plateformes, pour trier le catalogue et notre bibliothèque. */
-export const PLATFORM_GROUPS = [['all', 'Toutes'], ['ps', 'PlayStation'], ['xbox', 'Xbox'], ['switch', 'Switch'], ['pc', 'PC'], ['other', 'Autres']]
+export const PLATFORM_GROUPS = [['all', 'Toutes'], ['ps', 'PlayStation'], ['xbox', 'Xbox'], ['switch', 'Switch'], ['pc', 'PC'], ['mobile', 'Mobile'], ['retro', 'Rétro & autres']]
+/** Les boutiques du PC (le jeu y est vendu, ou on y joue). */
+export const PC_STORES = [['steam', 'Steam'], ['epic', 'Epic Games'], ['gog', 'GOG'], ['battlenet', 'Battle.net'], ['ea', 'EA app'], ['ubisoft', 'Ubisoft Connect'], ['itch', 'itch.io']]
+export const storeLabel = k => PC_STORES.find(x => x[0] === k)?.[1] || ''
+/** « ps », « pc:epic »… → « PlayStation », « Epic Games »… */
+export const pfLabel = pf => { const [f, st] = String(pf || 'all').split(':'); return st ? storeLabel(st) : PLATFORM_GROUPS.find(x => x[0] === f)?.[1] || 'Toutes' }
+export const pfFamily = pf => String(pf || 'all').split(':')[0]
+
 export function platformGroup(name) {
   const n = String(name || '')
   if (/^PS[45]\b|PlayStation [45]/i.test(n)) return 'ps'
   if (/xbox|^XONE$|^XSX|Series X/i.test(n)) return 'xbox'
   if (/switch|^NS2?$/i.test(n)) return 'switch'
-  if (/^PC$|windows/i.test(n)) return 'pc'
-  return 'other'
+  if (/^PC\b|windows/i.test(n)) return 'pc'
+  if (/^iOS$|android|iphone|ipad/i.test(n)) return 'mobile'
+  return 'retro'
 }
-/** Ce jeu est-il de cette famille ? (la plateforme où l'on y joue d'abord, sinon toutes les siennes) */
+/** La boutique PC d'une plateforme notée « PC · Epic Games » (sinon null). */
+const storeOfPlatform = name => { const m = /^PC · (.+)$/.exec(String(name || '')); return m ? PC_STORES.find(x => x[1] === m[1])?.[0] || null : null }
+/** Ce jeu est-il de cette famille (et de cette boutique PC) ? D'abord la plateforme où l'on y joue, sinon toutes les siennes. */
 export const onPlatform = (g, pf) => {
   if (!pf || pf === 'all') return true
+  const [fam, store] = pf === 'other' ? ['retro'] : pf.split(':')
   const list = g.platform ? [g.platform] : g.platforms || []
-  if (!list.length) return pf === 'other'
-  return list.some(p => platformGroup(p) === pf)
+  if (!list.length) return fam === 'retro'
+  if (!list.some(p => platformGroup(p) === fam)) return false
+  if (!store) return true
+  const mine = storeOfPlatform(g.platform)
+  if (mine) return mine === store
+  return (g.stores || []).includes(store) || (store === 'steam' && !!g.app_id)
+}
+/** Les choix « j'y joue sur » d'un jeu : ses plateformes, et pour le PC chacune de ses boutiques. */
+export const playOptions = g => {
+  const out = []
+  for (const p of g.platforms || []) {
+    if (platformGroup(p) === 'pc') { out.push('PC'); for (const [, l] of PC_STORES) out.push('PC · ' + l) } else out.push(p)
+  }
+  return [...new Set(out)]
+}
+/** La plateforme à noter quand on ajoute un jeu depuis un rayon (PlayStation : PS5 d'abord, Epic : « PC · Epic Games »…). */
+export function platformFor(item, pf) {
+  const list = item.platforms || []
+  const [fam, store] = String(pf || 'all').split(':')
+  if (fam === 'all') return list.length === 1 ? list[0] : null
+  if (fam === 'pc') return store ? 'PC · ' + storeLabel(store) : 'PC'
+  const mine = list.filter(p => platformGroup(p) === fam)
+  const pref = { ps: /PS5/, xbox: /XSX|Series/, switch: /Switch 2|NS2/ }[fam]
+  return mine.find(p => pref?.test(p)) || mine[0] || null
 }
 
 const plain = html => { try { return new DOMParser().parseFromString(html, 'text/html').body.textContent || '' } catch { return html } }

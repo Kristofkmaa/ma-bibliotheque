@@ -200,3 +200,6 @@ create table if not exists user_book_top (
 alter table user_book_top enable row level security;
 drop policy if exists "Son top" on user_book_top;
 create policy "Son top" on user_book_top for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Les boutiques PC où un jeu est vendu (Steam, Epic Games, GOG…)
+alter table user_games add column if not exists stores text[] default '{}';

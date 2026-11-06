@@ -5,12 +5,31 @@
  *   /api/igdb?q=zelda       → recherche
  *   /api/igdb?id=1942       → fiche d'un jeu (résumé, images, vidéos, studio, plateformes…)
  *   /api/igdb?featured=1    → les rayons : populaires en ce moment, les mieux notés, bientôt
- * Avec &pf=ps|xbox|switch|pc|other : seulement les jeux de ces plateformes (other : ni l'une ni l'autre).
+ * Avec &pf=ps|xbox|switch|pc|mobile|retro : seulement les jeux de ces plateformes (retro : tout le reste) ;
+ * et pour le PC, une boutique : &pf=pc:steam|epic|gog|battlenet|ea|ubisoft|itch.
  */
-// les familles de plateformes (identifiants IGDB) : PS5, PS4 · Xbox Series, One · Switch, Switch 2 · PC
-const PF = { ps: [167, 48], xbox: [169, 49], switch: [130, 508], pc: [6] }
-const MAIN = Object.values(PF).flat()
-const pfWhere = pf => (PF[pf] ? ` & platforms = (${PF[pf].join(',')})` : pf === 'other' ? ` & platforms != (${MAIN.join(',')})` : '')
+// les familles de plateformes (identifiants IGDB) : PS5, PS4 · Xbox Series, One · Switch, Switch 2 · PC · Android, iOS
+const PF = { ps: [167, 48], xbox: [169, 49], switch: [130, 508], pc: [6], mobile: [34, 39] }
+const MAIN = [...Object.values(PF).flat(), 14, 3]   // + Mac, Linux : le « rétro » est tout le reste
+// les boutiques PC : par le lien de leur page sur la fiche IGDB du jeu, ou par l'éditeur
+const STORE = {
+  steam: 'websites.url ~ *"steampowered.com"*',
+  epic: 'websites.url ~ *"epicgames.com"*',
+  gog: 'websites.url ~ *"gog.com"*',
+  itch: 'websites.url ~ *"itch.io"*',
+  battlenet: '(involved_companies.company.name ~ *"Blizzard"* | involved_companies.company.name ~ *"Activision"*)',
+  ea: '(involved_companies.company.name ~ *"Electronic Arts"* | involved_companies.company.name ~ *"EA Sports"*)',
+  ubisoft: 'involved_companies.company.name ~ *"Ubisoft"*',
+}
+const pfWhere = (pf, withStore = true) => {
+  const [fam, store] = String(pf || '').split(':')
+  if (fam === 'retro' || fam === 'other') return ` & platforms != (${MAIN.join(',')})`
+  if (!PF[fam]) return ''
+  return ` & platforms = (${PF[fam].join(',')})` + (fam === 'pc' && withStore && STORE[store] ? ` & ${STORE[store]}` : '')
+}
+// les boutiques PC où l'on trouve le jeu (d'après les liens de sa fiche)
+const STORE_URL = [['steam', /steampowered\.com/], ['epic', /epicgames\.com/], ['gog', /gog\.com/], ['itch', /itch\.io/], ['battlenet', /battle\.net|blizzard\.com/], ['ea', /\bea\.com/], ['ubisoft', /ubisoft\.com|ubi\.com/]]
+const storesOf = g => STORE_URL.filter(([, re]) => (g.websites || []).some(w => re.test(w.url || ''))).map(([k]) => k)
 let token = null, tokenExp = 0
 
 const LIST = 'name,cover.image_id,first_release_date,platforms.abbreviation,platforms.name,genres.name,total_rating,artworks.image_id,screenshots.image_id,websites.url'
@@ -43,6 +62,7 @@ const pick = g => ({
   genres: (g.genres || []).map(x => GENRES[x.name] || x.name).slice(0, 4),
   rating: typeof g.total_rating === 'number' ? Math.round(g.total_rating) : null,
   steam: steamOf(g),
+  stores: storesOf(g),
 })
 
 export default async function handler(req, res) {
@@ -80,11 +100,20 @@ export default async function handler(req, res) {
     const q = String(req.query.q || '').trim().replace(/["\\;]/g, ' ').slice(0, 80)
     const gid = parseInt(req.query.id, 10)
     const now = Math.floor(Date.now() / 1000)
-    const pw = pfWhere(String(req.query.pf || ''))
+    const pfq = String(req.query.pf || '')
+    let pw = pfWhere(pfq), approx = false
+    // un filtre de boutique refusé par IGDB : on garde la plateforme seule (le PC en général)
+    const tryGames = async build => {
+      try { return await games(build(pw)) } catch (e) {
+        if (e.status !== 400 || !pfq.includes(':')) throw e
+        approx = true; pw = pfWhere(pfq, false)
+        return games(build(pw))
+      }
+    }
     let out
     if (q) {
-      const list = await games(`search "${q}"; fields ${LIST}; where version_parent = null${pw}; limit 30;`)
-      out = { results: list.map(pick) }
+      const list = await tryGames(w => `search "${q}"; fields ${LIST}; where version_parent = null${w}; limit 30;`)
+      out = { results: list.map(pick), approx }
     } else if (gid > 0) {
       const [g] = await games(`fields ${FULL}; where id = ${gid};`)
       if (!g) { res.status(404).json({ error: 'Jeu introuvable' }); return }
@@ -98,12 +127,12 @@ export default async function handler(req, res) {
         votes: g.total_rating_count || 0,
       }
     } else if (req.query.featured) {
-      const [hot, best, soon] = await Promise.all([
-        games(`fields ${LIST}; where first_release_date > ${now - 150 * 86400} & first_release_date < ${now} & cover != null & total_rating_count > 2${pw}; sort total_rating_count desc; limit 18;`),
-        games(`fields ${LIST}; where total_rating_count > ${pw ? 60 : 400} & cover != null${pw}; sort total_rating desc; limit 18;`),
+      const hot = await tryGames(w => `fields ${LIST}; where first_release_date > ${now - (w ? 400 : 150) * 86400} & first_release_date < ${now} & cover != null & total_rating_count > 2${w}; sort total_rating_count desc; limit 18;`)
+      const [best, soon] = await Promise.all([
+        games(`fields ${LIST}; where total_rating_count > ${pw ? 40 : 400} & cover != null${pw}; sort total_rating desc; limit 18;`),
         games(`fields ${LIST}; where first_release_date > ${now} & cover != null & hypes > ${pw ? 0 : 3}${pw}; sort hypes desc; limit 18;`),
       ])
-      out = { hot: hot.map(pick), best: best.map(pick), soon: soon.map(pick) }
+      out = { hot: hot.map(pick), best: best.map(pick), soon: soon.map(pick), approx }
     } else { res.status(400).json({ error: 'q, id ou featured attendu' }); return }
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=43200')
     res.status(200).json(out)

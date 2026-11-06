@@ -16,6 +16,7 @@ const normalize = g => ({
   hero: g.hero || null,                 // la grande image
   genres: Array.isArray(g.genres) ? g.genres : [],
   platforms: Array.isArray(g.platforms) ? g.platforms : [],
+  stores: Array.isArray(g.stores) ? g.stores : [],   // les boutiques PC où il est vendu
   platform: g.platform || null,         // celle sur laquelle on y joue
   status: g.status || 'a_jouer',        // à jouer, en cours, terminé, abandonné
   release: g.release || '',
@@ -143,7 +144,7 @@ export function useGames(userId) {
     if (have) return have
     const row = normalize({
       igdb_id: item.igdb_id, app_id: item.app_id, name: item.name, img: item.cover || item.coverFallback, hero: item.hero,
-      genres: item.genres, platforms: item.platforms, release: item.date || (item.year ? String(item.year) : ''),
+      genres: item.genres, platforms: item.platforms, stores: item.stores, release: item.date || (item.year ? String(item.year) : ''),
       platform: item.platforms?.length === 1 ? item.platforms[0] : null, ...extra,
     })
     saveGames([row, ...ref.current])
