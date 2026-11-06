@@ -3,6 +3,8 @@ import { useIsMobile } from '../hooks/useIsMobile'
 import { loadImage } from '../lib/tmdb'
 import { relayUrl } from '../lib/covers'
 import { searchCatalog, featuredCatalog, catalogGame, catalogSource, STATUSES, statusLabel, PLATFORM_GROUPS, PC_STORES, storeLabel, pfLabel, pfFamily, onPlatform, playOptions, platformFor } from '../lib/games'
+// une note toujours entre 0 et 5 étoiles (une valeur hors échelle ne doit jamais casser l'affichage)
+const st5 = n => Math.max(0, Math.min(5, Math.round(+n || 0)))
 
 /**
  * Le PC du bureau gamer : notre ludothèque, dans l'esprit d'un logiciel de jeux. Une barre en
@@ -655,7 +657,7 @@ function HallOfFame({ items, fullTop, onOpen, onPlay, ranking, setRanking, reord
               <span className="hof-rank">N° {rank} <i>·</i> {ROMAN[rank - 1] ? <em>{ROMAN[rank - 1]}</em> : null}</span>
               <h2 className="hof-title">{cur.name}</h2>
               <p className="hof-sub">{[cur.platform || cur.platforms?.[0], statusLabel(cur.status), cur.genres?.[0]].filter(Boolean).join('   ·   ')}</p>
-              {cur.rating ? <span className="hof-stars" aria-label={`Ma note : ${cur.rating} sur 5`}>{'★'.repeat(cur.rating)}<i>{'★'.repeat(5 - cur.rating)}</i></span> : null}
+              {cur.rating ? <span className="hof-stars" aria-label={`Ma note : ${cur.rating} sur 5`}>{'★'.repeat(st5(cur.rating))}<i>{'★'.repeat(5 - st5(cur.rating))}</i></span> : null}
               <span className="hof-act">
                 <button type="button" className="hof-btn" onClick={() => onOpen(cur.id)}>Ouvrir la fiche</button>
                 <button type="button" className="hof-link" onClick={() => onPlay(cur)}><PlayGlyph /> Bande-annonce</button>
@@ -892,7 +894,7 @@ function ConsoleLib({ games, top, selId, onSelect, onHome, setFavorite, reorderT
             <span className="cn-kicker">{rank ? (rank === 1 ? 'Ton n°1' : `N°${rank} de ton top`) : statusLabel(cur.status)}{(cur.platform || cur.platforms?.[0]) ? '  ·  ' + (cur.platform || cur.platforms[0]) : ''}</span>
             <div className="cn-logo"><Logo g={cur} /></div>
             <p className="cn-meta">{[rank ? statusLabel(cur.status) : null, cur.genres?.slice(0, 2).join(' · '), cur.release].filter(Boolean).join('   ·   ')}</p>
-            {cur.rating ? <span className="cn-stars" aria-label={`Ma note : ${cur.rating} sur 5`}>{'★'.repeat(cur.rating)}<i>{'★'.repeat(5 - cur.rating)}</i></span> : null}
+            {cur.rating ? <span className="cn-stars" aria-label={`Ma note : ${cur.rating} sur 5`}>{'★'.repeat(st5(cur.rating))}<i>{'★'.repeat(5 - st5(cur.rating))}</i></span> : null}
             <div className="cn-act">
               <button type="button" className="cn-btn main" onClick={() => onSelect(cur.id)}>Ouvrir la fiche</button>
               <button type="button" className="cn-btn" onClick={() => onPlay(cur)}><PlayGlyph /> Bande-annonce</button>

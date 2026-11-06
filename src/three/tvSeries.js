@@ -1,4 +1,6 @@
 import { tmdbImgCors, loadImage, year, isMovie, runtimeLabel } from '../lib/tmdb'
+// une note toujours entre 0 et 5 étoiles (une valeur hors échelle ne doit jamais casser l'affichage)
+const st5 = n => Math.max(0, Math.min(5, Math.round(+n || 0)))
 
 /**
  * L'image projetée au mur du salon : notre menu de films et séries, comme sur la projection
@@ -128,7 +130,7 @@ export class TvSeries {
     tl.forEach((l, k) => g.fillText(l, 66, 392 + k * 90))
     let y = 392 + (tl.length - 1) * 90 + 52
     g.fillStyle = MUTED; g.font = `600 22px ${SANS}`
-    const meta = [s.rating ? '★'.repeat(s.rating) : '', year(s), isMovie(s) ? runtimeLabel(s.runtime) : s.seasons ? `${s.seasons} saisons` : ''].filter(Boolean).join('   ·   ')
+    const meta = [s.rating ? '★'.repeat(st5(s.rating)) : '', year(s), isMovie(s) ? runtimeLabel(s.runtime) : s.seasons ? `${s.seasons} saisons` : ''].filter(Boolean).join('   ·   ')
     g.fillText(meta, 72, y)
     // les deux boutons
     y += 34

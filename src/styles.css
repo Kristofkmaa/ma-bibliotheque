@@ -32,6 +32,11 @@ html, body {
 }
 
 body.app-shell { overflow: hidden; }
+/* téléphone : la page reste en place (ni zoom, ni glissement de côté, ni rebond) */
+html, body { overflow-x: hidden; overscroll-behavior: none; }
+:where(*) { touch-action: pan-x pan-y; }
+/* les pages qui défilent de haut en bas ne glissent jamais de côté */
+.sx-home, .sx-modal, .sx-page-scroll, .stv-search, .detail-scroll { overflow-x: hidden; }
 
 #root { width: 100%; min-height: 100%; }
 

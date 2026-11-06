@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import BluRayShelf, { canWebGL } from './BluRayShelf'
 import { tmdbImg, searchSeries, seriesDetails, seriesVideos, seriesImages, year, isMovie, workKey, runtimeLabel, publicRating, fmtVote, fmtVotes, seriesProviders, providerUrl } from '../lib/tmdb'
+// une note toujours entre 0 et 5 étoiles (une valeur hors échelle ne doit jamais casser l'affichage)
+const st5 = n => Math.max(0, Math.min(5, Math.round(+n || 0)))
 
 /** Un titre dont les mots montent un à un, comme sortis d'une fente. */
 function Rise({ text, as: Tag = 'span', className, delay = 0, step = 0.06 }) {
@@ -452,7 +454,7 @@ function DetailPage({ s, pub, videos, allCats, onBack, onPlay, onUpdate, onRemov
               {pub ? <span className="sx-pub-badge" title={`Note du public : ${fmtVote(pub.vote)}/10 (${fmtVotes(pub.votes)})`}>★ {fmtVote(pub.vote)}</span> : null}
               {[year(s), lengthLabel(s), (s.genres || []).slice(0, 2).join(', ')].filter(Boolean).join('   ·   ')}
             </p>
-            {s.rating ? <p className="sx-page-stars" aria-label={`${s.rating} étoiles sur 5`}>{'★'.repeat(s.rating)}<i>{'★'.repeat(5 - s.rating)}</i></p> : null}
+            {s.rating ? <p className="sx-page-stars" aria-label={`${s.rating} étoiles sur 5`}>{'★'.repeat(st5(s.rating))}<i>{'★'.repeat(5 - st5(s.rating))}</i></p> : null}
             <div className="sx-actions">
               {main && (
                 <a className="sx-btn watch" href={providerUrl(main, s.name, prov.link)} target="_blank" rel="noopener noreferrer">
@@ -508,7 +510,7 @@ function ListRow({ s, pub, onOpen }) {
           </span>
           <span className="sx-li-sub">
             {genres && <span>{genres}</span>}
-            {s.rating ? <span className="sx-li-stars" aria-label={`${s.rating} étoiles sur 5`}>{'★'.repeat(s.rating)}<i>{'★'.repeat(5 - s.rating)}</i></span> : <span className="sx-li-norate">Pas encore notée</span>}
+            {s.rating ? <span className="sx-li-stars" aria-label={`${s.rating} étoiles sur 5`}>{'★'.repeat(st5(s.rating))}<i>{'★'.repeat(5 - st5(s.rating))}</i></span> : <span className="sx-li-norate">Pas encore notée</span>}
           </span>
         </span>
         <span className="sx-li-chev" aria-hidden="true">›</span>
