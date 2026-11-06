@@ -212,3 +212,17 @@ create table if not exists user_showcase (
 alter table user_showcase enable row level security;
 drop policy if exists "Sa vitrine" on user_showcase;
 create policy "Sa vitrine" on user_showcase for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ============================================================================
+-- La cuisine : frigo, placards, recettes préférées, déjà cuisinées, courses
+-- (une ligne par personne, tout dans `data`)
+-- ============================================================================
+create table if not exists public.user_kitchen (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.user_kitchen enable row level security;
+drop policy if exists "user_kitchen_own" on public.user_kitchen;
+create policy "user_kitchen_own" on public.user_kitchen
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

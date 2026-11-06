@@ -421,7 +421,7 @@ function Library({ user, onSignOut }) {
       </div>
       {salon && (
         <Suspense fallback={<div className="salon" />}>
-          <LivingRoom tv={tvBus} showcase={showcase}
+          <LivingRoom tv={tvBus} showcase={showcase} userId={user.id}
             from={salon} books={books} shelves={effShelves} basketItems={basket.items}
             series={series} onAddSeries={addSeries} onUpdateSeries={updateSeries} onRemoveSeries={removeSeries} onRenameCategory={renameCategory}
             gamesApi={gamesApi} holder={user.user_metadata?.full_name || user.user_metadata?.name || ''}

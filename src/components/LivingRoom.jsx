@@ -5,6 +5,7 @@ import SeriesTV from './SeriesTV'
 import ShowcasePanel from './ShowcasePanel'
 import { resolveShowcase } from '../lib/showcase'
 import PcOS from './PcOS'
+import Kitchen from './Kitchen'
 import { applyTheme } from '../lib/theme'
 
 const store = {
@@ -81,7 +82,7 @@ function greeting(hour) {
  * L'accueil : le salon. La bibliothèque du salon mène au mur de livres ;
  * l'image projetée passe nos films et séries (on la touche : on entre dedans).
  */
-export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, gamesApi, holder, tv: tvBus, showcase, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
+export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, gamesApi, holder, userId, tv: tvBus, showcase, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
   const rootRef = useRef(null)
   const hostRef = useRef(null)
   const topRef = useRef(null)
@@ -183,7 +184,8 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   // le son de la télé : on le baisse dès qu'on part (vers la bibliothèque, le PC, les films…) et on
   // le remonte dès qu'on revient (pendant l'animation du retour)
   const [leaving, setLeaving] = useState(false)
-  useEffect(() => { setWall(!tv && !leaving) }, [tv, leaving]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [kitchen, setKitchen] = useState(false)   // la cuisine, par-dessus le salon
+  useEffect(() => { setWall(!tv && !leaving && !kitchen) }, [tv, leaving, kitchen]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { setWall(false); tvVideo.current?.setAttribute('data-off', '') }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Échap pendant le zoom : on ressort (une fois dans la télé, c'est le module qui s'en charge)
@@ -276,6 +278,9 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
         <PcOS {...gamesApi} holder={holder} fromRect={sceneRef.current?.screenRect?.('pc')} onClose={() => sceneRef.current?.unzoomTv()} />
       )}
 
+      {/* la cuisine : une autre pièce, ouverte par-dessus le salon */}
+      {kitchen && <Kitchen userId={userId} onClose={() => setKitchen(false)} />}
+
       <div className="salon-top" ref={topRef}>
         <div className="logo">
           <div className="logo-name">Maruchime</div>
@@ -306,6 +311,10 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5h9a4 4 0 0 1 3.9 4.8l-.8 3.6a2.2 2.2 0 0 1-3.7 1.1L13.8 16h-3.6l-2.1 2a2.2 2.2 0 0 1-3.7-1.1l-.8-3.6A4 4 0 0 1 7.5 8.5zM8 11.2v3M6.5 12.7h3" /><circle cx="15.8" cy="12" r=".6" /><circle cx="17.3" cy="13.8" r=".6" /></svg>
             <span>Jeux</span>
           </button>
+          <button type="button" className="tab" onClick={() => setKitchen(true)} disabled={going}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v7.5a2 2 0 0 0 2 2M11 3v7.5a2 2 0 0 1-2 2V21M9 3v6M16.5 21V3c-2 1.4-3 4-3 7.5h3" /></svg>
+            <span>Cuisine</span>
+          </button>
         </nav>
       ) : (
         <div className="salon-bottom" ref={bottomRef}>
@@ -318,6 +327,9 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
             </button>
             <button type="button" className="lbl box salon-go" onClick={() => sceneRef.current?.tap('pc')} disabled={going}>
               Le PC · Jeux <span aria-hidden="true">◆</span>
+            </button>
+            <button type="button" className="lbl box salon-go" onClick={() => setKitchen(true)} disabled={going}>
+              La cuisine <span aria-hidden="true">✦</span>
             </button>
           </div>
           <p className="salon-hint">{seated ? 'Fais glisser pour tourner la tête · molette en arrière pour te lever' : 'Fais glisser pour regarder autour · molette en avant pour t’asseoir dans le canapé'}</p>
