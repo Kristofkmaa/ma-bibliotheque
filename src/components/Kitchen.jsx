@@ -94,7 +94,7 @@ export default function Kitchen({ userId, onClose }) {
           <button type="button" onClick={() => go('courses')}><span className="kt-ico">📝</span><b>Les courses</b>{todo > 0 && <em>{todo}</em>}</button>
         </nav>
       )}
-      {!view && <p className="kt-hint">{mobile ? 'Glisse pour regarder la cuisine · touche le frigo ou les placards' : 'Clique sur le frigo, les placards ou la tablette'}</p>}
+      {!view && <p className="kt-hint">{mobile ? 'Glisse pour tourner la cuisine · touche le frigo ou les placards' : 'Fais glisser pour tourner la cuisine · clique sur le frigo, les placards ou la tablette'}</p>}
 
       {(arrived === 'frigo' || arrived === 'placard') && (
         <PantryPanel key={arrived} place={arrived} k={k} onClose={back} onRecipes={() => openApp('frigo')} onOther={() => go(arrived === 'frigo' ? 'placard' : 'frigo')} />

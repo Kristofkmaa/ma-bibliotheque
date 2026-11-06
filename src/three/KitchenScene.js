@@ -4,7 +4,9 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { noTouchSelect } from './webgl'
 
 /**
- * La cuisine en 3D : un mur carrelé, un plan de travail, un frigo dont la porte s'ouvre, des
+ * La cuisine en maquette, comme le salon : un plancher épais, quatre murs (celui qui est entre
+ * nous et la pièce s'abaisse), vue de trois quarts ; on la fait tourner du doigt.
+ * Contre le mur du fond : un mur carrelé, un plan de travail, un frigo dont la porte s'ouvre, des
  * placards hauts qui s'ouvrent, une tablette (l'appli de recettes) et une liste de courses
  * aimantée sur le frigo. Ce qu'on a rangé apparaît vraiment sur les étagères (des pictogrammes).
  *   focus('frigo' | 'placard' | 'tablette' | 'courses' | null) : la caméra y va, les portes s'ouvrent
@@ -21,7 +23,13 @@ const FR = { x: -1.62, w: 0.8, h: 1.92, d: 0.7 }          // le frigo
 const CAB = { x0: -1.08, n: 3, w: 0.8, y0: 1.5, h: 0.72, d: 0.36 } // les placards hauts
 const COUNTER = { x0: -1.14, x1: 2.4, h: 0.9, d: 0.62 }
 const TAB = { x: 0.32, z: 0.34 }                          // la tablette
-const SPAN = [-2.25, 2.7]                                 // ce qu'on peut regarder, de gauche à droite
+// la pièce (maquette) : le coin cuisine ci-dessus est construit contre le mur du fond (repère « local »,
+// mur en z = 0), puis posé dans la pièce par ROOT_OFF
+const R = 2.3, H = 2.7, T = 0.12, FT = 0.2
+const ROOT_OFF = new THREE.Vector3(-0.2, 0, -R)
+const AZ0 = 0.5, EL0 = 0.52, AZ_LIM = [-1.05, 1.05], EL_LIM = [0.32, 0.92]
+const TARGET0 = new THREE.Vector3(0, 0.85, 0)
+const FOV_ROOM = 30
 
 class Spring {
   constructor(v = 0, k = 90, damp = 1) { this.v = v; this.t = v; this.vel = 0; this.k = k; this.c = 2 * Math.sqrt(k) * damp }
@@ -122,7 +130,7 @@ export default class KitchenScene {
     this.cb = cb
     this.container = container
     this.mobile = matchMedia('(max-width: 767px)').matches
-    const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' })
+    const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     r.outputColorSpace = THREE.SRGBColorSpace
     r.toneMapping = THREE.ACESFilmicToneMapping
@@ -134,18 +142,20 @@ export default class KitchenScene {
     noTouchSelect(r.domElement)
 
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color('#E9E2D6')
     const pm = new THREE.PMREMGenerator(r)
     this.env = pm.fromScene(new RoomEnvironment(), 0.04).texture
     pm.dispose()
     this.scene.environment = this.env
     this.scene.environmentIntensity = 0.55
 
-    this.camera = new THREE.PerspectiveCamera(this.mobile ? 58 : 40, 1, 0.05, 60)
+    this.camera = new THREE.PerspectiveCamera(FOV_ROOM, 1, 0.05, 80)
     this.hits = []                 // ce qu'on peut toucher (userData.kind)
     this.anims = []                // portes : { obj, spring, open, closed }
     this.view = null               // vue actuelle : null (toute la cuisine) ou une partie
-    this.panX = new Spring(this.mobile ? -0.85 : 0.2, 60, 1)   // au téléphone : le frigo et la tablette
+    this.az = new Spring(AZ0, 40, 1)
+    this.el = new Spring(EL0, 40, 1)
+    this.dist = 12
+    this.root = new THREE.Group(); this.root.position.copy(ROOT_OFF)
     this.fly = null
     this.hover = null
     this.items = { frigo: new THREE.Group(), placard: new THREE.Group(), door: new THREE.Group() }
@@ -174,42 +184,174 @@ export default class KitchenScene {
 
   _build() {
     const S = this.scene
-    // la lumière : le jour qui entre par la fenêtre (à droite), un ciel doux, et le reflet de la pièce
-    S.add(new THREE.HemisphereLight('#FFF6EA', '#B79A82', 0.9))
-    const sun = new THREE.DirectionalLight('#FFF1DC', 2.1)
-    sun.position.set(3.2, 4.2, 3.4)
-    sun.target.position.set(0, 0.6, 0)
+    // la lumière : un ciel doux et un « soleil » haut, devant à gauche (comme le salon)
+    S.add(new THREE.HemisphereLight('#FFF7EC', '#B9A28A', 1.15))
+    const sun = new THREE.DirectionalLight('#FFF1DC', 1.9)
+    sun.position.set(-2.4, 6.4, 4.4)
+    sun.target.position.set(0, 0.4, 0)
     sun.castShadow = true
     sun.shadow.mapSize.set(this.mobile ? 1024 : 2048, this.mobile ? 1024 : 2048)
-    Object.assign(sun.shadow.camera, { left: -3.5, right: 3.5, top: 3, bottom: -1.5, near: 0.5, far: 12 })
-    sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02
-    S.add(sun, sun.target)
+    Object.assign(sun.shadow.camera, { left: -3.4, right: 3.4, top: 3.4, bottom: -3.4, near: 1, far: 16 })
+    sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.025; sun.shadow.radius = 4
+    const fill = new THREE.DirectionalLight('#E8EEFF', 0.35); fill.position.set(5, 2.5, 3)
+    S.add(sun, sun.target, fill)
 
-    // le mur, la crédence, le sol
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(14, 4), this._mat({ color: COL.wall, roughness: 0.95 }))
-    wall.position.set(0.2, 1.6, 0); wall.receiveShadow = true; S.add(wall)
+    this._buildShell()
+    S.add(this.root)
+    // la crédence en zellige, contre le mur du fond
     const zt = zelligeTexture(); zt.repeat.set((COUNTER.x1 - COUNTER.x0) / 1.4, 0.58 / 0.7)
     const spl = new THREE.Mesh(new THREE.PlaneGeometry(COUNTER.x1 - COUNTER.x0, 0.6), this._mat({ map: zt, roughness: 0.25, metalness: 0.02 }))
-    spl.position.set((COUNTER.x0 + COUNTER.x1) / 2, COUNTER.h + 0.3, 0.003); spl.receiveShadow = true; S.add(spl)
-    const ft = tometteTexture(); ft.repeat.set(9, 5)
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(14, 8), this._mat({ map: ft, roughness: 0.8 }))
-    floor.rotation.x = -Math.PI / 2; floor.position.set(0.2, 0, 4); floor.receiveShadow = true; S.add(floor)
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(14, 8), this._mat({ color: '#F4EFE7', roughness: 1 }))
-    ceil.rotation.x = Math.PI / 2; ceil.position.set(0.2, 2.75, 4); S.add(ceil)
-    const cornice = this._box(14, 0.05, 0.05, this._mat({ color: '#E6DED1', roughness: 0.9 })); cornice.position.set(0.2, 2.725, 0.025); S.add(cornice)
-    const skirt = this._box(14, 0.09, 0.015, this._mat({ color: '#E3D9CA', roughness: 0.8 })); skirt.position.set(0.2, 0.045, 0.008); S.add(skirt)
-
+    spl.position.set((COUNTER.x0 + COUNTER.x1) / 2, COUNTER.h + 0.3, 0.003); spl.receiveShadow = true; this.root.add(spl)
     this._buildCounter()
     this._buildFridge()
     this._buildCabinets()
     this._buildTablet()
     this._buildWindow()
     this._buildDecor()
-    S.add(this.items.frigo, this.items.placard)
+    this._buildRoomDecor()
+    this.root.add(this.items.frigo, this.items.placard)
+  }
+
+  // ---- La pièce : le socle, le sol, les murs ---------------------------------------------------
+  _buildShell() {
+    const S = this.scene
+    const slab = this._box(2 * R + 2 * T, FT, 2 * R + 2 * T, this._mat({ map: woodTexture('#CDBB9F'), roughness: 0.75 }), 0.03, 3)
+    slab.position.set(0, -FT / 2, 0); slab.castShadow = false; S.add(slab)
+    const ft = tometteTexture(); ft.repeat.set(2.3, 2.3)
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * R, 2 * R), this._mat({ map: ft, roughness: 0.8 }))
+    floor.rotation.x = -Math.PI / 2; floor.position.y = 0.002; floor.receiveShadow = true; S.add(floor)
+    // ombre douce sous la maquette
+    const cs = canvasTex(256, 256, (g, w, h) => {
+      const gr = g.createRadialGradient(w / 2, h / 2, w * 0.18, w / 2, h / 2, w / 2)
+      gr.addColorStop(0, 'rgba(40,30,20,0.38)'); gr.addColorStop(1, 'rgba(40,30,20,0)')
+      g.fillStyle = gr; g.fillRect(0, 0, w, h)
+    })
+    const shadow = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 6.4), new THREE.MeshBasicMaterial({ map: cs, transparent: true, depthWrite: false }))
+    shadow.rotation.x = -Math.PI / 2; shadow.position.y = -FT - 0.05; S.add(shadow)
+    this.disposables.push(shadow.material)
+
+    // quatre murs : celui qui est entre la caméra et la pièce s'abaisse
+    this.walls = []
+    const wallMat = this._mat({ color: COL.wall, roughness: 0.95 })
+    const sideMat = this._mat({ color: '#E7DECF', roughness: 0.95 })
+    const baseMat = this._mat({ color: '#F4EFE6', roughness: 0.7 })
+    const capMat = this._mat({ color: '#F7F2EA', roughness: 0.8 })
+    const L = 2 * R + 2 * T
+    const wall = (name, n, mat, along) => {
+      const grp = new THREE.Group(); S.add(grp)
+      const decor = new THREE.Group(); S.add(decor)
+      const x = n.x * (R + T / 2), z = n.z * (R + T / 2)
+      const m = this._box(along === 'x' ? L : T, H, along === 'x' ? T : L, mat, 0.02, 2); m.position.set(x, H / 2, z); m.castShadow = false
+      const b = this._box(along === 'x' ? 2 * R : 0.025, 0.09, along === 'x' ? 0.025 : 2 * R, baseMat, 0.006, 2)
+      b.position.set(n.x * (R - 0.0125), 0.045, n.z * (R - 0.0125)); b.castShadow = false
+      const c = this._box(along === 'x' ? L + 0.02 : T + 0.04, 0.05, along === 'x' ? T + 0.04 : L + 0.02, capMat, 0.015, 2); c.position.set(x, H + 0.02, z)
+      grp.add(m, b, c)
+      const w = { name, n, grp, decor, cut: new Spring(1, 70, 1) }
+      this.walls.push(w)
+      return w
+    }
+    wall('back', new THREE.Vector3(0, 0, -1), wallMat, 'x')
+    wall('front', new THREE.Vector3(0, 0, 1), wallMat, 'x')
+    this.leftWall = wall('left', new THREE.Vector3(-1, 0, 0), sideMat, 'z')
+    this.rightWall = wall('right', new THREE.Vector3(1, 0, 0), sideMat, 'z')
+  }
+
+  // ---- Le reste de la pièce : la table, les étagères ouvertes, un tapis, une plante ------------
+  _buildRoomDecor() {
+    const S = this.scene
+    const oak = this._mat({ map: woodTexture(COL.oak), roughness: 0.5 })
+    const dark = this._mat({ color: '#6B4A31', roughness: 0.6 })
+    // un tapis rayé devant le plan de travail
+    const rug = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 0.8), this._mat({
+      map: canvasTex(512, 160, (g, w, h) => {
+        g.fillStyle = '#F1E7D6'; g.fillRect(0, 0, w, h)
+        const st = ['#B4573A', '#F1E7D6', '#5F7A6A', '#F1E7D6', '#D9A93A', '#F1E7D6']
+        for (let x = 0, i = 0; x < w; x += 18, i++) { g.fillStyle = st[i % st.length]; g.fillRect(x, 10, 9, h - 20) }
+        g.strokeStyle = '#B4573A'; g.lineWidth = 6; g.strokeRect(3, 3, w - 6, h - 6)
+      }), roughness: 1,
+    }))
+    rug.rotation.x = -Math.PI / 2; rug.position.set(0.35, 0.006, -R + 1.08); rug.receiveShadow = true; S.add(rug)
+
+    // la table ronde et ses deux chaises
+    const TX = -1.05, TZ = 0.95
+    const table = new THREE.Group(); table.position.set(TX, 0, TZ); S.add(table)
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.04, 48), oak); top.position.y = 0.74; top.castShadow = top.receiveShadow = true; table.add(top)
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.7, 20), dark); leg.position.y = 0.37; leg.castShadow = true; table.add(leg)
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.28, 0.03, 32), dark); foot.position.y = 0.015; foot.castShadow = true; table.add(foot)
+    // un vase de fleurs sur la table
+    const vase = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.16, 20), this._mat({ color: '#5F7A6A', roughness: 0.3 }))
+    vase.position.set(0.06, 0.84, -0.04); vase.castShadow = true; table.add(vase)
+    seed = 12
+    const petals = [this._mat({ color: '#F3D36B', roughness: 0.6 }), this._mat({ color: '#F5F0E6', roughness: 0.6 }), this._mat({ color: '#D9776A', roughness: 0.6 })]
+    for (let i = 0; i < 7; i++) {
+      const st = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.22, 5), this._mat({ color: '#5D7E4A' }))
+      const a = rand() * Math.PI * 2, r = 0.02 + rand() * 0.03
+      st.position.set(0.06 + Math.cos(a) * r, 0.98, -0.04 + Math.sin(a) * r); st.rotation.set(Math.sin(a) * 0.3, 0, Math.cos(a) * 0.3); table.add(st)
+      const fl = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), petals[i % 3])
+      fl.position.set(0.06 + Math.cos(a) * r * 2.6, 1.09 + rand() * 0.04, -0.04 + Math.sin(a) * r * 2.6); fl.castShadow = true; table.add(fl)
+    }
+    const chair = (a) => {
+      const c = new THREE.Group()
+      c.position.set(TX + Math.sin(a) * 0.68, 0, TZ + Math.cos(a) * 0.68); c.rotation.y = a
+      const seat = this._box(0.42, 0.04, 0.42, oak, 0.015, 2); seat.position.y = 0.46; c.add(seat)
+      for (const [x, z] of [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]]) {
+        const l = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.016, 0.46, 10), dark); l.position.set(x, 0.23, z); l.castShadow = true; c.add(l)
+      }
+      const back = this._box(0.42, 0.34, 0.03, oak, 0.012, 2); back.position.set(0, 0.68, 0.2); back.rotation.x = 0.08; c.add(back)
+      for (const x of [-0.17, 0.17]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.42, 10), dark); p.position.set(x, 0.66, 0.2); p.castShadow = true; c.add(p) }
+      S.add(c)
+    }
+    chair(Math.PI * 0.18); chair(Math.PI * 0.82 + Math.PI)
+
+    // le mur de gauche : des étagères ouvertes (bocaux, livres de cuisine, une plante)
+    const shelves = this.leftWall.decor
+    const glass = this._mat({ color: '#EAF4F2', roughness: 0.05, transparent: true, opacity: 0.45 })
+    const fills = ['#E9D9B8', '#B4573A', '#F4EFE4', '#6E4B2A', '#D9A93A']
+    for (const [y, z0] of [[1.32, -0.95], [1.72, -0.95]]) {
+      const plank = this._box(0.24, 0.035, 1.25, oak, 0.008, 2); plank.position.set(-R + 0.12, y, z0 + 0.62); shelves.add(plank)
+      for (const z of [0.15, 1.1]) { const br = this._box(0.03, 0.12, 0.03, dark); br.position.set(-R + 0.03, y - 0.07, z0 + z); shelves.add(br) }
+    }
+    seed = 31
+    for (let i = 0; i < 5; i++) {
+      const hgt = 0.14 + rand() * 0.08, z = -0.82 + i * 0.13
+      const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, hgt, 16), glass); jar.position.set(-R + 0.12, 1.34 + hgt / 2, z); shelves.add(jar)
+      const fill = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, hgt * 0.7, 16), this._mat({ color: fills[i], roughness: 0.9 })); fill.position.set(-R + 0.12, 1.34 + hgt * 0.35 + 0.005, z); fill.castShadow = true; shelves.add(fill)
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.02, 16), oak); lid.position.set(-R + 0.12, 1.34 + hgt + 0.01, z); shelves.add(lid)
+    }
+    const bookCols = ['#B4573A', '#5F7A6A', '#2F3E5C', '#D9A93A']
+    bookCols.forEach((c, i) => { const b = this._box(0.17, 0.24 - i * 0.015, 0.035, this._mat({ color: c, roughness: 0.7 })); b.position.set(-R + 0.12, 1.74 + (0.24 - i * 0.015) / 2, -0.3 + i * 0.04); b.castShadow = true; shelves.add(b) })
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.11, 18), this._mat({ color: '#C26A49', roughness: 0.8 })); pot.position.set(-R + 0.12, 1.79, 0.05); pot.castShadow = true; shelves.add(pot)
+    const leafM = this._mat({ color: '#4E7D45', roughness: 0.7 })
+    for (let i = 0; i < 9; i++) { const l = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), leafM); l.scale.set(1, 0.45, 0.7); l.position.set(-R + 0.12 + (rand() - 0.5) * 0.12, 1.86 + rand() * 0.06, 0.05 + (rand() - 0.5) * 0.14); l.rotation.set(rand(), rand() * 3, rand()); l.castShadow = true; shelves.add(l) }
+    shelves.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
+
+    // le mur de droite : une affiche encadrée
+    const art = new THREE.Group(); this.rightWall.decor.add(art)
+    const frame = this._box(0.03, 0.78, 0.58, dark, 0.006, 2); frame.position.set(R - 0.016, 1.62, 0.2); art.add(frame)
+    const print = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.7), this._mat({
+      map: canvasTex(360, 504, (g, w, h) => {
+        g.fillStyle = '#F4E9D6'; g.fillRect(0, 0, w, h)
+        g.fillStyle = '#EBC33F'; g.beginPath(); g.ellipse(w / 2, h * 0.42, 92, 78, -0.4, 0, Math.PI * 2); g.fill()
+        g.fillStyle = '#5F7A6A'; g.beginPath(); g.ellipse(w / 2 + 70, h * 0.27, 40, 18, -0.7, 0, Math.PI * 2); g.fill()
+        g.fillStyle = '#B4573A'; g.font = 'italic 52px Georgia, serif'; g.textAlign = 'center'; g.fillText('Bon', w / 2, h * 0.78); g.fillText('appétit', w / 2, h * 0.88)
+      }), roughness: 0.9,
+    }))
+    print.rotation.y = -Math.PI / 2; print.position.set(R - 0.034, 1.62, 0.2); art.add(print)
+
+    // une grande plante contre le mur de droite
+    const bigPot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.36, 24), this._mat({ color: '#EDE7DC', roughness: 0.5 }))
+    bigPot.position.set(R - 0.36, 0.18, 0.75); bigPot.castShadow = true; S.add(bigPot)
+    seed = 44
+    for (let i = 0; i < 16; i++) {
+      const l = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), i % 2 ? leafM : this._mat({ color: '#6A9566', roughness: 0.7 }))
+      l.scale.set(1, 0.35, 0.55); const a = rand() * Math.PI * 2
+      l.position.set(R - 0.36 + Math.cos(a) * (0.1 + rand() * 0.2), 0.5 + rand() * 0.6, 0.75 + Math.sin(a) * (0.1 + rand() * 0.2))
+      l.rotation.set(rand() - 0.5, a, rand() - 0.5); l.castShadow = true; S.add(l)
+    }
   }
 
   _buildCounter() {
-    const S = this.scene
+    const S = this.root
     const { x0, x1, h, d } = COUNTER
     const W = x1 - x0
     const front = this._mat({ color: COL.front, roughness: 0.55 })
@@ -255,7 +397,7 @@ export default class KitchenScene {
   }
 
   _buildFridge() {
-    const S = this.scene
+    const S = this.root
     const { x, w, h, d } = FR
     const g = new THREE.Group(); g.position.set(x, 0, 0)
     const enamel = this._mat({ color: COL.fridge, roughness: 0.28, metalness: 0.05 })
@@ -313,7 +455,7 @@ export default class KitchenScene {
   }
 
   _buildCabinets() {
-    const S = this.scene
+    const S = this.root
     const { x0, n, w, y0, h, d } = CAB
     const carcass = this._mat({ map: woodTexture(COL.oakIn), roughness: 0.6 })
     const front = this._mat({ color: COL.front, roughness: 0.5 })
@@ -349,7 +491,7 @@ export default class KitchenScene {
   }
 
   _buildTablet() {
-    const S = this.scene
+    const S = this.root
     const g = new THREE.Group(); g.position.set(TAB.x, COUNTER.h + 0.04, TAB.z)
     const stand = this._box(0.16, 0.02, 0.12, this._mat({ map: woodTexture(COL.oak), roughness: 0.5 }), 0.006, 2); stand.position.set(0, 0.01, 0); g.add(stand)
     const tilt = new THREE.Group(); tilt.position.set(0, 0.02, -0.02); tilt.rotation.x = -0.28; g.add(tilt)
@@ -397,7 +539,7 @@ export default class KitchenScene {
   }
 
   _buildWindow() {
-    const S = this.scene
+    const S = this.root
     const x = 1.98, y = 1.92, W = 0.9, H = 0.82
     const sky = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({
       map: canvasTex(256, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#CFE3F2'); gr.addColorStop(0.7, '#EAF1EC'); gr.addColorStop(1, '#D9E4C9'); g.fillStyle = gr; g.fillRect(0, 0, w, h) }),
@@ -423,7 +565,7 @@ export default class KitchenScene {
   }
 
   _buildDecor() {
-    const S = this.scene
+    const S = this.root
     const h = COUNTER.h + 0.04
     // une planche à découper posée contre la crédence
     const board = this._box(0.3, 0.42, 0.022, this._mat({ map: woodTexture('#B98552'), roughness: 0.55 }), 0.03, 3)
@@ -496,19 +638,20 @@ export default class KitchenScene {
   }
 
   // ---- Caméra ------------------------------------------------------------------------------------
-  /** Le cadrage d'une vue : { pos, target }. Sur ordinateur, le panneau est à droite ; au téléphone, en bas. */
+  /** Le cadrage d'une vue : { pos, target, fov }. Sur ordinateur, le panneau est à droite ; au téléphone, en bas. */
   _frame(kind) {
+    if (!kind) return this._orbit()
     const asp = this.w / Math.max(1, this.h)
-    const tf = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2)
-    const dist = (W, H) => Math.max(H / 2 / tf, W / 2 / (tf * asp))
     const mob = this.mobile
+    const fov = mob ? 50 : 40
+    const tf = Math.tan(THREE.MathUtils.degToRad(fov) / 2)
+    const dist = (W, H) => Math.max(H / 2 / tf, W / 2 / (tf * asp))
     let tx, ty, d, lift = 0.12
     if (kind === 'frigo') {
       // (la porte ouverte dépasse à gauche et vers nous : on cadre le frigo et sa porte)
       // téléphone : la feuille couvre le bas ; tout l'intérieur du frigo tient dans le haut de l'écran
       if (mob) { const H = 1.36 / 0.42; d = dist(1.45, H) + 0.66; tx = FR.x - 0.12; ty = 1.42 - H / 2; lift = 0.95 }
-      else { const V = 1.5 / 0.66; d = dist(V, 2.25) + 0.55; tx = FR.x - 0.15 + V * 0.17; ty = 0.98 }
-      if (!mob) lift = 0.25
+      else { const V = 1.5 / 0.66; d = dist(V, 2.25) + 0.55; tx = FR.x - 0.15 + V * 0.17; ty = 0.98; lift = 0.25 }
     } else if (kind === 'courses') {
       if (mob) { d = dist(0.8, 1.7) + 0.7; tx = FR.x - 0.12; ty = 1.66 - 1.7 * 0.24 }
       else { const V = 1.0 / 0.66; d = dist(V, 0.8) + 0.7; tx = FR.x - 0.12 + V * 0.17; ty = 1.62 }
@@ -518,34 +661,57 @@ export default class KitchenScene {
       if (mob) { d = dist(2.5, 2.4) + 0.36; tx = cx; ty = 1.85 - 2.4 * 0.21 }
       else { const V = 2.6 / 0.66; d = dist(V, 1.3) + 0.36; tx = cx + V * 0.17; ty = 1.78 }
       lift = 0.05
-    } else if (kind === 'tablette') {
-      d = dist(0.5, 0.42); tx = TAB.x; ty = COUNTER.h + 0.16; lift = 0.18
-      return { pos: new THREE.Vector3(tx, ty + lift, TAB.z + 0.06 + d), target: new THREE.Vector3(tx, ty, TAB.z) }
     } else {
-      // toute la cuisine (au téléphone : on la fait glisser du doigt)
-      const H = mob ? 2.7 : 2.55
-      // (le devant du frigo et du plan de travail est à ~0,7 m du mur : on recule d'autant)
-      d = mob ? Math.min(dist(2.2, H), 4.6) + 0.7 : clamp(dist(SPAN[1] - SPAN[0], H), 3.2, 7.5) + 0.7
-      const V = 2 * (d - 0.7) * tf * asp
-      const lo = SPAN[0] + V / 2, hi = SPAN[1] - V / 2
-      tx = lo < hi ? clamp(this.panX.t, lo, hi) : (SPAN[0] + SPAN[1]) / 2
-      this.panLim = lo < hi ? [lo, hi] : [tx, tx]
-      ty = 1.22
-      return { pos: new THREE.Vector3(tx, ty + 0.18, d), target: new THREE.Vector3(tx, ty, 0) }
+      d = dist(0.5, 0.42); tx = TAB.x; ty = COUNTER.h + 0.16; lift = 0.18
+      return { pos: new THREE.Vector3(tx, ty + lift, TAB.z + 0.06 + d).add(ROOT_OFF), target: new THREE.Vector3(tx, ty, TAB.z).add(ROOT_OFF), fov }
     }
-    return { pos: new THREE.Vector3(tx, ty + lift, d + 0.1), target: new THREE.Vector3(tx, ty, 0.1) }
+    // (cadrage pensé contre le mur du fond, puis posé dans la pièce)
+    return { pos: new THREE.Vector3(tx, ty + lift, d + 0.1).add(ROOT_OFF), target: new THREE.Vector3(tx, ty, 0.1).add(ROOT_OFF), fov }
+  }
+  /** Toute la maquette, vue de trois quarts (on tourne autour en glissant). */
+  _orbit(az = this.az.v, el = this.el.v) {
+    const d = this.dist
+    const t = TARGET0
+    return { pos: new THREE.Vector3(t.x + Math.sin(az) * Math.cos(el) * d, t.y + Math.sin(el) * d, t.z + Math.cos(az) * Math.cos(el) * d), target: t.clone(), fov: FOV_ROOM }
+  }
+  /** La distance qui fait tenir toute la maquette à l'écran, sous tous les angles permis. */
+  _fitDistance() {
+    const pts = []
+    for (const x of [-R - T, R + T]) for (const y of [-FT, H + 0.05]) for (const z of [-R - T, R + T]) pts.push(new THREE.Vector3(x, y, z))
+    const m = this.mobile ? { top: 0.1, bottom: 0.13, side: 0.03 } : { top: 0.1, bottom: 0.16, side: 0.05 }
+    const cam = new THREE.PerspectiveCamera(FOV_ROOM, this.w / Math.max(1, this.h), 0.05, 80)
+    const fits = d => {
+      for (const az of [AZ_LIM[0], AZ_LIM[0] / 2, 0, AZ0, AZ_LIM[1]]) {
+        this.dist = d
+        const f = this._orbit(az, EL0)
+        cam.position.copy(f.pos); cam.lookAt(f.target); cam.updateMatrixWorld()
+        for (const p of pts) {
+          const v = p.clone().project(cam)
+          if (Math.abs(v.x) > 1 - m.side * 2 || v.y > 1 - m.top * 2 || v.y < -1 + m.bottom * 2) return false
+        }
+      }
+      return true
+    }
+    let lo = 3, hi = 60
+    for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid }
+    return hi
   }
   _place(f, snap = false) {
-    if (snap) { this.cam = { pos: f.pos.clone(), target: f.target.clone() }; this._applyCam(); return }
-    this.fly = { from: { pos: this.cam.pos.clone(), target: this.cam.target.clone() }, to: f, t: 0, dur: 1.15 }
+    if (snap) { this.cam = { pos: f.pos.clone(), target: f.target.clone(), fov: f.fov }; this._applyCam(); return }
+    this.fly = { from: { pos: this.cam.pos.clone(), target: this.cam.target.clone(), fov: this.cam.fov }, to: f, t: 0, dur: 1.2 }
     this.kick()
   }
-  _applyCam() { this.camera.position.copy(this.cam.pos); this.camera.lookAt(this.cam.target) }
+  _applyCam() {
+    this.camera.position.copy(this.cam.pos); this.camera.lookAt(this.cam.target)
+    if (Math.abs(this.camera.fov - this.cam.fov) > 1e-3) { this.camera.fov = this.cam.fov; this.camera.updateProjectionMatrix() }
+  }
 
-  /** Aller vers une partie de la cuisine (null : revenir à toute la cuisine). */
+  /** Aller vers une partie de la cuisine (null : revenir à toute la maquette). */
   focus(kind) {
     this.view = kind
     this.fridgeDoor.spring.t = kind === 'frigo' ? this.fridgeDoor.open : 0
+    // devant le frigo, les étagères du mur de gauche passeraient devant la porte ouverte
+    this.leftWall.decor.visible = kind !== 'frigo' && kind !== 'courses' && this.leftWall.cut.v > 0.6
     for (const a of this.anims) if (a.cab) a.spring.t = kind === 'placard' ? a.open : 0
     this._setHover(null)
     this._place(this._frame(kind))
@@ -558,8 +724,8 @@ export default class KitchenScene {
     this.mobile = matchMedia('(max-width: 767px)').matches
     this.renderer.setSize(w, h, false)
     this.camera.aspect = w / h
-    this.camera.fov = this.mobile ? 58 : 40
     this.camera.updateProjectionMatrix()
+    this.dist = this._fitDistance()
     if (this.cam) { const f = this._frame(this.view); if (this.fly) this.fly.to = f; else this._place(f, true) }
     this.kick()
   }
@@ -569,7 +735,7 @@ export default class KitchenScene {
     const rc = this.renderer.domElement.getBoundingClientRect()
     const ndc = new THREE.Vector2(((cx - rc.left) / rc.width) * 2 - 1, -((cy - rc.top) / rc.height) * 2 + 1)
     const ray = new THREE.Raycaster(); ray.setFromCamera(ndc, this.camera)
-    const hit = ray.intersectObjects(this.hits, false)[0]
+    const hit = ray.intersectObjects(this.hits, false).find(h => h.object.visible)
     return hit?.object.userData.kind || null
   }
   _setHover(kind, x, y) {
@@ -583,20 +749,20 @@ export default class KitchenScene {
     const el = this.renderer.domElement
     this.onDown = e => {
       if (e.button > 0) return
-      this.press = { x: e.clientX, y: e.clientY, pan: this.panX.t, moved: false, id: e.pointerId }
+      this.press = { x: e.clientX, y: e.clientY, az: this.az.t, el: this.el.t, moved: false, id: e.pointerId }
       el.setPointerCapture?.(e.pointerId)
     }
     this.onMove = e => {
       const p = this.press
       if (!p) { if (e.pointerType === 'mouse') { const k = this._pick(e.clientX, e.clientY); if (k !== this.hover || k) this._setHover(k, e.clientX, e.clientY) } return }
-      const dx = e.clientX - p.x
-      if (!p.moved && Math.hypot(dx, e.clientY - p.y) > 8) { p.moved = true; this._setHover(null) }
-      if (p.moved && !this.view && this.panLim) {
-        const upp = (2 * this.cam.pos.z * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2)) / this.h
-        const [lo, hi] = this.panLim
-        const v = p.pan - dx * upp
-        this.panX.t = v < lo ? lo + (v - lo) * 0.3 : v > hi ? hi + (v - hi) * 0.3 : v
-        this.panX.snap(this.panX.t)
+      const dx = e.clientX - p.x, dy = e.clientY - p.y
+      if (!p.moved && Math.hypot(dx, dy) > 8) { p.moved = true; this._setHover(null); el.style.cursor = this.view ? 'default' : 'grabbing' }
+      if (p.moved && !this.view && !this.fly) {
+        // on tourne autour de la maquette (avec un peu d'élastique aux bords)
+        const k = 5.2 / Math.max(320, this.w)
+        const rub = (v, [lo, hi]) => (v < lo ? lo + (v - lo) * 0.3 : v > hi ? hi + (v - hi) * 0.3 : v)
+        this.az.t = rub(p.az - dx * k, AZ_LIM)
+        this.el.t = rub(p.el + dy * k * 0.6, EL_LIM)
         this.kick()
       }
     }
@@ -604,8 +770,8 @@ export default class KitchenScene {
       const p = this.press
       this.press = null
       if (!p) return
-      if (this.panLim) { this.panX.t = clamp(this.panX.t, ...this.panLim) ; this.kick() }
-      if (p.moved) return
+      this.az.t = clamp(this.az.t, ...AZ_LIM); this.el.t = clamp(this.el.t, ...EL_LIM); this.kick()
+      if (p.moved) { el.style.cursor = this.view ? 'default' : 'grab'; return }
       const k = this._pick(e.clientX, e.clientY)
       if (k) this.cb.onTap?.(k)
       else if (this.view) this.cb.onTap?.(null)
@@ -629,15 +795,36 @@ export default class KitchenScene {
       f.start ??= now
       f.t = Math.min(1, (now - f.start) / 1000 / f.dur)   // à l'horloge : même lent, le trajet dure ce qu'il doit
       const k = ease(f.t)
+      if (!this.view) f.to = this._orbit()           // le retour suit la maquette là où on l'a laissée
       this.cam.pos.lerpVectors(f.from.pos, f.to.pos, k)
       this.cam.target.lerpVectors(f.from.target, f.to.target, k)
+      this.cam.fov = f.from.fov + (f.to.fov - f.from.fov) * k
       if (f.t >= 1) { this.fly = null; this.cb.onArrive?.(this.view) } else busy = true
-    } else if (!this.view && !this.panX.done) {
-      for (let i = 0; i < sub; i++) this.panX.step(dt / sub); const f = this._frame(null); this.cam.pos.copy(f.pos); this.cam.target.copy(f.target); busy = true
-    } else if (!this.view && !this.press && this.panLim) {
-      const f = this._frame(null); if (f.pos.distanceTo(this.cam.pos) > 1e-4) { this.cam.pos.lerp(f.pos, 0.25); this.cam.target.lerp(f.target, 0.25); busy = true }
+    } else if (!this.view) {
+      if (!this.az.done || !this.el.done) {
+        for (let i = 0; i < sub; i++) { this.az.step(dt / sub); this.el.step(dt / sub) }
+        busy = true
+      }
+      const f = this._orbit(); this.cam.pos.copy(f.pos); this.cam.target.copy(f.target); this.cam.fov = f.fov
     }
     this._applyCam()
+    // les murs : celui qui est entre la caméra et la pièce s'abaisse, les autres se relèvent
+    // (pendant qu'on regarde le frigo ou les placards, ils restent comme ils sont)
+    if (!this.view || this.fly) {
+      const cp = this.camera.position, len = Math.hypot(cp.x, cp.z) || 1
+      for (const w of this.walls) {
+        if (!this.view) w.cut.t = (w.n.x * cp.x + w.n.z * cp.z) / len > 0.2 ? 0.07 : 1
+        if (!this.wallsReady) w.cut.snap(w.cut.t)
+        if (!w.cut.done || !this.wallsReady) {
+          for (let i = 0; i < sub; i++) w.cut.step(dt / sub)
+          w.grp.scale.y = Math.max(0.05, w.cut.v)
+          w.decor.visible = w.cut.v > 0.6
+          this.renderer.shadowMap.needsUpdate = true
+          busy = true
+        }
+      }
+      this.wallsReady = true
+    }
     let doors = false
     for (const a of this.anims) {
       if (a.spring.done) continue
