@@ -3818,3 +3818,37 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
   .hof-row-cover { width: 34px; height: 51px; }
   .hof-row-txt b { font-size: 17px; }
 }
+
+/* le meuble télé : nos médias préférés (le panneau du bas) */
+.sc { max-height: 56vh; overflow-y: auto; overscroll-behavior: contain; }
+.sc-row { display: flex; gap: 12px; overflow-x: auto; padding: 16px 18px 4px; scrollbar-width: none; min-height: 60px; }
+.sc-item { flex: none; width: 112px; display: flex; flex-direction: column; gap: 5px; }
+.sc-cover { position: relative; display: block; aspect-ratio: 148 / 188; border-radius: 3px; overflow: hidden; background: #2A2620; box-shadow: 0 10px 20px -10px rgba(0, 0, 0, 0.8); }
+.sc-item.f-book .sc-cover { aspect-ratio: 155 / 235; border-radius: 1px 3px 3px 1px; box-shadow: inset 4px 0 0 rgba(0, 0, 0, 0.25), 0 10px 20px -10px rgba(0, 0, 0, 0.8); }
+.sc-item.f-switch .sc-cover { aspect-ratio: 108 / 172; width: 80%; margin: 0 auto; }
+.sc-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.sc-cover b { position: absolute; inset: 8px; font-family: var(--serif); font-style: italic; font-size: 13px; color: #F3EFE8; }
+.sc-band { position: absolute; left: 0; right: 0; top: 0; height: 9%; background: #2457C5; }
+.sc-item.p-ps .sc-band { background: #1F5FD6; } .sc-item.p-xbox .sc-band { background: #1E8E2E; } .sc-item.p-switch .sc-band { background: #E60012; }
+.sc-item.p-pc .sc-band, .sc-item.p-mobile .sc-band { background: #2E3440; } .sc-item.p-retro .sc-band { background: #6B4A1E; }
+.sc-name { font-family: var(--serif); font-size: 13.5px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-kind { font: 600 9.5px var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: rgba(243, 239, 232, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-act { display: flex; justify-content: space-between; }
+.sc-act button { width: 32px; height: 28px; border-radius: 14px; border: 1px solid rgba(243, 239, 232, 0.2); color: #F3EFE8; font-size: 14px; }
+.sc-act button:disabled { opacity: 0.25; }
+.sc-count { padding: 6px 18px 0; font-family: var(--serif); font-style: italic; font-size: 13px; color: rgba(243, 239, 232, 0.55); }
+.sc-empty { padding: 4px 0 8px; font-family: var(--serif); font-style: italic; font-size: 14px; color: rgba(243, 239, 232, 0.6); }
+.sc-find { display: block; padding: 10px 18px 0; }
+.sc-find input { width: 100%; height: 38px; padding: 0 14px; border-radius: 19px; border: 1px solid rgba(243, 239, 232, 0.18); background: rgba(255, 255, 255, 0.05); color: #F3EFE8; font: 14px var(--sans); outline: none; }
+.sc-pool { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; padding: 10px 14px 18px; }
+.sc-pick { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 8px; text-align: left; color: #F3EFE8; border: 1px solid transparent; }
+.sc-pick:hover { background: rgba(255, 255, 255, 0.05); }
+.sc-pick.on { background: rgba(232, 176, 75, 0.12); border-color: rgba(232, 176, 75, 0.35); }
+.sc-pick:disabled { opacity: 0.4; }
+.sc-pick-img { flex: none; width: 34px; height: 48px; border-radius: 2px; overflow: hidden; background: #2A2620; }
+.sc-pick-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sc-pick-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sc-pick-txt b { font-family: var(--serif); font-weight: 500; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-pick-txt em { font-style: normal; font-size: 11.5px; color: rgba(243, 239, 232, 0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-pick-mark { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(243, 239, 232, 0.3); font-size: 15px; }
+.sc-pick.on .sc-pick-mark { background: #E8B04B; border-color: #E8B04B; color: #1d1430; }

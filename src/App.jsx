@@ -5,6 +5,7 @@ import { useShelves } from './hooks/useShelves'
 import { useSeries } from './hooks/useSeries'
 import { useGames } from './hooks/useGames'
 import { useBookTop, TOP_MAX } from './hooks/useBookTop'
+import { useShowcase } from './hooks/useShowcase'
 import TopBooksPanel from './components/TopBooksPanel'
 import TvBackdrop from './components/TvBackdrop'
 import { effectiveShelves, placeBook, moveBook } from './lib/shelfOps'
@@ -62,6 +63,7 @@ function Library({ user, onSignOut }) {
   const gamesApi = useGames(user.id)
   // notre top 5 de livres : de face sur l'étagère d'honneur, en haut de la bibliothèque
   const bookTop = useBookTop(user.id)
+  const showcase = useShowcase(user.id)   // nos médias préférés, sur le meuble télé du salon
   const [topPanel, setTopPanel] = useState(false)
   const topBooks = useMemo(() => { const m = new Map(books.map(b => [b.id, b])); return bookTop.ids.map(id => m.get(id)).filter(Boolean) }, [bookTop.ids, books])
   // la télé du salon : allumée pendant toute la visite (salon, bibliothèque, PC…) ; le salon la
@@ -419,7 +421,7 @@ function Library({ user, onSignOut }) {
       </div>
       {salon && (
         <Suspense fallback={<div className="salon" />}>
-          <LivingRoom tv={tvBus}
+          <LivingRoom tv={tvBus} showcase={showcase}
             from={salon} books={books} shelves={effShelves} basketItems={basket.items}
             series={series} onAddSeries={addSeries} onUpdateSeries={updateSeries} onRemoveSeries={removeSeries} onRenameCategory={renameCategory}
             gamesApi={gamesApi} holder={user.user_metadata?.full_name || user.user_metadata?.name || ''}

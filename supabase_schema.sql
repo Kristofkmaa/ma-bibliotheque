@@ -203,3 +203,12 @@ create policy "Son top" on user_book_top for all using (auth.uid() = user_id) wi
 
 -- Les boutiques PC où un jeu est vendu (Steam, Epic Games, GOG…)
 alter table user_games add column if not exists stores text[] default '{}';
+
+-- Nos médias préférés, posés sur le meuble télé du salon
+create table if not exists user_showcase (
+  user_id  uuid primary key references auth.users(id) on delete cascade,
+  items    jsonb not null default '[]'
+);
+alter table user_showcase enable row level security;
+drop policy if exists "Sa vitrine" on user_showcase;
+create policy "Sa vitrine" on user_showcase for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

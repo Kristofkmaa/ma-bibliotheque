@@ -786,7 +786,8 @@ export class LivingRoomScene {
       grp.add(f)
     }
     this._drawCabinet()
-    this._register('cabinet', grp, 'Notre vitrine')
+    this.cabTop = leg + Hh
+    this._register('cabinet', grp, 'Nos médias préférés')
     this.wallOf('left').attached.push(grp)
 
     // l'image projetée directement sur le mur : bords fondus, halo de lumière autour
@@ -901,44 +902,100 @@ export class LivingRoomScene {
   /** L'affiche projetée montre l'œuvre dont le générique passe. */
   showWork(id) { this.series.showId(id); this._drawTv() }
 
-  /** L'intérieur de la vitrine : un boîtier par film ou série, dans l'ordre d'ajout. */
+  /** L'intérieur du meuble, derrière ses portes vitrées : un bois sombre, une étagère, un peu de lumière. */
   _drawCabinet() {
     const c = this.cabCanvas
     if (!c) return
     const g = c.getContext('2d'), W = c.width, Hc = c.height
     const bg = g.createLinearGradient(0, 0, 0, Hc)
-    bg.addColorStop(0, '#120D09'); bg.addColorStop(0.25, '#2A1F16'); bg.addColorStop(1, '#3A2B1E')
+    bg.addColorStop(0, '#120D09'); bg.addColorStop(0.3, '#2A1F16'); bg.addColorStop(1, '#3A2B1E')
     g.fillStyle = bg; g.fillRect(0, 0, W, Hc)
-    const list = [...(this.cabList || [])].sort((a, b) => (a.added_at || '').localeCompare(b.added_at || ''))
-    const pad = 22, top = Hc * 0.1, h = Hc - top - 14
-    const sw = Math.min(h * 0.11, (W - 2 * pad) / Math.max(1, list.length) - 3)
-    list.forEach((s, i) => {
-      const x = pad + i * (sw + 3)
-      const [bgc, fg] = CASE_COLORS[hashName(s.name) % CASE_COLORS.length]
-      g.fillStyle = bgc; g.fillRect(x, top, sw, h)
-      g.fillStyle = s.media === 'movie' ? '#C23B33' : '#2A62C0'; g.fillRect(x, top, sw, h * 0.085)
-      const sh = g.createLinearGradient(x, 0, x + sw, 0)
-      sh.addColorStop(0, 'rgba(255,255,255,0.18)'); sh.addColorStop(0.45, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.3)')
-      g.fillStyle = sh; g.fillRect(x, top, sw, h)
-      g.save()
-      g.translate(x + sw / 2, top + h * 0.55); g.rotate(Math.PI / 2)
-      g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle'
-      g.font = `700 ${Math.round(sw * 0.48)}px "Inter Tight", system-ui, sans-serif`
-      let name = (s.name || '').toUpperCase()
-      while (name.length > 3 && g.measureText(name).width > h * 0.8) name = name.slice(0, -2) + '…'
-      g.fillText(name, 0, 0)
-      g.restore()
-    })
-    if (!list.length) {
-      g.fillStyle = 'rgba(244,239,227,0.55)'; g.textAlign = 'center'; g.textBaseline = 'middle'
-      g.font = `italic 400 ${Math.round(Hc * 0.13)}px "Newsreader", Georgia, serif`
-      g.fillText('Vos films et séries se rangeront ici', W / 2, Hc / 2)
-    }
-    // ombre portée de la tablette du haut
+    const glow = g.createRadialGradient(W / 2, Hc * 0.15, 10, W / 2, Hc * 0.3, W * 0.55)
+    glow.addColorStop(0, 'rgba(255,214,160,0.14)'); glow.addColorStop(1, 'rgba(0,0,0,0)')
+    g.fillStyle = glow; g.fillRect(0, 0, W, Hc)
+    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, Hc * 0.55, W, Hc * 0.04)
+    g.fillStyle = 'rgba(255,230,190,0.08)'; g.fillRect(0, Hc * 0.55, W, 3)
     const sh = g.createLinearGradient(0, 0, 0, Hc * 0.3)
     sh.addColorStop(0, 'rgba(0,0,0,0.55)'); sh.addColorStop(1, 'rgba(0,0,0,0)')
     g.fillStyle = sh; g.fillRect(0, 0, W, Hc * 0.3)
     this.cabTex.needsUpdate = true
+  }
+
+  /**
+   * Nos médias préférés, debout sur le meuble télé, dans notre ordre : des livres, des
+   * boîtiers de Blu-ray (films, séries), des boîtiers de jeux (bandeau de leur console).
+   */
+  setShowcase(list) {
+    const sig = (list || []).map(x => x.key + '|' + (x.tex || '')).join(',')
+    if (sig === this.showSig || !this.cabGroup) return
+    this.showSig = sig
+    if (this.showGroup) {
+      this.cabGroup.remove(this.showGroup)
+      this.showGroup.traverse(o => { if (o.isMesh) { o.geometry.dispose(); (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.map?.dispose(); m.dispose() }) } })
+    }
+    const grp = new THREE.Group()
+    this.showGroup = grp
+    this.cabGroup.add(grp)
+    const items = list || []
+    if (!items.length) return
+    const W = 2.3, D = 0.42, S = 1.18
+    const DIM = { book: [0.155, 0.235, 0.032], bluray: [0.148, 0.188, 0.017], game: [0.148, 0.188, 0.017], switch: [0.108, 0.172, 0.013] }
+    const PLASTIC = { bluray: '#1B3F8F', ps: '#16367E', xbox: '#13612C', switch: '#C8102E', pc: '#22252B', mobile: '#22252B', retro: '#2B2B2B' }
+    const BAND = { ps: '#1F5FD6', xbox: '#1E8E2E', switch: '#E60012', pc: '#2E3440', mobile: '#127C76', retro: '#6B4A1E' }
+    const slot = Math.min(0.32, (W - 0.24) / items.length)
+    items.forEach((it, k) => {
+      const [w0, h0, d0] = DIM[it.format] || DIM.game
+      const w = w0 * S, h = h0 * S, d = d0 * S
+      const cw = 360, chh = Math.round(cw * h / w)
+      const cv = document.createElement('canvas'); cv.width = cw; cv.height = chh
+      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4
+      const band = it.format === 'book' ? 0 : Math.round(chh * 0.085)
+      const bandCol = it.format === 'bluray' ? '#2457C5' : BAND[it.fam] || '#2E3440'
+      const draw = img => {
+        const g = cv.getContext('2d')
+        g.fillStyle = it.format === 'book' ? (it.color || '#8C2F22') : '#15171C'; g.fillRect(0, 0, cw, chh)
+        if (img) {
+          const ah = chh - band, r = Math.max(cw / img.naturalWidth, ah / img.naturalHeight)
+          const sw = cw / r, sh = ah / r
+          g.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, band, cw, ah)
+        } else {
+          g.fillStyle = it.ink || '#EDE3CC'; g.textAlign = 'center'; g.textBaseline = 'middle'
+          g.font = `italic 600 ${Math.round(cw * 0.1)}px "Newsreader", Georgia, serif`
+          const words = String(it.name || '').split(/\s+/), lines = []
+          let line = ''
+          for (const wd of words) { const t = line ? line + ' ' + wd : wd; if (g.measureText(t).width > cw * 0.8 && line) { lines.push(line); line = wd } else line = t }
+          if (line) lines.push(line)
+          lines.slice(0, 5).forEach((l, i) => g.fillText(l, cw / 2, band + (chh - band) * 0.42 + (i - (Math.min(5, lines.length) - 1) / 2) * cw * 0.13))
+        }
+        if (band) {
+          g.fillStyle = bandCol; g.fillRect(0, 0, cw, band)
+          g.fillStyle = '#fff'; g.font = `800 ${Math.round(band * 0.5)}px "Inter Tight", system-ui, sans-serif`; g.textBaseline = 'middle'
+          g.textAlign = 'left'; g.fillText(it.band || '', cw * 0.06, band / 2 + 1)
+          if (it.year) { g.textAlign = 'right'; g.fillText(it.year, cw * 0.94, band / 2 + 1) }
+        }
+        // le reflet du plastique (ou du papier glacé)
+        const sh = g.createLinearGradient(0, 0, cw, chh)
+        sh.addColorStop(0, 'rgba(255,255,255,0.12)'); sh.addColorStop(0.35, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.1)')
+        g.fillStyle = sh; g.fillRect(0, 0, cw, chh)
+        tex.needsUpdate = true
+      }
+      draw(null)
+      if (it.tex) loadImage(it.tex).then(img => { if (img && this.showGroup === grp) draw(img) })
+      const front = new THREE.MeshStandardMaterial({ map: tex, roughness: it.format === 'book' ? 0.6 : 0.3, metalness: 0 })
+      const side = it.format === 'book'
+        ? new THREE.MeshStandardMaterial({ color: '#EFE8D8', roughness: 0.9 })
+        : new THREE.MeshStandardMaterial({ color: it.format === 'bluray' ? PLASTIC.bluray : PLASTIC[it.fam] || '#22252B', roughness: 0.35 })
+      const spine = it.format === 'book' ? new THREE.MeshStandardMaterial({ color: it.color || '#8C2F22', roughness: 0.6 }) : side
+      const back = new THREE.MeshStandardMaterial({ color: it.format === 'book' ? (it.color || '#8C2F22') : '#101114', roughness: 0.6 })
+      // faces : +x tranche, −x dos (le dos du livre), +y, −y, +z devant (la couverture), −z
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [side, spine, side, side, front, back])
+      const x = (k - (items.length - 1) / 2) * slot
+      mesh.position.set(x, this.cabTop + h / 2 + 0.003, -D / 2 + 0.1)
+      mesh.rotation.set(-0.09, ((k * 37) % 7 - 3) * 0.012, 0)
+      mesh.castShadow = mesh.receiveShadow = true
+      grp.add(mesh)
+    })
+    this.shadowDirty = 2
   }
 
   _emitSlide() {
@@ -964,9 +1021,10 @@ export class LivingRoomScene {
       // devant le meuble, un peu au-dessus : la vitrine occupe le bas de l'écran
       this.cabGroup.updateWorldMatrix(true, false)
       const target = this.cabGroup.localToWorld(this.cabFront.clone())
-      target.y += 0.25
-      const dist = Math.min(2.4 * 0.6 / (t * this.camera.aspect), 0.7 / 0.3 / 2 / t)
-      return { target, az: Math.PI / 2, el: 0.3, dist }
+      // les médias posés dessus se voient en grand dans le haut de l'écran (le panneau occupe le bas)
+      const dist = Math.min(2.5 * 0.55 / (t * this.camera.aspect), 0.75 / 0.4 / 2 / t)
+      target.y = (this.cabTop || 0.64) + 0.14 - 0.42 * 2 * t * dist * 0.3
+      return { target, az: Math.PI / 2, el: 0.12, dist }
     }
     // face à l'objectif du projecteur, tout près : on entre dans la lumière
     this.lensGlass.updateWorldMatrix(true, false)

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { LivingRoomScene, dayMode } from '../three/LivingRoomScene'
 import { useIsMobile } from '../hooks/useIsMobile'
 import SeriesTV from './SeriesTV'
-import Vitrine from './Vitrine'
+import ShowcasePanel from './ShowcasePanel'
+import { resolveShowcase } from '../lib/showcase'
 import PcOS from './PcOS'
 import { applyTheme } from '../lib/theme'
 
@@ -80,7 +81,7 @@ function greeting(hour) {
  * L'accueil : le salon. La bibliothèque du salon mène au mur de livres ;
  * l'image projetée passe nos films et séries (on la touche : on entre dedans).
  */
-export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, gamesApi, holder, tv: tvBus, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
+export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, gamesApi, holder, tv: tvBus, showcase, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
   const rootRef = useRef(null)
   const hostRef = useRef(null)
   const topRef = useRef(null)
@@ -173,6 +174,9 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   // nos séries sur l'écran : les mieux notées d'abord
   const tvSeries = useMemo(() => [...(series || [])].sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.added_at || '').localeCompare(a.added_at || '')), [series])
   useEffect(() => { sceneRef.current?.setSeries(tvSeries) }, [tvSeries])
+  // nos médias préférés, debout sur le meuble télé
+  const shownMedia = useMemo(() => resolveShowcase(showcase?.items || [], { books, series: series || [], games: gamesApi?.games || [] }), [showcase?.items, books, series, gamesApi?.games])
+  useEffect(() => { sceneRef.current?.setShowcase(shownMedia) }, [shownMedia])
   // ce qui passe à la télé : l'image projetée suit, et le lecteur n'a le son que si on voit le mur
   useEffect(() => { sceneRef.current?.setVideoOn(onAir) }, [onAir])
   useEffect(() => { if (nowId) sceneRef.current?.showWork(nowId) }, [nowId])
@@ -259,8 +263,8 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       )}
 
       {/* devant le meuble télé : la vitrine de nos films et séries */}
-      {inside === 'cab' && !openWork && (
-        <Vitrine series={series || []} onOpen={w => setOpenWork(w.id)} onList={() => setOpenWork('list')} onClose={() => sceneRef.current?.unzoomTv()} />
+      {inside === 'cab' && !openWork && showcase && (
+        <ShowcasePanel shown={shownMedia} api={showcase} books={books} series={series || []} games={gamesApi?.games || []} onClose={() => sceneRef.current?.unzoomTv()} />
       )}
       {inside === 'cab' && openWork && (
         <SeriesTV series={series || []} initialId={openWork === 'list' ? null : openWork} onAdd={onAddSeries} onUpdate={onUpdateSeries} onRemove={onRemoveSeries} onRenameCategory={onRenameCategory}
