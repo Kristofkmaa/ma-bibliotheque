@@ -3,7 +3,7 @@
  * que si son serveur l'autorise (CORS). On la récupère ici et on la renvoie avec l'en-tête
  * qui va bien. Seuls quelques hôtes de couvertures sont acceptés (pas de relais ouvert).
  */
-const ALLOWED = ['books.google.com', 'books.googleusercontent.com', 'covers.openlibrary.org', 'archive.org', 'image.tmdb.org']
+const ALLOWED = ['books.google.com', 'books.googleusercontent.com', 'covers.openlibrary.org', 'archive.org', 'image.tmdb.org', 'steamstatic.com']
 
 export default async function handler(req, res) {
   try {
@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     const type = upstream.headers.get('content-type') || ''
     if (!upstream.ok || !type.startsWith('image/')) { res.status(404).send('Couverture introuvable'); return }
     const buf = Buffer.from(await upstream.arrayBuffer())
-    if (buf.length > 4 * 1024 * 1024) { res.status(413).send('Image trop lourde'); return }
+    if (buf.length > 6 * 1024 * 1024) { res.status(413).send('Image trop lourde'); return }
     res.setHeader('Content-Type', type)
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Cache-Control', 'public, max-age=604800, s-maxage=2592000, immutable')

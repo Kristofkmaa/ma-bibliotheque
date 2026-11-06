@@ -177,3 +177,7 @@ create table if not exists user_wallet (
 alter table user_wallet enable row level security;
 drop policy if exists "Son porte-monnaie" on user_wallet;
 create policy "Son porte-monnaie" on user_wallet for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Le PC : l'ordre de « Mon top », le fond d'écran et les couleurs des lumières
+alter table user_games add column if not exists fav_rank integer;
+alter table user_wallet add column if not exists pc_setup jsonb;

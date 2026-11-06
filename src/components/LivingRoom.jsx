@@ -110,6 +110,9 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { sceneRef.current?.setTvBubble(!bubbleOff) }, [bubbleOff])
+  // l'écran du PC, dans la pièce, montre notre fond d'écran
+  useEffect(() => { sceneRef.current?.setPcWallpaper?.(gamesApi?.wallpaper?.url || null) }, [gamesApi?.wallpaper?.url])
+  useEffect(() => { sceneRef.current?.setPcColors?.({ pc: gamesApi?.setup?.pc, kb: gamesApi?.setup?.kb }) }, [gamesApi?.setup?.pc, gamesApi?.setup?.kb])
 
   // nos séries sur l'écran : les mieux notées d'abord
   const tvSeries = useMemo(() => [...(series || [])].sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.added_at || '').localeCompare(a.added_at || '')), [series])

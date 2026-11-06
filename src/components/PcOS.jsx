@@ -14,6 +14,7 @@ const APPS = {
   stim: { title: 'Stim', w: 1120, h: 740 },
   games: { title: 'Mes jeux', w: 960, h: 640 },
   bank: { title: 'Banque Maruchime', w: 520, h: 680 },
+  wall: { title: 'Personnaliser', w: 980, h: 680 },
 }
 
 /** Le texte d'un petit morceau de HTML de la boutique (entités comprises), sans l'interpréter. */
@@ -57,7 +58,26 @@ const Star = ({ on }) => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1
 const Back = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 const Wallet = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" fill="none" stroke="currentColor" strokeWidth="1.8" /><rect x="4" y="8" width="16.5" height="11" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.8" /><circle cx="16.5" cy="13.5" r="1.3" fill="currentColor" /></svg>
 
-const ICONS = { stim: StimGlyph, games: GamesGlyph, bank: BankGlyph }
+function PictureGlyph() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <rect x="7" y="10" width="34" height="28" rx="4" fill="none" stroke="currentColor" strokeWidth="3.2" />
+      <circle cx="17" cy="19" r="3.4" fill="currentColor" />
+      <path d="M9 34l10-9 6 5 7-8 9 10" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function LightGlyph() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M24 7a12 12 0 0 0-7 21.8V33h14v-4.2A12 12 0 0 0 24 7z" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinejoin="round" />
+      <path d="M18.5 38h11M20.5 42.5h7" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+const ICONS = { stim: StimGlyph, games: GamesGlyph, bank: BankGlyph, wall: PictureGlyph }
 
 /* -------------------------------------------------------------------------- */
 /* Une fenêtre                                                                */
@@ -157,7 +177,7 @@ function Hero({ list, owned, onOpen }) {
   )
 }
 
-function Media({ g }) {
+function Media({ g, onWallpaper }) {
   const movies = useMemo(() => {
     const hlsOk = typeof document !== 'undefined' && document.createElement('video').canPlayType('application/vnd.apple.mpegurl')
     return (g.movies || []).filter(m => m.mp4 || m.webm || (m.hls && hlsOk))
@@ -176,6 +196,9 @@ function Media({ g }) {
               {cur.hls && <source src={cur.hls} type="application/vnd.apple.mpegurl" />}
             </video>
           : <img key={cur.src} src={cur.src} alt="" />}
+        {cur.kind === 'img' && onWallpaper && (
+          <button type="button" className="st-wallbtn" onClick={() => onWallpaper({ url: cur.src, name: g.name, app_id: g.id })}><PictureGlyph /> Mettre en fond d’écran</button>
+        )}
       </div>
       <div className="st-thumbs">
         {items.map((it, i) => (
@@ -189,7 +212,7 @@ function Media({ g }) {
   )
 }
 
-function GamePage({ id, owned, balance, onBuy, onPlay, onFunds }) {
+function GamePage({ id, owned, balance, onBuy, onPlay, onFunds, onWallpaper, favOf, onFav }) {
   const [g, setG] = useState(null)
   const [err, setErr] = useState(null)
   const [ask, setAsk] = useState(false)       // la fenêtre de confirmation d'achat
@@ -212,7 +235,7 @@ function GamePage({ id, owned, balance, onBuy, onPlay, onFunds }) {
       <div className="st-game-inner">
         <h2 className="st-game-name">{g.name}</h2>
         <div className="st-game-top">
-          <Media g={g} />
+          <Media g={g} onWallpaper={onWallpaper} />
           <aside className="st-game-side">
             {g.img && <img className="st-game-cap" src={g.img} alt="" />}
             {g.short && <p className="st-game-short">{plain(g.short)}</p>}
@@ -231,7 +254,10 @@ function GamePage({ id, owned, balance, onBuy, onPlay, onFunds }) {
             {!have && <span className="st-buy-sub">{g.platforms?.length ? g.platforms.map(p => ({ windows: 'Windows', mac: 'macOS', linux: 'Linux' })[p] || p).join(' · ') : 'PC'}</span>}
           </div>
           {have
-            ? <button type="button" className="st-btn go" onClick={() => onPlay(g.id)}>Jouer</button>
+            ? <div className="st-buy-act own">
+                {favOf(g.id) && <button type="button" className={'st-btn ghost gm-fav' + (favOf(g.id).favorite ? ' on' : '')} onClick={() => onFav(g.id)}><Star on={favOf(g.id).favorite} /> {favOf(g.id).favorite ? `N°${favOf(g.id).fav_rank} de mon top` : 'Ajouter à mon top'}</button>}
+                <button type="button" className="st-btn go" onClick={() => onPlay(g.id)}>Jouer</button>
+              </div>
             : <div className="st-buy-act"><PriceTag price={price} original={g.original} discount={g.discount} /><button type="button" className="st-btn buy" onClick={() => setAsk(true)}>{price === 0 ? 'Ajouter à ma bibliothèque' : 'Acheter'}</button></div>}
         </div>
       </div>
@@ -272,7 +298,7 @@ function GamePage({ id, owned, balance, onBuy, onPlay, onFunds }) {
   )
 }
 
-function Stim({ games, balance, buy, onFunds, onPlay, route, setRoute }) {
+function Stim({ games, balance, buy, onFunds, onPlay, onWallpaper, setFavorite, route, setRoute }) {
   const [feat, setFeat] = useState(null)
   const [err, setErr] = useState(null)
   const [q, setQ] = useState('')
@@ -337,7 +363,8 @@ function Stim({ games, balance, buy, onFunds, onPlay, route, setRoute }) {
                 : <div className="st-grid">{results.map(g => <GameCard key={g.id} g={g} owned={owned(g.id)} onOpen={open} wide />)}</div>}
           </section>
         )}
-        {view === 'game' && <GamePage id={route.id} owned={owned} balance={balance} onBuy={buy} onPlay={onPlay} onFunds={onFunds} />}
+        {view === 'game' && <GamePage id={route.id} owned={owned} balance={balance} onBuy={buy} onPlay={onPlay} onFunds={onFunds} onWallpaper={onWallpaper}
+          favOf={appId => games.find(x => x.app_id === appId)} onFav={appId => { const r = games.find(x => x.app_id === appId); if (r) setFavorite(r.id, !r.favorite) }} />}
         {view === 'library' && (
           <section className="st-results">
             <h3>Ma bibliothèque · {games.length} jeu{games.length > 1 ? 'x' : ''}</h3>
@@ -480,13 +507,101 @@ function Launch({ game, onQuit }) {
   )
 }
 
-function MyGames({ games, updateGame, removeGame, openStore, openGame, playId, setPlayId }) {
-  const [filter, setFilter] = useState('all')
+const SORTS = [['recent', 'Récents'], ['name', 'Nom'], ['rating', 'Ma note']]
+const byRank = (a, b) => (a.fav_rank ?? 1e9) - (b.fav_rank ?? 1e9) || a.added_at.localeCompare(b.added_at)
+const Stars = ({ n }) => <span className="gm-stars" aria-label={n ? `${n} sur 5` : 'Pas de note'}>{[1, 2, 3, 4, 5].map(k => <Star key={k} on={(n || 0) >= k} />)}</span>
+const Grip = () => <svg viewBox="0 0 24 24" aria-hidden="true">{[7, 12, 17].flatMap(y => [9, 15].map(x => <circle key={x + '-' + y} cx={x} cy={y} r="1.6" fill="currentColor" />))}</svg>
+
+/**
+ * « Mon top » : nos jeux préférés, classés. On les range en les faisant glisser par la poignée
+ * (souris ou doigt), ou avec les flèches.
+ */
+function TopList({ top, onOpen, onPlay, onRemove, reorder }) {
+  const [drag, setDrag] = useState(null)          // { id, from, dy, h }
+  const rows = useRef(new Map())
+  const target = drag ? clampInt(drag.from + Math.round(drag.dy / drag.h), 0, top.length - 1) : -1
+  const down = (e, id, from) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return
+    const el = rows.current.get(id)
+    const h = (el?.offsetHeight || 76) + 8
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    setDrag({ id, from, dy: 0, h, y0: e.clientY })
+  }
+  const move = e => { if (drag) setDrag(d => ({ ...d, dy: e.clientY - d.y0 })) }
+  const up = () => {
+    if (!drag) return
+    if (target !== drag.from) {
+      const ids = top.map(g => g.id)
+      const [m] = ids.splice(drag.from, 1)
+      ids.splice(target, 0, m)
+      reorder(ids)
+    }
+    setDrag(null)
+  }
+  const step = (i, d) => {
+    const ids = top.map(g => g.id)
+    const j = i + d
+    if (j < 0 || j >= ids.length) return
+    ;[ids[i], ids[j]] = [ids[j], ids[i]]
+    reorder(ids)
+  }
+  return (
+    <ol className={'gm-top' + (drag ? ' dragging' : '')}>
+      {top.map((g, i) => {
+        let ty = 0
+        if (drag) {
+          if (g.id === drag.id) ty = drag.dy
+          else if (drag.from < target && i > drag.from && i <= target) ty = -drag.h
+          else if (drag.from > target && i < drag.from && i >= target) ty = drag.h
+        }
+        const rank = drag && g.id === drag.id ? target + 1 : drag ? i + 1 + (ty < 0 ? -1 : ty > 0 ? 1 : 0) : i + 1
+        return (
+          <li key={g.id} ref={el => (el ? rows.current.set(g.id, el) : rows.current.delete(g.id))}
+            className={'gm-top-row' + (rank <= 3 ? ' r' + rank : '') + (drag?.id === g.id ? ' lifted' : '')}
+            style={ty ? { transform: `translateY(${ty}px)` } : null}>
+            <button type="button" className="gm-grip" onPointerDown={e => down(e, g.id, i)} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+              aria-label={`Déplacer ${g.name}`} title="Glisser pour changer l’ordre"><Grip /></button>
+            <span className="gm-rank">{rank}</span>
+            <button type="button" className="gm-top-main" onClick={() => onOpen(g.id)}>
+              <span className="gm-top-img">{g.img && <img src={g.img} alt="" loading="lazy" />}</span>
+              <span className="gm-top-txt">
+                <b>{g.name}</b>
+                <em>{g.genres?.slice(0, 2).join(' · ') || 'Jeu'}</em>
+                <Stars n={g.rating} />
+              </span>
+            </button>
+            <span className="gm-top-act">
+              <button type="button" className="gm-mini" onClick={() => step(i, -1)} disabled={i === 0} aria-label="Monter">▲</button>
+              <button type="button" className="gm-mini" onClick={() => step(i, 1)} disabled={i === top.length - 1} aria-label="Descendre">▼</button>
+              <button type="button" className="gm-mini play" onClick={() => onPlay(g.app_id)} aria-label={`Jouer à ${g.name}`}>▶</button>
+              <button type="button" className="gm-mini" onClick={() => onRemove(g.id)} aria-label="Retirer de mon top">✕</button>
+            </span>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+function clampInt(v, a, b) { return Math.max(a, Math.min(b, v)) }
+
+function MyGames({ games, updateGame, removeGame, setFavorite, reorderTop, openStore, openGame, onWallpaper, playId, setPlayId }) {
+  const top = useMemo(() => games.filter(g => g.favorite).sort(byRank), [games])
+  const [tab, setTab] = useState(() => (games.some(g => g.favorite) ? 'top' : 'all'))
   const [sel, setSel] = useState(null)
+  const [q, setQ] = useState('')
+  const [sort, setSort] = useState('recent')
+  const [toast, setToast] = useState(null)
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t) }, [toast])
   const list = useMemo(() => {
-    const l = filter === 'fav' ? games.filter(g => g.favorite) : games
-    return [...l].sort((a, b) => (b.favorite - a.favorite) || (b.rating || 0) - (a.rating || 0) || b.added_at.localeCompare(a.added_at))
-  }, [games, filter])
+    const t = q.trim().toLowerCase()
+    const l = t ? games.filter(g => g.name.toLowerCase().includes(t)) : games
+    const cmp = { recent: (a, b) => b.added_at.localeCompare(a.added_at), name: (a, b) => a.name.localeCompare(b.name, 'fr'), rating: (a, b) => (b.rating || 0) - (a.rating || 0) || a.name.localeCompare(b.name, 'fr') }[sort]
+    return [...l].sort(cmp)
+  }, [games, q, sort])
+  const fav = (g, on) => {
+    const r = setFavorite(g.id, on)
+    setToast(on ? `${g.name} entre dans ton top · n°${r}` : `${g.name} sort de ton top`)
+  }
   const cur = games.find(g => g.id === sel) || null
   const playing = games.find(g => g.app_id === playId) || null
   if (!games.length) {
@@ -499,28 +614,80 @@ function MyGames({ games, updateGame, removeGame, openStore, openGame, playId, s
       </div>
     )
   }
-  const nFav = games.filter(g => g.favorite).length
+  const first = top[0]
   return (
     <div className="gm">
       <div className="gm-bar-top">
         <div className="st-tabs">
-          <button type="button" className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>Tous · {games.length}</button>
-          <button type="button" className={filter === 'fav' ? 'on' : ''} onClick={() => setFilter('fav')}>Mes préférés · {nFav}</button>
+          <button type="button" className={tab === 'top' ? 'on' : ''} onClick={() => setTab('top')}>Mon top · {top.length}</button>
+          <button type="button" className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')}>Tous mes jeux · {games.length}</button>
         </div>
       </div>
-      {filter === 'fav' && !list.length && <div className="st-empty"><p>Touche l’étoile d’un jeu pour l’ajouter à tes préférés.</p></div>}
-      <div className="gm-grid">
-        {list.map(g => (
-          <div key={g.id} className={'gm-tile' + (g.favorite ? ' fav' : '')}>
-            <button type="button" className="gm-tile-img" onClick={() => setSel(g.id)}>
-              {g.img && <img src={g.img} alt="" loading="lazy" />}
-              <span className="gm-tile-name">{g.name}</span>
-            </button>
-            <button type="button" className={'gm-star' + (g.favorite ? ' on' : '')} onClick={() => updateGame(g.id, { favorite: !g.favorite })} aria-pressed={g.favorite} aria-label={g.favorite ? 'Retirer des préférés' : 'Ajouter aux préférés'}><Star on={g.favorite} /></button>
-            <button type="button" className="gm-play" onClick={() => setPlayId(g.app_id)} aria-label={`Jouer à ${g.name}`}>▶</button>
+
+      {tab === 'top' && (
+        <div className="gm-scroll">
+          {!top.length ? (
+            <div className="gm-top-empty">
+              <span className="gm-podium" aria-hidden="true"><i>2</i><i>1</i><i>3</i></span>
+              <b>Ton top est vide</b>
+              <p>Touche l’étoile <Star on={false} /> d’un jeu pour l’ajouter à ton classement, puis range-les dans l’ordre que tu veux.</p>
+              <button type="button" className="st-btn buy" onClick={() => setTab('all')}>Choisir dans mes jeux</button>
+            </div>
+          ) : <>
+            <section className="gm-top-hero" style={first.img ? { '--bg': `url("${first.img}")` } : null}>
+              <span className="gm-top-crown">N°1</span>
+              <b>{first.name}</b>
+              <span className="gm-top-hero-sub">{top.length > 1 ? `Ton jeu préféré, devant ${top[1].name}` : 'Ton jeu préféré'}</span>
+              <span className="gm-top-hero-act">
+                <button type="button" className="st-btn go" onClick={() => setPlayId(first.app_id)}>▶ Jouer</button>
+                <button type="button" className="st-btn ghost" onClick={() => setSel(first.id)}>Détails</button>
+              </span>
+            </section>
+            <p className="gm-hint"><Grip /> Fais glisser un jeu par sa poignée pour changer son rang</p>
+            <TopList top={top} onOpen={setSel} onPlay={setPlayId} onRemove={id => fav(games.find(g => g.id === id), false)} reorder={reorderTop} />
+            {top.length < games.length && (
+              <section className="gm-add">
+                <h4>Ajouter à mon top</h4>
+                <div className="gm-add-row">
+                  {games.filter(g => !g.favorite).map(g => (
+                    <button type="button" key={g.id} className="gm-add-chip" onClick={() => fav(g, true)}>
+                      {g.img && <img src={g.img} alt="" loading="lazy" />}<span>{g.name}</span><b>+</b>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+          </>}
+        </div>
+      )}
+
+      {tab === 'all' && (
+        <div className="gm-scroll">
+          <div className="gm-tools">
+            <label className="gm-find">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20" /></svg>
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Retrouver un jeu…" aria-label="Retrouver un jeu" />
+            </label>
+            <div className="gm-sort" role="group" aria-label="Trier">
+              {SORTS.map(([k, t]) => <button type="button" key={k} className={sort === k ? 'on' : ''} onClick={() => setSort(k)}>{t}</button>)}
+            </div>
           </div>
-        ))}
-      </div>
+          {!list.length && <div className="st-empty"><p>Aucun jeu ne correspond.</p></div>}
+          <div className="gm-grid">
+            {list.map(g => (
+              <div key={g.id} className={'gm-tile' + (g.favorite ? ' fav' : '')}>
+                <button type="button" className="gm-tile-img" onClick={() => setSel(g.id)}>
+                  {g.img && <img src={g.img} alt="" loading="lazy" />}
+                  <span className="gm-tile-name">{g.name}</span>
+                </button>
+                {g.favorite && <span className="gm-badge">N°{g.fav_rank}</span>}
+                <button type="button" className={'gm-star' + (g.favorite ? ' on' : '')} onClick={() => fav(g, !g.favorite)} aria-pressed={g.favorite} aria-label={g.favorite ? 'Retirer de mon top' : 'Ajouter à mon top'}><Star on={g.favorite} /></button>
+                <button type="button" className="gm-play" onClick={() => setPlayId(g.app_id)} aria-label={`Jouer à ${g.name}`}>▶</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {cur && (
         <div className="gm-detail" role="dialog" aria-label={cur.name}>
@@ -532,7 +699,8 @@ function MyGames({ games, updateGame, removeGame, openStore, openGame, playId, s
             <p className="st-muted">{[cur.genres?.slice(0, 2).join(', '), cur.release].filter(Boolean).join(' · ')}</p>
             <div className="gm-detail-act">
               <button type="button" className="st-btn go" onClick={() => setPlayId(cur.app_id)}>▶ Jouer</button>
-              <button type="button" className={'st-btn ghost gm-fav' + (cur.favorite ? ' on' : '')} onClick={() => updateGame(cur.id, { favorite: !cur.favorite })}><Star on={cur.favorite} /> {cur.favorite ? 'Dans mes préférés' : 'Ajouter aux préférés'}</button>
+              <button type="button" className={'st-btn ghost gm-fav' + (cur.favorite ? ' on' : '')} onClick={() => fav(cur, !cur.favorite)}><Star on={cur.favorite} /> {cur.favorite ? `N°${cur.fav_rank} de mon top` : 'Ajouter à mon top'}</button>
+              <button type="button" className="st-btn ghost" onClick={() => onWallpaper(cur)}><PictureGlyph /> Fond d’écran</button>
             </div>
             <div className="gm-rate" role="group" aria-label="Ma note">
               <span>Ma note</span>
@@ -548,7 +716,154 @@ function MyGames({ games, updateGame, removeGame, openStore, openGame, playId, s
           </div>
         </div>
       )}
+      {toast && <div className="pc-toast" role="status">{toast}</div>}
       {playing && <Launch game={playing} onQuit={() => setPlayId(null)} />}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Fond d'écran                                                               */
+/* -------------------------------------------------------------------------- */
+
+/** Les grandes images d'un jeu, de la plus « fond d'écran » à la moins. */
+const artOf = (id, d) => {
+  const base = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/`
+  return [...new Set([base + 'library_hero.jpg', d?.background, ...(d?.screenshots || []), d?.img].filter(Boolean))]
+}
+
+function Wallpapers({ games, wallpaper, setWallpaper, request }) {
+  const [game, setGame] = useState(() => request || (wallpaper?.app_id ? { app_id: wallpaper.app_id, name: wallpaper.name } : games[0] ? { app_id: games[0].app_id, name: games[0].name } : null))
+  const [pending, setPending] = useState(wallpaper)
+  const [imgs, setImgs] = useState(null)
+  const [bad, setBad] = useState(() => new Set())
+  const [q, setQ] = useState('')
+  const [found, setFound] = useState(null)
+  const [saved, setSaved] = useState(false)
+  useEffect(() => { if (request) setGame(request) }, [request])
+  useEffect(() => {
+    if (!game) return
+    let live = true
+    setImgs(null)
+    gameDetails(game.app_id).then(d => { if (live) setImgs(artOf(game.app_id, d)) }, () => { if (live) setImgs(artOf(game.app_id, null)) })
+    return () => { live = false }
+  }, [game?.app_id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!saved) return; const t = setTimeout(() => setSaved(false), 2200); return () => clearTimeout(t) }, [saved])
+  const search = e => {
+    e.preventDefault()
+    const t = q.trim()
+    if (!t) return
+    setFound([])
+    searchGames(t).then(r => setFound(r.slice(0, 12)), () => setFound([]))
+  }
+  const apply = w => { setWallpaper(w); setPending(w); setSaved(true) }
+  const same = (pending?.url || null) === (wallpaper?.url || null)
+  const list = (imgs || []).filter(u => !bad.has(u))
+  const pick = (g, i) => (
+    <button type="button" key={g.app_id + '-' + i} className={'wp-chip' + (game?.app_id === g.app_id ? ' on' : '')} onClick={() => setGame({ app_id: g.app_id, name: g.name })}>
+      {g.img && <img src={g.img} alt="" loading="lazy" />}<span>{g.name}</span>
+    </button>
+  )
+  return (
+    <div className="wp">
+      <div className="wp-left">
+        <div className="wp-preview">
+          {pending?.url ? <img key={pending.url} src={pending.url} alt="" /> : <span className="wp-default" />}
+          <span className="wp-fake" aria-hidden="true"><i className="g" /><i className="s" /></span>
+          <span className="wp-fake-bar" aria-hidden="true" />
+        </div>
+        <p className="wp-cap">{pending?.url ? <>Image de <b>{pending.name}</b></> : 'Fond Maruchime (par défaut)'}</p>
+        <div className="wp-act">
+          <button type="button" className="st-btn buy" disabled={same} onClick={() => apply(pending)}>{same ? 'Fond actuel' : 'Appliquer'}</button>
+          <button type="button" className="st-btn ghost" disabled={!pending && !wallpaper} onClick={() => apply(null)}>Fond Maruchime</button>
+        </div>
+        {saved && <p className="wp-ok">Fond d’écran appliqué ✓</p>}
+      </div>
+      <div className="wp-right">
+        {games.length > 0 && <>
+          <h4>Mes jeux</h4>
+          <div className="wp-chips">{games.map((g, i) => pick({ app_id: g.app_id, name: g.name, img: g.img }, i))}</div>
+        </>}
+        <form className="st-search wp-search" onSubmit={search} role="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20" /></svg>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Un autre jeu…" enterKeyHint="search" aria-label="Chercher un jeu" />
+        </form>
+        {found && (found.length ? <div className="wp-chips">{found.map((g, i) => pick({ app_id: g.id, name: g.name, img: g.img }, i))}</div> : <p className="st-muted">Recherche…</p>)}
+        {game && <>
+          <h4>Images de {game.name}</h4>
+          {!imgs ? <div className="st-loading"><span /></div> : (
+            <div className="wp-grid">
+              {list.map(u => (
+                <button type="button" key={u} className={'wp-img' + (pending?.url === u ? ' on' : '')} onClick={() => setPending({ url: u, name: game.name, app_id: game.app_id })} onDoubleClick={() => apply({ url: u, name: game.name, app_id: game.app_id })}>
+                  <img src={u} alt="" loading="lazy" onError={() => setBad(b => new Set(b).add(u))} />
+                </button>
+              ))}
+            </div>
+          )}
+        </>}
+        {!game && <p className="st-muted">Choisis un jeu pour voir ses images.</p>}
+      </div>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Lumières RGB : la tour et le clavier                                       */
+/* -------------------------------------------------------------------------- */
+
+const COLORS = [
+  ['rainbow', 'Arc-en-ciel'], ['#7A5CFF', 'Violet'], ['#2F7BFF', 'Bleu'], ['#22D3EE', 'Cyan'], ['#34E07A', 'Vert'],
+  ['#F6B93B', 'Or'], ['#FF7A1A', 'Orange'], ['#FF3B4E', 'Rouge'], ['#FF5FC8', 'Rose'], ['#F2F2FF', 'Blanc'],
+]
+const RAINBOW = 'conic-gradient(#FF3B4E, #F6B93B, #34E07A, #22D3EE, #2F7BFF, #7A5CFF, #FF5FC8, #FF3B4E)'
+
+function Swatches({ value, onPick, label }) {
+  return (
+    <div className="lt-sw" role="radiogroup" aria-label={label}>
+      {COLORS.map(([c, name]) => (
+        <button type="button" key={c} role="radio" aria-checked={value === c} className={value === c ? 'on' : ''} title={name} aria-label={name}
+          style={{ background: c === 'rainbow' ? RAINBOW : c, '--c': c === 'rainbow' ? '#fff' : c }} onClick={() => onPick(c)} />
+      ))}
+    </div>
+  )
+}
+
+function Lights({ setup, setSetup }) {
+  const pc = setup?.pc || 'rainbow', kb = setup?.kb || 'rainbow'
+  const name = c => COLORS.find(x => x[0] === c)?.[1] || ''
+  const glow = c => (c === 'rainbow' ? undefined : c)
+  return (
+    <div className="lt">
+      <div className={'lt-scene' + (pc === 'rainbow' ? ' rb-pc' : '') + (kb === 'rainbow' ? ' rb-kb' : '')} style={{ '--pc': glow(pc), '--kb': glow(kb) }} aria-hidden="true">
+        <span className="lt-glow" />
+        <span className="lt-tower"><i /><i /><i /></span>
+        <span className="lt-kb">{Array.from({ length: 36 }, (_, i) => <i key={i} />)}</span>
+        <span className="lt-strip" />
+      </div>
+      <section>
+        <h4>Le PC <em>tour, ventilateurs et bandeau du bureau · {name(pc)}</em></h4>
+        <Swatches value={pc} onPick={c => setSetup({ pc: c })} label="Couleur du PC" />
+      </section>
+      <section>
+        <h4>Le clavier <em>{name(kb)}</em></h4>
+        <Swatches value={kb} onPick={c => setSetup({ kb: c })} label="Couleur du clavier" />
+      </section>
+      <button type="button" className="st-btn ghost lt-same" onClick={() => setSetup({ kb: pc })} disabled={pc === kb}>Clavier assorti au PC</button>
+      <p className="st-muted">Les lumières changent aussi sur le bureau du salon.</p>
+    </div>
+  )
+}
+
+function Custom({ tab, setTab, ...p }) {
+  return (
+    <div className="cu">
+      <div className="gm-bar-top cu-tabs">
+        <div className="st-tabs">
+          <button type="button" className={tab === 'wall' ? 'on' : ''} onClick={() => setTab('wall')}>Fond d’écran</button>
+          <button type="button" className={tab === 'lights' ? 'on' : ''} onClick={() => setTab('lights')}>Lumières RGB</button>
+        </div>
+      </div>
+      {tab === 'wall' ? <Wallpapers {...p} /> : <Lights setup={p.setup} setSetup={p.setSetup} />}
     </div>
   )
 }
@@ -568,7 +883,7 @@ function Clock() {
   )
 }
 
-export default function PcOS({ games, balance, addFunds, buy, updateGame, removeGame, holder, fromRect, onClose }) {
+export default function PcOS({ games, balance, addFunds, buy, updateGame, removeGame, setFavorite, reorderTop, wallpaper, setWallpaper, setup, setSetup, holder, fromRect, onClose }) {
   const mobile = useIsMobile()
   const rootRef = useRef(null)
   const [wins, setWins] = useState([])
@@ -576,7 +891,12 @@ export default function PcOS({ games, balance, addFunds, buy, updateGame, remove
   const [closing, setClosing] = useState(false)
   const [stimRoute, setStimRoute] = useState({ view: 'store' })
   const [playId, setPlayId] = useState(null)
+  const [wallFor, setWallFor] = useState(null)   // le jeu dont on veut voir les images (fenêtre Fond d'écran)
+  const [ctx, setCtx] = useState(null)           // le petit menu du clic droit sur le bureau
+  const [customTab, setCustomTab] = useState('wall')
+  const [toast, setToast] = useState(null)
   const zTop = useRef(10)
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t) }, [toast])
 
   // comme le reste du salon : l'écran s'agrandit depuis le moniteur 3D
   const rectInset = useCallback(() => {
@@ -626,10 +946,14 @@ export default function PcOS({ games, balance, addFunds, buy, updateGame, remove
   const play = id => { setPlayId(id); openApp('games') }
   const showGame = id => { setStimRoute({ view: 'game', id }); openApp('stim') }
   const funds = () => openApp('bank')
+  const chooseWall = g => { setWallFor(g ? { app_id: g.app_id, name: g.name } : null); setCustomTab('wall'); openApp('wall') }
+  const chooseLights = () => { setCustomTab('lights'); openApp('wall') }
+  const quickWall = w => { setWallpaper(w); setToast(`Nouveau fond d’écran : ${w.name}`) }
 
   useEffect(() => {
     const k = e => {
       if (e.key !== 'Escape' || e.target?.tagName === 'INPUT') return
+      if (ctx) { setCtx(null); return }
       if (menu) { setMenu(false); return }
       if (playId) { setPlayId(null); return }
       if (activeApp) { closeWin(activeApp); return }
@@ -637,17 +961,26 @@ export default function PcOS({ games, balance, addFunds, buy, updateGame, remove
     }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
-  }, [menu, playId, activeApp, close])
+  }, [menu, ctx, playId, activeApp, close])
 
   const content = app => {
-    if (app === 'stim') return <Stim games={games} balance={balance} buy={buy} onFunds={funds} onPlay={play} route={stimRoute} setRoute={setStimRoute} />
-    if (app === 'games') return <MyGames games={games} updateGame={updateGame} removeGame={removeGame} openStore={() => openApp('stim')} openGame={showGame} playId={playId} setPlayId={setPlayId} />
+    if (app === 'stim') return <Stim games={games} balance={balance} buy={buy} onFunds={funds} onPlay={play} onWallpaper={quickWall} setFavorite={setFavorite} route={stimRoute} setRoute={setStimRoute} />
+    if (app === 'games') return <MyGames games={games} updateGame={updateGame} removeGame={removeGame} setFavorite={setFavorite} reorderTop={reorderTop} openStore={() => openApp('stim')} openGame={showGame} onWallpaper={chooseWall} playId={playId} setPlayId={setPlayId} />
+    if (app === 'wall') return <Custom tab={customTab} setTab={setCustomTab} games={games} wallpaper={wallpaper} setWallpaper={setWallpaper} request={wallFor} setup={setup} setSetup={setSetup} />
     return <Bank holder={holder} balance={balance} addFunds={addFunds} onDone={() => { closeWin('bank'); openApp('stim') }} />
   }
 
   return (
-    <div ref={rootRef} className={'pcos' + (closing ? ' closing' : '') + (mobile ? ' mobile' : '')} role="application" aria-label="Le PC">
-      <div className="pc-wall" aria-hidden="true"><i /><i /><i /><span>Maruchime OS</span></div>
+    <div ref={rootRef} className={'pcos' + (closing ? ' closing' : '') + (mobile ? ' mobile' : '')} role="application" aria-label="Le PC"
+      onPointerDown={e => { if (ctx && !e.target.closest('.pc-ctx')) setCtx(null) }}
+      onContextMenu={e => {
+        if (e.target.closest('.pc-win, .pc-task, .pc-menu, .pc-ctx')) return
+        e.preventDefault(); setMenu(false)
+        setCtx({ x: Math.min(e.clientX, window.innerWidth - 250), y: Math.min(e.clientY, window.innerHeight - 160) })
+      }}>
+      {wallpaper?.url
+        ? <div className="pc-wall custom" aria-hidden="true"><img key={wallpaper.url} src={wallpaper.url} alt="" /></div>
+        : <div className="pc-wall" aria-hidden="true"><i /><i /><i /><span>Maruchime OS</span></div>}
       <div className="pc-icons" onPointerDown={() => setMenu(false)}>
         {[['games', 'Mes jeux'], ['stim', 'Stim']].map(([app, label]) => {
           const Icon = ICONS[app]
@@ -673,11 +1006,23 @@ export default function PcOS({ games, balance, addFunds, buy, updateGame, remove
           <button type="button" role="menuitem" onClick={() => openApp('games')}><span className="pc-menu-ico games"><GamesGlyph /></span>Mes jeux</button>
           <button type="button" role="menuitem" onClick={() => openApp('stim')}><span className="pc-menu-ico stim"><StimGlyph /></span>Stim</button>
           <button type="button" role="menuitem" onClick={() => openApp('bank')}><span className="pc-menu-ico bank"><BankGlyph /></span>Banque Maruchime</button>
+          <button type="button" role="menuitem" onClick={() => chooseWall(null)}><span className="pc-menu-ico wall"><PictureGlyph /></span>Fond d’écran</button>
+          <button type="button" role="menuitem" onClick={chooseLights}><span className="pc-menu-ico lights"><LightGlyph /></span>Lumières RGB</button>
           <button type="button" role="menuitem" className="pc-menu-off" onClick={close}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8M7 6.5a7.5 7.5 0 1 0 10 0" /></svg> Éteindre et revenir au salon
           </button>
         </div>
       )}
+
+      {ctx && (
+        <div className="pc-ctx" role="menu" style={{ left: ctx.x, top: ctx.y }}>
+          <button type="button" role="menuitem" onClick={() => { setCtx(null); chooseWall(null) }}><PictureGlyph /> Changer le fond d’écran…</button>
+          {wallpaper && <button type="button" role="menuitem" onClick={() => { setCtx(null); setWallpaper(null) }}>Revenir au fond Maruchime</button>}
+          <button type="button" role="menuitem" onClick={() => { setCtx(null); chooseLights() }}><LightGlyph /> Couleurs des lumières…</button>
+          <button type="button" role="menuitem" onClick={() => { setCtx(null); openApp('games') }}>Ouvrir Mes jeux</button>
+        </div>
+      )}
+      {toast && <div className="pc-toast top" role="status">{toast}</div>}
 
       <footer className="pc-task">
         <button type="button" className={'pc-start' + (menu ? ' on' : '')} onClick={() => setMenu(v => !v)} aria-label="Menu" aria-expanded={menu}><span className="pc-orb" /></button>

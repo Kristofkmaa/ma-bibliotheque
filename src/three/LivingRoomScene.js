@@ -6,6 +6,8 @@ import { TvSeries, TV_W, TV_H } from './tvSeries'
 import { resolveSkin } from '../lib/skins'
 import { RH, PT, SD, ST } from './BookcaseScene'
 import { noTouchSelect } from './webgl'
+import { loadImage } from '../lib/tmdb'
+import { relayUrl } from '../lib/covers'
 
 /**
  * Le salon d'accueil : une pièce en maquette (sol + deux murs), vue de trois quarts,
@@ -13,7 +15,7 @@ import { noTouchSelect } from './webgl'
  * on touche un objet pour qu'il réagisse ; la bibliothèque mène au mur de livres.
  */
 
-const R = 2.4          // demi-côté de la pièce (assez grande : chaque mur a son rôle)
+const R = 2.85         // demi-côté de la pièce (assez grande : chaque mur a son rôle)
 const H = 3.0          // hauteur des murs (la pièce occupe la hauteur d'un téléphone)
 const T = 0.12         // épaisseur des murs
 const FT = 0.2         // épaisseur du plancher
@@ -25,7 +27,7 @@ const TARGET0 = new THREE.Vector3(0, 0.95, 0)
 
 // emplacements (repère de la pièce)
 const BOOKCASE = { x: -1.05, z: -R + 0.2, w: 1.62, h: 2.18, d: 0.38 }   // mur du fond, à gauche (face à la caméra)
-const PC = { x: 0, w: 1.7 }                 // le bureau gamer, centré sur le mur de devant (à la place de la cheminée)
+const PC = { x: -0.45, w: 1.7 }             // le bureau gamer, centré sur le mur de devant (à la place de la cheminée)
 const MON = { w: 0.8, h: 0.45, y: 1.2 }     // l'écran principal du PC (16:9)
 // la chaise du PC (dans le repère du bureau, qui regarde le mur) : au repos, tirée pour s'asseoir, approchée de l'écran
 const CHAIR = { x: -0.1, rest: 1.05, out: 1.5, near: 0.98, turn: 0.22, eye: 1.2, stand: 1.74, behind: 0.95 }
@@ -634,8 +636,10 @@ export class LivingRoomScene {
     const metal = this._mat('#2A2A31', { metalness: 0.5, roughness: 0.35 })
     const top = this._mat('#1E1E24', { roughness: 0.4 })
     const glow = c => new THREE.MeshBasicMaterial({ color: c, toneMapped: false })
-    this.rgbMats = []
-    const rgb = () => { const m = glow('#7A5CFF'); this.rgbMats.push(m); this.disposables.push(m); return m }
+    // les lumières : celles du PC (tour, bandeau du bureau) et celles du clavier, chacune sa couleur
+    this.rgbMats = { pc: [], kb: [] }
+    this.rgbMode = this.rgbMode || { pc: 'rainbow', kb: 'rainbow' }
+    const rgb = (part = 'pc') => { const m = glow('#7A5CFF'); this.rgbMats[part].push(m); this.disposables.push(m); return m }
     // le bureau
     const W = PC.w, D = 0.72, Ht = 0.76
     const desk = this._rbox(W, 0.045, D, 0.012, top)
@@ -675,7 +679,7 @@ export class LivingRoomScene {
     pad.position.set(-0.05, Ht + 0.025, 0.52)
     const kb = this._rbox(0.44, 0.022, 0.14, 0.006, black)
     kb.position.set(-0.12, Ht + 0.04, 0.5)
-    const kbGlow = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(0.42, 0.12)), rgb())
+    const kbGlow = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(0.42, 0.12)), rgb('kb'))
     kbGlow.rotation.x = -Math.PI / 2
     kbGlow.position.set(-0.12, Ht + 0.052, 0.5)
     const mouse = this._rbox(0.06, 0.03, 0.1, 0.02, black)
@@ -725,15 +729,132 @@ export class LivingRoomScene {
     this.pcLight = new THREE.PointLight(0x7a5cff, 1.4, 3.2, 1.6)
     this.pcLight.position.set(PC.x, 0.9, R - 0.6)
     this.scene.add(this.pcLight)
-    // un néon au mur, au-dessus des écrans (il s'abaisse avec le mur)
-    const neon = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(0.9, 0.3)), new THREE.MeshBasicMaterial({ map: this._track(neonTexture()), transparent: true, toneMapped: false }))
-    neon.position.set(PC.x, 2.05, R - 0.01)
-    neon.rotation.y = Math.PI
-    const fw = this.wallOf('front')
-    fw.grp.add(neon)
-    fw.decor.push(neon)
+    this._buildGeekDecor(grp, { W, Ht, black, metal })
     this._register('pc', grp, 'Le PC')
     this.wallOf('front').attached.push(grp)
+  }
+
+  /**
+   * La déco geek du coin gamer (dans le repère du bureau : x le long du mur, z vers la pièce) :
+   * une étagère au-dessus de l'écran (figurine de robot, mangas, petite figurine du guerrier),
+   * un casque sur son support, une manette, et au sol, à côté du bureau, la grande statue d'un
+   * guerrier en armure noire avec son épée gigantesque.
+   */
+  _buildGeekDecor(grp, { W, Ht, black, metal }) {
+    const add = (o, x, y, z, ry = 0) => { o.position.set(x, y, z); o.rotation.y = ry; grp.add(o); return o }
+    // l'étagère murale
+    const wood = this._mat('#2B2622', { roughness: 0.6 })
+    add(this._rbox(1.1, 0.03, 0.2, 0.008, wood), -0.15, 1.72, 0.11)
+    for (const sx of [-0.62, 0.32]) add(this._rbox(0.02, 0.08, 0.16, 0.004, metal), sx, 1.67, 0.09)
+    // une rangée de mangas
+    const spines = ['#C8102E', '#1F3FB0', '#F2B705', '#111111', '#E86A17', '#2E8B57', '#F4F1EA', '#6A2C91', '#C8102E']
+    spines.forEach((c, i) => {
+      const h = 0.17 + (i % 3) * 0.008
+      add(this._rbox(0.028, h, 0.12, 0.003, this._mat(c, { roughness: 0.55 })), 0.12 + i * 0.03, 1.735 + h / 2, 0.1)
+    })
+    // le robot (un mecha blanc et bleu, visière lumineuse)
+    const bot = this._buildMecha(); add(bot, -0.5, 1.735, 0.11, 0.35)
+    // la petite figurine du guerrier, sur l'étagère
+    const mini = this._buildSwordsman(0.3); add(mini, -0.22, 1.735, 0.11, -0.25)
+    // le casque sur son support (à gauche sur le bureau)
+    const stand = new THREE.Group()
+    const pole = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.012, 0.012, 0.26, 10)), metal); pole.position.y = 0.13
+    const foot = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.06, 0.07, 0.012, 20)), metal); foot.position.y = 0.006
+    const band = new THREE.Mesh(this._geo(new THREE.TorusGeometry(0.085, 0.012, 8, 24, Math.PI)), black); band.position.y = 0.2
+    const cupMat = this._mat('#1A1A20', { roughness: 0.5 })
+    const cups = [-1, 1].map(sx => { const c = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.045, 0.045, 0.035, 18)), cupMat); c.rotation.z = Math.PI / 2; c.position.set(sx * 0.085, 0.19, 0); return c })
+    stand.add(pole, foot, band, ...cups)
+    add(stand, -W / 2 + 0.16, Ht + 0.023, 0.32, 0.3)
+    // une manette posée devant
+    const pad = new THREE.Group()
+    const body = this._rbox(0.13, 0.03, 0.07, 0.014, this._mat('#E9E6F2', { roughness: 0.45 })); body.position.y = 0.015
+    const grips = [-1, 1].map(sx => { const g = new THREE.Mesh(this._geo(new THREE.SphereGeometry(0.03, 14, 10)), body.material); g.scale.set(1, 0.6, 1.25); g.position.set(sx * 0.055, 0.014, 0.03); return g })
+    const sticks = [[-0.03, -0.008], [0.028, 0.012]].map(([x, z]) => { const st = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.009, 0.009, 0.014, 10)), black); st.position.set(x, 0.035, z); return st })
+    pad.add(body, ...grips, ...sticks)
+    add(pad, -0.52, Ht + 0.023, 0.56, 0.35)
+    // la grande statue, au sol à droite du bureau
+    const statue = this._buildSwordsman(1.15)
+    const plinth = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.2, 0.22, 0.14, 28)), this._mat('#141416', { roughness: 0.4, metalness: 0.2 }))
+    plinth.position.y = 0.07
+    const rim = new THREE.Mesh(this._geo(new THREE.TorusGeometry(0.205, 0.006, 6, 40)), this._mat('#B8892F', { metalness: 0.8, roughness: 0.3 }))
+    rim.rotation.x = Math.PI / 2; rim.position.y = 0.14
+    statue.position.y = 0.14
+    const sg = new THREE.Group(); sg.add(plinth, rim, statue)
+    add(sg, W / 2 + 0.36, 0, 0.3, -0.5)
+    this.statue = statue
+  }
+
+  /** Un guerrier en armure noire, cape déchirée, une épée immense sur l'épaule (hauteur ≈ 0,8 × s). */
+  _buildSwordsman(s = 1) {
+    const g = new THREE.Group()
+    const armor = this._mat('#24242A', { roughness: 0.35, metalness: 0.55 })
+    const dark = this._mat('#121214', { roughness: 0.8 })
+    const cloth = this._mat('#0D0D0F', { roughness: 0.95, side: THREE.DoubleSide })
+    const skin = this._mat('#C9A184', { roughness: 0.7 })
+    const steel = this._mat('#B4B7C0', { roughness: 0.35, metalness: 0.35 })
+    const box = (w, h, d, m, x, y, z, rx = 0, rz = 0) => { const b = this._rbox(w * s, h * s, d * s, Math.min(w, h, d) * s * 0.25, m); b.position.set(x * s, y * s, z * s); b.rotation.set(rx, 0, rz); g.add(b); return b }
+    // jambes, bottes
+    box(0.075, 0.26, 0.08, dark, -0.05, 0.17, 0, 0, 0.06)
+    box(0.075, 0.26, 0.08, dark, 0.05, 0.17, 0.01, 0, -0.06)
+    box(0.09, 0.07, 0.12, armor, -0.06, 0.035, 0.015)
+    box(0.09, 0.07, 0.12, armor, 0.06, 0.035, 0.025)
+    // le torse en armure, la ceinture
+    box(0.2, 0.2, 0.12, armor, 0, 0.42, 0)
+    box(0.18, 0.04, 0.125, dark, 0, 0.31, 0)
+    // les épaulières
+    for (const sx of [-1, 1]) { const p = new THREE.Mesh(this._geo(new THREE.SphereGeometry(0.06 * s, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2)), armor); p.position.set(sx * 0.12 * s, 0.5 * s, 0); p.scale.set(1.1, 0.8, 1.1); g.add(p) }
+    // les bras : celui de gauche en métal (un bras mécanique), celui de droite tient l'épée
+    box(0.06, 0.2, 0.065, steel, -0.14, 0.37, 0.01, 0, 0.12)
+    box(0.06, 0.18, 0.065, armor, 0.15, 0.43, 0.03, -0.9, -0.3)
+    // la tête : visage, cheveux en pointes noires
+    const head = new THREE.Mesh(this._geo(new THREE.SphereGeometry(0.055 * s, 16, 12)), skin)
+    head.position.set(0, 0.6 * s, 0.005 * s); g.add(head)
+    for (let k = 0; k < 9; k++) {
+      const a = (k / 9) * Math.PI * 2
+      const spike = new THREE.Mesh(this._geo(new THREE.ConeGeometry(0.022 * s, 0.07 * s, 6)), dark)
+      spike.position.set(Math.cos(a) * 0.035 * s, 0.635 * s, Math.sin(a) * 0.03 * s - 0.01 * s)
+      spike.rotation.set(Math.sin(a) * -0.9, 0, Math.cos(a) * -0.9 - 0.0)
+      g.add(spike)
+    }
+    const top = new THREE.Mesh(this._geo(new THREE.SphereGeometry(0.058 * s, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2)), dark)
+    top.position.set(0, 0.61 * s, -0.004 * s); g.add(top)
+    // la cape, déchirée en bas, qui tombe des épaules
+    const cape = new THREE.Mesh(this._geo(capeGeometry(0.34 * s, 0.5 * s)), cloth)
+    cape.position.set(0, 0.52 * s - 0.25 * s, -0.07 * s); cape.rotation.x = 0.1; g.add(cape)
+    // l'épée : une lame immense, épaisse comme un bloc de fer, posée sur l'épaule droite
+    const sword = new THREE.Group()
+    const blade = this._rbox(0.085 * s, 0.82 * s, 0.022 * s, 0.006 * s, steel); blade.position.y = 0.48 * s
+    const tip = new THREE.Mesh(this._geo(new THREE.ConeGeometry(0.06 * s, 0.08 * s, 4)), steel); tip.position.y = 0.92 * s; tip.rotation.y = Math.PI / 4; tip.scale.set(1, 1, 0.26)
+    const guard = this._rbox(0.14 * s, 0.025 * s, 0.035 * s, 0.006 * s, dark); guard.position.y = 0.065 * s
+    const grip = new THREE.Mesh(this._geo(new THREE.CylinderGeometry(0.013 * s, 0.013 * s, 0.12 * s, 10)), this._mat('#3A2A1E', { roughness: 0.9 })); grip.position.y = 0
+    sword.add(blade, tip, guard, grip)
+    sword.position.set(0.16 * s, 0.4 * s, 0.07 * s)
+    sword.rotation.set(-0.35, 0, -0.62)
+    g.add(sword)
+    g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
+    return g
+  }
+
+  /** Un petit robot de combat, blanc et bleu, la visière allumée (≈ 0,2 de haut). */
+  _buildMecha() {
+    const g = new THREE.Group()
+    const white = this._mat('#EDEEF2', { roughness: 0.4 }), blue = this._mat('#2F5BD3', { roughness: 0.4 }), red = this._mat('#D33A2F', { roughness: 0.5 })
+    const glowM = new THREE.MeshBasicMaterial({ color: '#7DF9FF', toneMapped: false }); this.disposables.push(glowM)
+    const box = (w, h, d, m, x, y, z) => { const b = this._rbox(w, h, d, Math.min(w, h, d) * 0.2, m); b.position.set(x, y, z); g.add(b); return b }
+    box(0.03, 0.07, 0.035, white, -0.022, 0.035, 0); box(0.03, 0.07, 0.035, white, 0.022, 0.035, 0)
+    box(0.034, 0.02, 0.045, blue, -0.022, 0.01, 0.005); box(0.034, 0.02, 0.045, blue, 0.022, 0.01, 0.005)
+    box(0.08, 0.06, 0.05, blue, 0, 0.1, 0); box(0.05, 0.025, 0.052, red, 0, 0.085, 0.002)
+    box(0.03, 0.065, 0.032, white, -0.058, 0.095, 0); box(0.03, 0.065, 0.032, white, 0.058, 0.095, 0)
+    box(0.04, 0.035, 0.04, white, 0, 0.148, 0)
+    const visor = new THREE.Mesh(this._geo(new THREE.PlaneGeometry(0.03, 0.008)), glowM); visor.position.set(0, 0.15, 0.0205); g.add(visor)
+    for (const sx of [-1, 1]) { const a = new THREE.Mesh(this._geo(new THREE.ConeGeometry(0.004, 0.03, 4)), this._mat('#F2C230')); a.position.set(sx * 0.012, 0.175, 0.012); a.rotation.z = -sx * 0.6; g.add(a) }
+    g.traverse(o => { if (o.isMesh && o.material?.isMeshStandardMaterial) o.castShadow = true })
+    return g
+  }
+
+  /** Les lumières du coin gamer : 'rainbow' (elles changent doucement de teinte) ou une couleur « #rrggbb ». */
+  setPcColors({ pc, kb } = {}) {
+    this.rgbMode = { pc: pc || 'rainbow', kb: kb || 'rainbow' }
   }
 
   // ---- Coin télé -------------------------------------------------------------------------
@@ -1025,6 +1146,14 @@ export class LivingRoomScene {
     const tf = `matrix3d(${m})`
     if (el.style.transform !== tf) el.style.transform = tf
     if (el.style.visibility !== 'visible') el.style.visibility = 'visible'
+  }
+
+  /** Le fond d'écran du PC (adresse d'une image de jeu, ou null) : l'écran 3D le montre aussi. */
+  setPcWallpaper(url) {
+    this.pcWallUrl = url
+    const draw = img => { if (!this.pcCanvas || this.pcWallUrl !== url) return; drawPcDesktop(this.pcCanvas, img); this.pcTex.needsUpdate = true; this.shadowDirty = 2 }
+    if (!url) { draw(null); return }
+    loadImage(relayUrl(url)).then(img => draw(img))
   }
 
   /** Où se trouve l'image projetée à l'écran (en pixels de la page) : le menu s'ouvre depuis là. */
@@ -2227,13 +2356,19 @@ export class LivingRoomScene {
       l.pivot.rotation.z = Math.sin(this.time * 0.9 + l.phase) * 0.018 + l.sway.v * 0.06
       l.pivot.rotation.x = Math.cos(this.time * 0.7 + l.phase) * 0.012
     }
-    // le coin gamer : les lumières changent doucement de couleur
+    // le coin gamer : chaque lumière a sa couleur, ou change doucement de teinte (arc-en-ciel)
     if (this.rgbMats) {
-      const hue = (this.time * 0.04) % 1
-      const c = new THREE.Color().setHSL(hue, 0.85, 0.6)
-      for (const m of this.rgbMats) m.color.copy(c)
+      const rainbow = new THREE.Color().setHSL((this.time * 0.04) % 1, 0.85, 0.6)
+      const colorOf = part => {
+        const m = this.rgbMode?.[part]
+        if (!m || m === 'rainbow') return rainbow
+        return (this._rgbCache ||= new Map()).get(m) || this._rgbCache.set(m, new THREE.Color(m)).get(m)
+      }
+      const cp = colorOf('pc'), ck = colorOf('kb')
+      for (const m of this.rgbMats.pc) m.color.copy(cp)
+      for (const m of this.rgbMats.kb) m.color.copy(ck)
       const pcOn = this.wallOf('front').f ?? 1
-      this.pcLight.color.copy(c)
+      this.pcLight.color.copy(cp)
       this.pcLight.intensity = (this.mode === 'jour' ? 0.9 : 1.6) * sal * pcOn
     }
     // lampe
@@ -2426,18 +2561,28 @@ function glassTexture() {
 
 // ---- Le coin gamer : l'écran du PC, le second écran, la vitre de la tour, le néon -------------
 /** L'écran du PC vu du salon : le bureau de « Maruchime OS » (fond, deux icônes, barre du bas). */
-function drawPcDesktop(c) {
+/** L'écran du PC : notre fond d'écran (l'image d'un jeu, ou le fond Maruchime), les icônes, la barre. */
+function drawPcDesktop(c, img = null) {
   const g = c.getContext('2d'), W = c.width, H = c.height
-  const bg = g.createLinearGradient(0, 0, W, H)
-  bg.addColorStop(0, '#1B1F4B'); bg.addColorStop(0.55, '#3A2470'); bg.addColorStop(1, '#0E1430')
-  g.fillStyle = bg; g.fillRect(0, 0, W, H)
-  for (const [x, y, r, col] of [[0.78, 0.3, 0.32, 'rgba(122,92,255,0.45)'], [0.2, 0.85, 0.3, 'rgba(232,176,75,0.25)'], [0.55, 0.65, 0.22, 'rgba(60,160,255,0.3)']]) {
-    const gr = g.createRadialGradient(x * W, y * H, 0, x * W, y * H, r * W)
-    gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)')
-    g.fillStyle = gr; g.fillRect(0, 0, W, H)
+  if (img) {
+    const r = Math.max(W / img.naturalWidth, H / img.naturalHeight)
+    const sw = W / r, sh = H / r
+    g.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, 0, W, H)
+    const sh2 = g.createLinearGradient(0, 0, W * 0.35, 0)
+    sh2.addColorStop(0, 'rgba(0,0,0,0.35)'); sh2.addColorStop(1, 'rgba(0,0,0,0)')
+    g.fillStyle = sh2; g.fillRect(0, 0, W, H)
+  } else {
+    const bg = g.createLinearGradient(0, 0, W, H)
+    bg.addColorStop(0, '#1B1F4B'); bg.addColorStop(0.55, '#3A2470'); bg.addColorStop(1, '#0E1430')
+    g.fillStyle = bg; g.fillRect(0, 0, W, H)
+    for (const [x, y, r, col] of [[0.78, 0.3, 0.32, 'rgba(122,92,255,0.45)'], [0.2, 0.85, 0.3, 'rgba(232,176,75,0.25)'], [0.55, 0.65, 0.22, 'rgba(60,160,255,0.3)']]) {
+      const gr = g.createRadialGradient(x * W, y * H, 0, x * W, y * H, r * W)
+      gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)')
+      g.fillStyle = gr; g.fillRect(0, 0, W, H)
+    }
+    g.fillStyle = 'rgba(255,255,255,0.9)'; g.font = '600 64px "Inter Tight", system-ui, sans-serif'; g.textAlign = 'right'
+    g.fillText('Maruchime OS', W - 70, H - 140)
   }
-  g.fillStyle = 'rgba(255,255,255,0.9)'; g.font = '600 64px "Inter Tight", system-ui, sans-serif'; g.textAlign = 'right'
-  g.fillText('Maruchime OS', W - 70, H - 140)
   // deux icônes
   const icon = (x, y, label, col) => {
     g.fillStyle = col; g.beginPath(); g.roundRect?.(x, y, 110, 110, 24); g.fill()
@@ -2469,13 +2614,19 @@ function towerGlassTexture() {
   return t
 }
 
-function neonTexture() {
-  const c = document.createElement('canvas'); c.width = 600; c.height = 200
-  const g = c.getContext('2d')
-  g.font = 'italic 700 92px "Newsreader", Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle'
-  g.shadowColor = '#ff4fd8'; g.shadowBlur = 30
-  g.fillStyle = '#ffd6f6'; g.fillText('Player 2', 300, 100)
-  g.shadowBlur = 12; g.fillText('Player 2', 300, 100)
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace
-  return t
+/** Une cape : un rectangle qui s'évase vers le bas, plissé, au bas déchiré en pointes. */
+function capeGeometry(w, h) {
+  const cols = 10, rows = 6
+  const geo = new THREE.PlaneGeometry(w, h, cols, rows)
+  const p = geo.attributes.position
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i)
+    const t = (h / 2 - y) / h                       // 0 en haut, 1 en bas
+    const col = Math.round((x / w + 0.5) * cols)
+    p.setX(i, x * (0.75 + 0.55 * t))
+    p.setZ(i, -Math.cos((x / w) * Math.PI) * 0.03 * t - Math.sin(col * 1.7) * 0.012 * t - 0.03 * t)
+    if (t > 0.99) p.setY(i, y + (col % 2 ? 0.06 * h : 0) + Math.sin(col * 3.1) * 0.03 * h)
+  }
+  geo.computeVertexNormals()
+  return geo
 }
