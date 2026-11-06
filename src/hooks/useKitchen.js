@@ -15,7 +15,7 @@ const same = (a, b) => norm(a) === norm(b)
  * (colonne `data` en jsonb) ; tant qu'elle n'existe pas (ou en mode démo), gardé dans ce navigateur.
  *   pantry   : [{ id, fr, en, alt, emoji, aisle, place: 'frigo' | 'placard', added_at }]
  *   favorites: [{ id, title, image, time }]   cooked: [{ id, title, image, at }]
- *   shopping : [{ id, fr, en, emoji, aisle, place, done }]
+ *   shopping : [{ id, fr, en, emoji, aisle, place, qty, from: [titres des recettes], done }]
  */
 export function useKitchen(userId) {
   const [data, setData] = useState(EMPTY)
@@ -67,14 +67,29 @@ export function useKitchen(userId) {
   const addShopping = useCallback(list => save(d => {
     const next = [...d.shopping]
     for (const it of list) {
-      if (next.some(s => same(s.fr, it.fr) && !s.done)) continue
+      const i = next.findIndex(s => same(s.fr, it.fr) && !s.done)
+      if (i >= 0) {
+        // déjà sur la liste : on note seulement pour quelle autre recette
+        if (it.from && !(next[i].from || []).includes(it.from)) next[i] = { ...next[i], from: [...(next[i].from || []), it.from] }
+        continue
+      }
       const cat = ingredientByFr(it.fr)
-      next.push({ id: uid(), fr: it.fr, en: it.en || cat?.en || '', emoji: cat?.emoji || '🛒', aisle: cat?.aisle || '', place: cat?.place || 'frigo', done: false })
+      next.push({ id: uid(), fr: it.fr, en: it.en || cat?.en || '', emoji: cat?.emoji || '🛒', aisle: cat?.aisle || '', place: cat?.place || 'frigo', qty: it.qty || '', from: it.from ? [it.from] : [], done: false })
     }
     return { shopping: next }
   }), [save])
   const toggleShopping = useCallback(id => save(d => ({ shopping: d.shopping.map(s => (s.id === id ? { ...s, done: !s.done } : s)) })), [save])
   const removeShopping = useCallback(id => save(d => ({ shopping: d.shopping.filter(s => s.id !== id) })), [save])
+  /** Est-ce déjà sur la liste (pas encore acheté) ? */
+  const inShopping = useCallback(fr => data.shopping.some(s => same(s.fr, fr) && !s.done), [data.shopping])
+  /** Retirer de la liste ce qu'on y avait mis pour une recette (si aucune autre recette ne le demande). */
+  const unShopping = useCallback((fr, from) => save(d => ({
+    shopping: d.shopping.flatMap(s => {
+      if (!same(s.fr, fr) || s.done) return [s]
+      const rest = (s.from || []).filter(f => f !== from)
+      return rest.length ? [{ ...s, from: rest }] : []
+    }),
+  })), [save])
   /** Les courses cochées sont rangées : chacune à sa place (frigo ou placard), et quittent la liste. */
   const storeShopping = useCallback(() => save(d => {
     const bought = d.shopping.filter(s => s.done)
@@ -87,5 +102,5 @@ export function useKitchen(userId) {
     return { pantry, shopping: d.shopping.filter(s => !s.done) }
   }), [save])
 
-  return { ...data, addItem, removeItem, removeItems, moveItem, isFavorite, toggleFavorite, markCooked, addShopping, toggleShopping, removeShopping, storeShopping }
+  return { ...data, addItem, removeItem, removeItems, moveItem, isFavorite, toggleFavorite, markCooked, addShopping, toggleShopping, removeShopping, inShopping, unShopping, storeShopping }
 }

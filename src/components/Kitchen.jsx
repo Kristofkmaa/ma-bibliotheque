@@ -19,6 +19,7 @@ const byFr = new Map(INGREDIENTS.map(i => [i.fr, i]))
 
 const Close = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
 const Back = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+const CartIcon = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2.2l2.1 10.2a1.5 1.5 0 0 0 1.5 1.2h8.4a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.1" /><circle cx="9.5" cy="19.5" r="1.3" /><circle cx="17" cy="19.5" r="1.3" /></svg>
 const Heart = ({ on }) => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" className={on ? 'fill' : ''} /></svg>
 
 export default function Kitchen({ userId, scene, onClose }) {
@@ -214,7 +215,8 @@ function ShoppingPanel({ k, onClose }) {
               <button type="button" className="kt-check" onClick={() => k.toggleShopping(s.id)} aria-pressed={s.done} aria-label={s.done ? `Décocher ${s.fr}` : `Cocher ${s.fr}`}>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
               </button>
-              <span className="kt-emo">{s.emoji}</span><span className="kt-name">{s.fr}</span>
+              <span className="kt-emo">{s.emoji}</span>
+              <span className="kt-name">{s.fr}{s.qty && <i className="kt-qty"> · {s.qty}</i>}{s.from?.length > 0 && <small className="kt-from">pour {s.from.join(', ')}</small>}</span>
               <button type="button" className="kt-del" onClick={() => k.removeShopping(s.id)} aria-label={`Retirer ${s.fr}`}><Close /></button>
             </li>
           ))}
@@ -260,7 +262,7 @@ function RecipeApp({ k, start, onClose, onOpenPlace, onShow }) {
         {tab === 'chercher' && <Search onOpen={setOpen} />}
         {tab === 'miennes' && <Mine k={k} onOpen={setOpen} />}
       </main>
-      {open && <RecipePage id={open} k={k} onBack={() => setOpen(null)} onShow={onShow} />}
+      {open && <RecipePage id={open} k={k} onBack={() => setOpen(null)} onShow={onShow} onCourses={() => onOpenPlace('courses')} />}
     </div>
   )
 }
@@ -390,7 +392,7 @@ function Mine({ k, onOpen }) {
   )
 }
 
-function RecipePage({ id, k, onBack, onShow }) {
+function RecipePage({ id, k, onBack, onShow, onCourses }) {
   const st = useAsync(() => recipeDetail(id), [id])
   const [people, setPeople] = useState(null)
   const [doneSteps, setDoneSteps] = useState(() => new Set())
@@ -403,6 +405,18 @@ function RecipePage({ id, k, onBack, onShow }) {
   const missing = ings.filter(i => !i.staple && !i.have)
   const fav = r && k.favorites.some(f => f.id === r.id)
   const ratio = r?.servings && people ? people / r.servings : 1
+  const qtyOf = i => [amountFr(i.amount * ratio), i.unit].filter(Boolean).join(' ')
+  const listed = missing.filter(m => k.inShopping(m.fr))
+  const toList = missing.filter(m => !k.inShopping(m.fr))
+  const addMissing = () => {
+    if (!toList.length) return
+    k.addShopping(toList.map(m => ({ fr: m.fr, en: m.en, qty: qtyOf(m), from: r.title })))
+    setToast(`${toList.length} ajouté${toList.length > 1 ? 's' : ''} à la liste de courses`)
+  }
+  const flipOne = m => {
+    if (k.inShopping(m.fr)) { k.unShopping(m.fr, r.title); setToast(`« ${m.fr} » retiré des courses`) }
+    else { k.addShopping([{ fr: m.fr, en: m.en, qty: qtyOf(m), from: r.title }]); setToast(`« ${m.fr} » ajouté aux courses`) }
+  }
 
   return (
     <div className="ka-page">
@@ -427,6 +441,16 @@ function RecipePage({ id, k, onBack, onShow }) {
                 <button type="button" className={'ka-heart' + (fav ? ' on' : '')} onClick={() => k.toggleFavorite(r)} aria-pressed={fav}><Heart on={fav} />{fav ? 'Dans nos préférées' : 'Garder'}</button>
                 <button type="button" className="kt-cta" onClick={() => setCooking(true)}>J’ai cuisiné ça</button>
               </div>
+              {missing.length > 0 && (toList.length ? (
+                <button type="button" className="ka-cart" onClick={addMissing}>
+                  <CartIcon /><span><b>{toList.length > 1 ? `Ajouter les ${toList.length} manquants aux courses` : `Ajouter « ${toList[0].fr} » aux courses`}</b>
+                  <em>{toList.slice(0, 4).map(m => m.fr.toLowerCase()).join(', ')}{toList.length > 4 ? '…' : ''}</em></span>
+                </button>
+              ) : (
+                <button type="button" className="ka-cart ok" onClick={onCourses}>
+                  <CartIcon /><span><b>{listed.length > 1 ? `Les ${listed.length} manquants sont sur la liste` : 'Ce qui manque est sur la liste'}</b><em>Voir la liste de courses →</em></span>
+                </button>
+              ))}
             </div>
           </div>
           <div className="ka-body">
@@ -436,17 +460,17 @@ function RecipePage({ id, k, onBack, onShow }) {
                 {ings.map((i, n) => (
                   <li key={n} className={i.staple ? 'base' : i.have ? 'have' : 'miss'}>
                     <span className="ka-dot" aria-hidden="true" />
-                    <span className="ka-q">{[amountFr(i.amount * ratio), i.unit].filter(Boolean).join(' ')}</span>
+                    <span className="ka-q">{qtyOf(i)}</span>
                     <span className="ka-n">{i.fr}</span>
-                    <em>{i.staple ? 'de base' : i.have ? (i.have.place === 'placard' ? 'placard' : 'frigo') : 'à acheter'}</em>
+                    {i.staple || i.have ? <em>{i.staple ? 'de base' : i.have.place === 'placard' ? 'placard' : 'frigo'}</em> : (
+                      <button type="button" className={'ka-buy' + (k.inShopping(i.fr) ? ' on' : '')} onClick={() => flipOne(i)} aria-pressed={k.inShopping(i.fr)}
+                        aria-label={k.inShopping(i.fr) ? `Retirer ${i.fr} des courses` : `Ajouter ${i.fr} aux courses`}>
+                        {k.inShopping(i.fr) ? '✓ sur la liste' : '+ courses'}
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
-              {missing.length > 0 && (
-                <button type="button" className="kt-ghost wide" onClick={() => { k.addShopping(missing.map(m => ({ fr: m.fr, en: m.en }))); setToast(`${missing.length} ajouté${missing.length > 1 ? 's' : ''} à la liste de courses`) }}>
-                  📝 {missing.length > 1 ? `Ajouter les ${missing.length} manquants aux courses` : `Ajouter « ${missing[0].fr} » aux courses`}
-                </button>
-              )}
             </section>
             <section className="ka-steps">
               <h3>Préparation</h3>

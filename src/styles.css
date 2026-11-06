@@ -4198,6 +4198,24 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
 .ka-ings em { font: 600 11px var(--sans); font-style: normal; letter-spacing: 0.04em; text-transform: uppercase; color: var(--k-terra); }
 .ka-ings li.have em { color: var(--k-ok); }
 .ka-ings li.base em { color: var(--k-mute); }
+.ka-buy { align-self: center; height: 28px; padding: 0 10px; border-radius: 9px; white-space: nowrap; font: 700 11.5px var(--sans); letter-spacing: 0.02em;
+  color: var(--k-terra); background: rgba(180, 87, 58, 0.08); box-shadow: inset 0 0 0 1px rgba(180, 87, 58, 0.28); transition: background 0.15s, color 0.15s, transform 0.12s; }
+.ka-buy:hover { background: rgba(180, 87, 58, 0.14); }
+.ka-buy:active { transform: scale(0.96); }
+.ka-buy.on { color: var(--k-ok); background: rgba(78, 125, 91, 0.1); box-shadow: inset 0 0 0 1px rgba(78, 125, 91, 0.3); }
+.ka-cart { display: flex; align-items: center; gap: 14px; width: 100%; max-width: 460px; margin-top: 12px; padding: 12px 16px 12px 14px; border-radius: 14px; text-align: left;
+  background: var(--k-terra); color: #fff; box-shadow: 0 14px 30px -18px rgba(180, 87, 58, 0.9); transition: transform 0.12s, filter 0.15s; }
+.ka-cart:hover { filter: brightness(1.06); }
+.ka-cart:active { transform: scale(0.985); }
+.ka-cart svg { width: 26px; height: 26px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ka-cart span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ka-cart b { font: 700 14.5px var(--sans); }
+.ka-cart em { font: 500 12.5px var(--sans); font-style: normal; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ka-cart.ok { background: #fff; color: var(--k-ok); box-shadow: inset 0 0 0 1.5px rgba(78, 125, 91, 0.45); }
+.ka-cart.ok em { color: var(--k-mute); opacity: 1; }
+.kt-shoplist .kt-name { white-space: normal; }
+.kt-qty { font-style: normal; color: var(--k-mute); font-weight: 500; }
+.kt-from { display: block; margin-top: 1px; font: 500 12px var(--sans); color: var(--k-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ka-steps ol { list-style: none; counter-reset: s; }
 .ka-steps li button { display: flex; gap: 16px; width: 100%; padding: 16px 0; text-align: left; border-bottom: 1px solid var(--k-line); font: 17px/1.6 var(--serif); color: var(--k-ink); transition: opacity 0.2s; }
 .ka-num { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none; font: 700 13px var(--sans); background: var(--k-ink); color: #fff; margin-top: 1px; }
