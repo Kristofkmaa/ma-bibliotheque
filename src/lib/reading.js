@@ -26,6 +26,17 @@ export const isRead = b => has(b, 'lu')
 export const isLoved = b => has(b, 'aime')
 export const inPal = b => isOwned(b) && !isRead(b) && !isReading(b)
 
+/** « Montrer » dans la bibliothèque : les mêmes tris que la tablette. */
+export const SHOWS = [
+  { id: 'all', label: 'Tous les livres', test: null },
+  { id: 'en_cours', label: 'Je lis', one: 'en cours', test: isReading },
+  { id: 'pile', label: 'Ma pile', one: 'dans ma pile', test: inPal },
+  { id: 'lu', label: 'J’ai lu', one: 'lu', many: 'lus', test: isRead },
+  { id: 'souhaite', label: 'Wishlist', one: 'dans la wishlist', test: isWish },
+  { id: 'aime', label: 'J’aime', one: 'aimé', many: 'aimés', test: isLoved },
+  { id: 'possede', label: 'J’ai', one: 'à nous', test: isOwned },
+]
+
 export const today = () => {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`

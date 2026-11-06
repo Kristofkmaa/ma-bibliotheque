@@ -734,6 +734,9 @@ export class BookcaseScene {
       x: new Spring(0, 150, 0.78), y: new Spring(0, 190, 0.6), z: new Spring(0, 170, 0.72),
       yaw: new Spring(-BETA, 150, 0.8), tilt: new Spring(0, 160, 0.75),
     })
+    entry.backColor = back.color.clone()
+    entry.dim = entry.dimT = this._dimmed(book) ? 1 : 0
+    this._paintDim(entry)
     this.books.set(book.id, entry)
     // Le livre n'apparaît qu'avec sa vraie couverture (préchargée) : jamais d'image par défaut
     entry.waiting = true
@@ -784,6 +787,25 @@ export class BookcaseScene {
       e.mark = null
     }
     e.markReady = true
+  }
+
+  /**
+   * Trier par statut de lecture (J'ai lu, Je lis…) : fn(livre) dit si on le montre. Les autres
+   * restent à leur place (le rangement ne bouge pas) mais s'assombrissent et reculent un peu.
+   * null : tout le monde.
+   */
+  setFilter(fn) {
+    this.filterFn = fn || null
+    for (const e of this.books.values()) e.dimT = this._dimmed(e.book) ? 1 : 0
+    this._refreshTargets()
+    this.kick()
+  }
+  _dimmed(book) { return !!this.filterFn && !this.filterFn(book) }
+  _paintDim(e) {
+    const f = 1 - 0.86 * e.dim
+    const [cover, back, spine] = e.mats
+    cover.color.setScalar(f); spine.color.setScalar(f)
+    back.color.copy(e.backColor).multiplyScalar(f)
   }
 
   _disposeBook(entry) {
@@ -903,6 +925,7 @@ export class BookcaseScene {
       const created = !e
       if (!e) e = this._makeBook(b)
       e.book = b
+      e.dimT = this._dimmed(b) ? 1 : 0
       this._syncBookmark(e)
       const base = this.bases.get(id)
       if (!base) continue
@@ -1230,6 +1253,8 @@ export class BookcaseScene {
       if (e.id === this.hoverId) { lift += 0.075; pull += 0.13 }
       if (e.taking) { lift += 0.16; pull += 0.3 }
       if (e.id === this.spotId) { lift += 0.12; pull += 0.24 }
+      // tri par statut : ceux qu'on cherche avancent un peu, les autres reculent dans l'ombre
+      if (this.filterFn) pull += e.dimT ? -0.1 : 0.09
       e.waveLift = lift
       e.y.t = e.base.y + lift + (e.wave || 0)
       e.z.t = e.base.z + pull
@@ -1335,6 +1360,13 @@ export class BookcaseScene {
         if (s >= 1) e.markGrow = false; else moving = true
       }
       if (!(e.x.done && e.y.done && e.z.done && e.yaw.done)) moving = true
+      if (e.dim !== e.dimT) {
+        const k = 1 - Math.exp(-dt * 9)
+        e.dim += (e.dimT - e.dim) * k
+        if (Math.abs(e.dim - e.dimT) < 0.004) e.dim = e.dimT
+        this._paintDim(e)
+        moving = true
+      }
     }
     if (this.caseParts) {
       const { CW } = this.layout

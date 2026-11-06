@@ -67,7 +67,7 @@ function autoLabel(row, n, sort) {
  */
 export default function Bookcase3D({
   books, allBooks, sort, viewKey, manual, canEdit, shelves, commitShelves, newShelfSignal,
-  onOpen, locked, focusId, onFocused, emptyText, apiRef, aside, onShelfClick, topBooks, onTopPlaque,
+  onOpen, locked, focusId, onFocused, emptyText, apiRef, aside, onShelfClick, topBooks, onTopPlaque, show,
 }) {
   const caseRef = useRef(null)
   const sceneRef = useRef(null)
@@ -214,6 +214,7 @@ export default function Bookcase3D({
 
   // notre top 5, de face sur l'étagère d'honneur en haut du meuble
   useEffect(() => { sceneRef.current?.setTop(topBooks || []) }, [topBooks])
+  useEffect(() => { sceneRef.current?.setFilter(show || null) }, [show])
 
   // tous les rayons sans le livre déplacé (pour viser l'emplacement)
   dataRef.current.rowsWithout = id => buildRows({ manual: true, shelves: previewDrag(eff, id, null), autoBooks: [], byId, visible, canEdit: true, perRow: shelfRow, minRows: L.rows })

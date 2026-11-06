@@ -26,6 +26,7 @@ import SearchPanel from './components/SearchPanel'
 import LoginPage from './components/LoginPage'
 import ReadingTablet, { ReadingDock } from './components/ReadingTablet'
 import { useReading } from './hooks/useReading'
+import { SHOWS } from './lib/reading'
 
 const Scanner = lazy(() => import('./components/Scanner'))
 // La bibliothèque en vraie 3D (Three.js) est chargée à part ; sans WebGL, étagère dessinée à plat
@@ -122,6 +123,14 @@ function Library({ user, onSignOut }) {
   const booksRef = useRef(books); booksRef.current = books
 
   const setSort = v => { setSortState(v); writePref('levana.sort2', v) }
+  // « Montrer » : J'ai lu, Je lis… (les autres livres s'estompent, sans quitter leur place)
+  const [show, setShowState] = useState(() => readPref('levana.show', 'all'))
+  const setShow = v => { setShowState(v); writePref('levana.show', v) }
+  const showDef = SHOWS.find(x => x.id === show) || SHOWS[0]
+  const showTest = showDef.test
+  const showCount = useMemo(() => (showTest ? books.filter(showTest).length : books.length), [books, showTest])
+  const showOpts = useMemo(() => SHOWS.map(x => ({ ...x, n: x.test ? books.filter(x.test).length : books.length })), [books])
+  const showLine = showTest && (showCount === 0 ? `Aucun livre ${showDef.one}` : `${showCount} livre${showCount > 1 ? 's' : ''} ${showCount > 1 && showDef.many ? showDef.many : showDef.one}`)
   const manual = sort === 'manual'
   const canEdit = manual
 
@@ -256,6 +265,11 @@ function Library({ user, onSignOut }) {
   }, [scanner, detailOpen, searchOpen, closeDetail, closeSearch])
 
   const emptyText = 'Le premier rayon attend son livre'
+  const SHOW_PILL = showTest && (
+    <button type="button" className="show-pill lbl" onClick={() => setShow('all')} aria-label={`${showLine} — tout montrer`}>
+      <b>{showDef.label}</b><span>{showLine}</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3L3 9" /></svg>
+    </button>
+  )
 
   return (
     <div className="scene">
@@ -287,7 +301,16 @@ function Library({ user, onSignOut }) {
             {SORTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </label>
+        <label className={'lbl scene-sort scene-show' + (showTest ? ' on' : '')} aria-label="Montrer">
+          <span>Montrer</span>
+          <svg className="sort-ico" width="14" height="12" viewBox="0 0 14 12" aria-hidden="true"><path d="M1 6s2.3-4.2 6-4.2S13 6 13 6s-2.3 4.2-6 4.2S1 6 1 6z" stroke="currentColor" strokeWidth="1.2" fill="none" /><circle cx="7" cy="6" r="1.7" fill="currentColor" /></svg>
+          <select value={show} onChange={e => setShow(e.target.value)}>
+            {showOpts.map(o => <option key={o.id} value={o.id}>{o.label} ({o.n})</option>)}
+          </select>
+        </label>
+        {!mobile && SHOW_PILL}
       </div>
+      {mobile && !salon && SHOW_PILL}
 
       {loading && !books.length ? (
         <p className="scene-loading lbl">Ouverture des rayons…</p>
@@ -297,7 +320,7 @@ function Library({ user, onSignOut }) {
           shelves={shelves} commitShelves={commitShelves} newShelfSignal={newShelfSignal}
           onOpen={openBook} onAdd={openSearch} locked={overlay} apiRef={bookcaseApi}
           onShelfClick={id => setShelvesOpen({ id })}
-          topBooks={topBooks} onTopPlaque={() => setTopPanel(true)}
+          topBooks={topBooks} onTopPlaque={() => setTopPanel(true)} show={showTest}
           aside={basket.items.length > 0 && !mobile ? (
             <BasketTray
               items={basket.items} shelves={effShelves} books={books} api={bookcaseApi} mobile={mobile}
@@ -328,6 +351,12 @@ function Library({ user, onSignOut }) {
                 <span>Ranger par</span>
                 <select value={sort} onChange={e => setSort(e.target.value)}>
                   {SORTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </label>
+              <label className="lbl find-sort">
+                <span>Montrer</span>
+                <select value={show} onChange={e => { setShow(e.target.value); setFindOpen(false) }}>
+                  {showOpts.map(o => <option key={o.id} value={o.id}>{o.label} ({o.n})</option>)}
                 </select>
               </label>
             </div>

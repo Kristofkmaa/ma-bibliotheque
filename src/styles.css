@@ -142,6 +142,18 @@ a { color: inherit; }
 }
 .scene-sort select:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
 .scene-loading { align-self: center; justify-self: center; color: var(--muted); }
+.scene-show.on select { border-color: var(--cobalt); color: var(--cobalt); }
+.show-pill { display: inline-flex; align-items: center; gap: 9px; height: 25px; padding: 0 8px 0 10px; background: var(--cobalt); color: #fff; border: 0; cursor: pointer;
+  animation: showIn 0.35s cubic-bezier(.2,.9,.25,1) both; }
+.show-pill b { font-weight: 700; }
+.show-pill span { opacity: 0.78; text-transform: none; letter-spacing: 0.02em; font-weight: 500; }
+.show-pill svg { width: 10px; height: 10px; stroke: currentColor; stroke-width: 1.6; fill: none; margin-left: 2px; }
+.show-pill:hover svg { transform: rotate(90deg); transition: transform 0.2s; }
+@keyframes showIn { from { opacity: 0; transform: translateY(-4px) scale(0.96); } }
+@media (max-width: 767px) {
+  .show-pill { position: fixed; z-index: 6; top: calc(env(safe-area-inset-top, 0px) + 10px); left: 50%; translate: -50% 0; height: 30px; padding: 0 12px; border-radius: 15px;
+    box-shadow: 0 8px 20px -10px rgba(20, 30, 80, 0.7); white-space: nowrap; }
+}
 
 /* Étagère en perspective ------------------------------------------------------ */
 /* La perspective est calculée une fois en JS puis dessinée à plat (SVG + calques agrandis) :
