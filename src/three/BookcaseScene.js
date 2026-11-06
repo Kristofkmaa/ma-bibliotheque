@@ -22,6 +22,7 @@ export const BETA = 0.4    // rotation des livres (rad) : on voit la moitié de 
 export const GAP = 0.105   // espace ajouté entre deux livres
 const AVG_T = 0.115        // épaisseur moyenne d'un livre (pour estimer la capacité d'un rayon)
 const DOOR_T = 0.025
+export const HON = RH + PT + 0.24   // hauteur de l'étagère d'honneur (au-dessus du meuble) : notre top 5
 
 /** Géométrie partagée avec React : nombre de rayons, largeur du meuble, livres par rayon. */
 export function worldLayout(wPx, hPx, mobile) {
@@ -221,7 +222,9 @@ export class BookcaseScene {
     const el = mobile ? 0.11 : 0.15
     this.camDir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el))
     this.viewH = vis * (RH + PT) + PT
-    this.totalH = Math.max(this.rowCount, vis) * (RH + PT) + PT
+    // l'étagère d'honneur (notre top 5) coiffe le meuble : on peut monter jusqu'à elle
+    this.honorH = this.topList?.length && this.rowCount >= vis ? HON : 0
+    this.totalH = Math.max(this.rowCount, vis) * (RH + PT) + PT + this.honorH
     this.camNear = this._fitWindow(this.viewH)
     this.camFar = this.totalH > this.viewH + 0.01 ? this._fitWindow(this.totalH + 0.12) : this.camNear
     if (!this.scrollInit && this.rowCount) { this.scroll.snap(this._clampScroll(Infinity)); this.scrollInit = true }
@@ -523,6 +526,7 @@ export class BookcaseScene {
     this.rowsData.forEach((row, r) => { this._applySkin(r, row.palette, true); this.rowSkins[r] = row.palette })
     this._syncPlaques()
     this._computeBases()
+    this._buildHonor()
     this._fitCamera()
     this._updateVisible(true)
     this._updateDoorTargets()
@@ -544,6 +548,169 @@ export class BookcaseScene {
       part.doorMats.forEach(m => { m.map = doorTexture(palette.doors); m.needsUpdate = true })
     }
     if (r === 0) this.crown.material.color.copy(part.targetWood)
+  }
+
+  // ---- L'étagère d'honneur : notre top 5, de face, sur des chevalets, sous une lampe -------------
+  /** Notre top (livres, du n°1 au n°5). Rien : pas d'étagère d'honneur. */
+  setTop(list) {
+    const ids = (list || []).map(b => b.id + ':' + (b.cover_url || b.coverUrl || '')).join('|')
+    if (ids === this.topSig && this.honorBuiltFor === this.layout?.CW) return
+    this.topSig = ids
+    const had = !!this.topList?.length
+    this.topList = (list || []).slice(0, 5)
+    if (!this.layout) return
+    this._buildHonor()
+    if (had !== !!this.topList.length) this._fitCamera()
+    this.kick()
+  }
+
+  _disposeHonor() {
+    const h = this.honor
+    if (!h) return
+    this.root.remove(h.group)
+    h.group.traverse(o => {
+      if (o.geometry) o.geometry.dispose()
+      const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []
+      ms.forEach(m => { if (m !== this.pagesMat && !h.shared.includes(m)) { m.map && h.ownTex.includes(m.map) && m.map.dispose(); m.dispose() } })
+    })
+    h.ownTex.forEach(t => t.dispose())
+    this.honor = null
+  }
+
+  _buildHonor() {
+    this._disposeHonor()
+    this.honorBuiltFor = this.layout?.CW
+    const list = this.topList || []
+    if (!list.length || !this.layout || !this.rowCount) return
+    const { CW } = this.layout
+    const y0 = this.rowCount * (RH + PT) + PT          // le dessus du meuble
+    const g = new THREE.Group()
+    const ownTex = [], shared = []
+    const wood = this._woodMat('#D8CCB0'); shared.push(wood)
+    if (this.caseParts?.[0]) wood.color.copy(this.caseParts[0].wood.color)
+    const brass = this.brassMat ||= new THREE.MeshStandardMaterial({ color: '#B8914A', metalness: 0.55, roughness: 0.4 })
+    shared.push(brass)
+    // le fond : un velours sombre, éclairé en son centre par la lampe
+    const velvet = document.createElement('canvas'); velvet.width = 512; velvet.height = 256
+    const vg = velvet.getContext('2d')
+    vg.fillStyle = '#2A1A1F'; vg.fillRect(0, 0, 512, 256)
+    const pool = vg.createRadialGradient(256, 40, 10, 256, 80, 300)
+    pool.addColorStop(0, 'rgba(255,214,150,0.55)'); pool.addColorStop(0.45, 'rgba(255,190,120,0.18)'); pool.addColorStop(1, 'rgba(0,0,0,0)')
+    vg.fillStyle = pool; vg.fillRect(0, 0, 512, 256)
+    const vtex = new THREE.CanvasTexture(velvet); vtex.colorSpace = THREE.SRGBColorSpace; ownTex.push(vtex)
+    const backMat = new THREE.MeshStandardMaterial({ map: vtex, roughness: 1, emissive: new THREE.Color('#ffcf94'), emissiveMap: vtex, emissiveIntensity: 0 })
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(CW, HON), backMat)
+    back.position.set(0, y0 + HON / 2, -SD / 2)
+    back.receiveShadow = true
+    // les montants, le plateau, la corniche
+    const sideL = new THREE.Mesh(new THREE.BoxGeometry(ST, HON, SD + 0.04), wood)
+    sideL.position.set(-CW / 2 - ST / 2, y0 + HON / 2, 0.02)
+    const sideR = sideL.clone(); sideR.position.x = CW / 2 + ST / 2
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(CW + 2 * ST + 0.08, 0.1, SD + 0.12), wood)
+    crown.position.set(0, y0 + HON + 0.05, 0.03)
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(CW + 2 * ST, 0.05, 0.05), wood)   // le rebord qui retient les chevalets
+    lip.position.set(0, y0 + 0.07, SD / 2 - 0.02)
+    for (const m of [sideL, sideR, crown, lip]) { m.castShadow = m.receiveShadow = true }
+    g.add(back, sideL, sideR, crown, lip)
+    // la lampe de tableau, en laiton, au milieu sous la corniche
+    const lampW = Math.min(CW * 0.5, 1.6)
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, lampW, 16), brass)
+    bar.rotation.z = Math.PI / 2
+    bar.position.set(0, y0 + HON - 0.1, SD / 2 - 0.05)
+    const glowMat = new THREE.MeshBasicMaterial({ color: '#fff1d6', transparent: true, opacity: 0 })
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(lampW * 0.96, 0.03), glowMat)
+    glow.position.set(0, y0 + HON - 0.137, SD / 2 - 0.05)
+    glow.rotation.x = Math.PI / 2
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.16, 8), brass)
+    arm.position.set(0, y0 + HON - 0.03, SD / 2 - 0.12); arm.rotation.x = 0.7
+    g.add(bar, glow, arm)
+    const light = new THREE.PointLight(0xffd6a0, 0, 4.2, 1.6)
+    light.position.set(0, y0 + HON - 0.25, SD / 2 + 0.3)
+    g.add(light)
+    // la plaque du titre, sur la corniche
+    const { tex: ttex, aspect: ta } = plaqueTexture('Mes incontournables')
+    const tMat = new THREE.MeshStandardMaterial({ map: ttex, metalness: 0.35, roughness: 0.45 })
+    const th = 0.075, tw = Math.min(CW * 0.6, th * ta)
+    const title = new THREE.Mesh(new THREE.BoxGeometry(tw, th, 0.014), [brass, brass, brass, brass, tMat, brass])
+    title.position.set(0, y0 + HON + 0.05, SD / 2 + 0.1)
+    title.userData.topPlaque = true
+    g.add(title)
+    // les livres, de face sur leur chevalet : le n°1 au milieu, puis 2 et 3 de chaque côté, 4 et 5 aux bords
+    const n = list.length
+    const order = n === 1 ? [0] : n === 2 ? [1, 0] : n === 3 ? [1, 0, 2] : n === 4 ? [3, 1, 0, 2] : [3, 1, 0, 2, 4]
+    const slot = CW / Math.max(n, 3)
+    const books = []
+    order.forEach((rank, k) => {
+      const book = list[rank]
+      const { h, t, d } = bookDims(book)
+      const big = rank === 0 ? 1 : 0.86
+      const s = Math.min(big * (HON - 0.42) / h, (slot * 0.84) / d, big * 1.05)
+      const x = (k - (order.length - 1) / 2) * slot
+      const grp = new THREE.Group()
+      grp.position.set(x, y0 + 0.02, 0.05)
+      // le chevalet : deux pieds et un appui
+      const easel = [[-0.32, 0.08], [0.32, 0.08]].map(([fx]) => {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.025, h * s * 0.75, 0.025), brass)
+        leg.position.set(fx * d * s, h * s * 0.36, -0.08); leg.rotation.x = 0.18
+        return leg
+      })
+      const ledge = new THREE.Mesh(new THREE.BoxGeometry(d * s * 0.9, 0.035, 0.07), brass)
+      ledge.position.set(0, 0.06, 0.06)
+      grp.add(...easel, ledge)
+      // le livre, couverture vers nous, un peu penché en arrière
+      const [bg] = spineColors(book)
+      const cover = new THREE.MeshStandardMaterial({ roughness: 0.5 })
+      const spine = new THREE.MeshStandardMaterial({ map: spineTexture(book), roughness: 0.6 })
+      const backM = new THREE.MeshStandardMaterial({ color: new THREE.Color(bg).multiplyScalar(0.8), roughness: 0.7 })
+      // ordre des faces : +x tranche des pages, -x dos, +y/-y, +z couverture, -z 4e de couverture
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(d * s, h * s, t * s), [this.pagesMat, spine, this.pagesMat, this.pagesMat, cover, backM])
+      mesh.position.set(0, 0.075 + h * s / 2, 0.02)
+      mesh.rotation.x = -0.1
+      mesh.castShadow = mesh.receiveShadow = true
+      mesh.userData.topBook = book.id
+      grp.add(mesh)
+      withCover(book, tex => { cover.map = tex; cover.needsUpdate = true; this.kick() }, tex => { cover.map = tex; cover.needsUpdate = true; this.kick() })
+      // la plaque gravée du rang, sur le rebord
+      const { tex: ptex, aspect: pa } = plaqueTexture(`N° ${rank + 1}`)
+      const pMat = new THREE.MeshStandardMaterial({ map: ptex, metalness: 0.35, roughness: 0.45 })
+      const ph = 0.085, pw = Math.min(slot * 0.6, ph * pa)
+      const plaque = new THREE.Mesh(new THREE.BoxGeometry(pw, ph, 0.012), [brass, brass, brass, brass, pMat, brass])
+      plaque.position.set(x, y0 + 0.07, SD / 2 + 0.012)
+      plaque.userData.topPlaque = true
+      g.add(grp, plaque)
+      books.push({ mesh, book, grp, rank })
+    })
+    g.traverse(o => { if (o.isMesh && o !== glow) { o.castShadow = true; o.receiveShadow = true } })
+    back.castShadow = false
+    this.root.add(g)
+    this.honor = { group: g, books, light, glowMat, backMat, on: 0, ownTex, shared, t0: performance.now() }
+  }
+
+  /** La lampe s'allume doucement à l'arrivée (et les livres du top se posent). */
+  _stepHonor(dt) {
+    const h = this.honor
+    if (h.on >= 1) return false
+    const age = (performance.now() - h.t0) / 1000
+    if (age < 0.6) return true
+    h.on = Math.min(1, h.on + dt / 1.2)
+    const e = h.on * h.on * (3 - 2 * h.on)
+    h.light.intensity = 1.6 * e
+    h.glowMat.opacity = e
+    h.backMat.emissiveIntensity = 0.45 * e
+    return true
+  }
+
+  _pickHonor(e) {
+    const h = this.honor
+    if (!h) return null
+    const rc = this.renderer.domElement.getBoundingClientRect()
+    this.ndc.set(((e.clientX - rc.left) / rc.width) * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1)
+    this.raycaster.setFromCamera(this.ndc, this.camera)
+    const hit = this.raycaster.intersectObjects(h.group.children, true)[0]
+    if (!hit) return null
+    if (hit.object.userData.topBook) { const b = h.books.find(x => x.book.id === hit.object.userData.topBook); return b ? { book: b.book, mesh: b.mesh } : null }
+    if (hit.object.userData.topPlaque) return { plaque: true }
+    return null
   }
 
   // ---- Livres ----------------------------------------------------------------------------------
@@ -882,6 +1049,8 @@ export class BookcaseScene {
       }
       if (press.moved) return
       if (press.overview) { this._zoomAt(e); return }
+      const tp = this._pickHonor(e)
+      if (tp) { if (tp.book) this.cb.onOpen?.(tp.book, { getBoundingClientRect: () => this.screenRect({ mesh: tp.mesh }) }); else this.cb.onTopPlaque?.(); return }
       const pl = this._pickPlaque(e)
       if (pl != null) { this.cb.onPlaque?.(pl); return }
       const hit = this._pick(e)
@@ -1189,6 +1358,7 @@ export class BookcaseScene {
       }
     }
 
+    if (this.honor && this._stepHonor(dt)) moving = true
     this.renderer.render(this.scene, this.camera)
     if (this._adapt(dt)) moving = true     // qualité réduite : on redessine aussitôt (sinon le mur resterait vide)
     this._emitOverlay()
@@ -1244,6 +1414,7 @@ export class BookcaseScene {
   }
 
   dispose() {
+    this._disposeHonor()
     this.disposed = true
     clearTimeout(this.rebuildTimer)
     clearTimeout(this.spotTimer)

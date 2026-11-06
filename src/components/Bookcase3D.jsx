@@ -67,7 +67,7 @@ function autoLabel(row, n, sort) {
  */
 export default function Bookcase3D({
   books, allBooks, sort, viewKey, manual, canEdit, shelves, commitShelves, newShelfSignal,
-  onOpen, locked, focusId, onFocused, emptyText, apiRef, aside, onShelfClick,
+  onOpen, locked, focusId, onFocused, emptyText, apiRef, aside, onShelfClick, topBooks, onTopPlaque,
 }) {
   const caseRef = useRef(null)
   const sceneRef = useRef(null)
@@ -149,7 +149,7 @@ export default function Bookcase3D({
 
   // ---- Scène 3D -------------------------------------------------------------------------------
   const dataRef = useRef(null)
-  dataRef.current = { displayRows, eff, manual, canEdit, onOpen, onShelfClick }
+  dataRef.current = { displayRows, eff, manual, canEdit, onOpen, onShelfClick, onTopPlaque }
   const commitRef = useRef(commitShelves)
   commitRef.current = commitShelves
   const pendingNew = useRef(null)
@@ -197,6 +197,8 @@ export default function Bookcase3D({
         const el = thumbRef.current
         if (el) { el.style.top = `${(v.top * 100).toFixed(2)}%`; el.style.height = `${Math.max(4, (v.bottom - v.top) * 100).toFixed(2)}%` }
       },
+      // la plaque de l'étagère d'honneur ouvre « Ranger mon top »
+      onTopPlaque: () => dataRef.current.onTopPlaque?.(),
       // la plaque d'une étagère ouvre ses réglages
       onPlaque: r => {
         const meta = dataRef.current.displayRows[r]
@@ -208,6 +210,9 @@ export default function Bookcase3D({
     return () => { scene.dispose(); sceneRef.current = null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // notre top 5, de face sur l'étagère d'honneur en haut du meuble
+  useEffect(() => { sceneRef.current?.setTop(topBooks || []) }, [topBooks])
 
   // tous les rayons sans le livre déplacé (pour viser l'emplacement)
   dataRef.current.rowsWithout = id => buildRows({ manual: true, shelves: previewDrag(eff, id, null), autoBooks: [], byId, visible, canEdit: true, perRow: shelfRow, minRows: L.rows })

@@ -191,3 +191,12 @@ alter table user_games add column if not exists platform text;
 alter table user_games add column if not exists status text default 'a_jouer';
 create unique index if not exists user_games_igdb on user_games(user_id, igdb_id);
 alter table user_wallet alter column balance drop not null;
+
+-- Notre top 5 de livres (l'étagère d'honneur, en haut de la bibliothèque)
+create table if not exists user_book_top (
+  user_id   uuid primary key references auth.users(id) on delete cascade,
+  book_ids  text[] not null default '{}'
+);
+alter table user_book_top enable row level security;
+drop policy if exists "Son top" on user_book_top;
+create policy "Son top" on user_book_top for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

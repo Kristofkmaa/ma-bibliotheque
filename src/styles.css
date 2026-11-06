@@ -3560,3 +3560,41 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
   .pd-icon { width: 80px; }
   .pd-icon-tile { width: 50px; height: 50px; }
 }
+
+/* Mon top 5 de livres : dans la fiche, et le panneau « Ranger mon top » (papier, encre, laiton) */
+.top-row { align-items: center; }
+.top-medal { display: inline-grid; place-items: center; min-width: 46px; height: 26px; padding: 0 8px; border-radius: 13px; font: 700 12px var(--sans); letter-spacing: 0.04em;
+  background: linear-gradient(160deg, #E9D39A, #B8914A); color: #2A1F0E; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(0, 0, 0, 0.2); }
+.top-medal.r1 { background: linear-gradient(160deg, #F6D77A, #C99A2E); }
+.top-medal.r2 { background: linear-gradient(160deg, #E8EAEE, #A9AFBA); }
+.top-medal.r3 { background: linear-gradient(160deg, #E8B48A, #A8683A); color: #fff; }
+.top-add span { opacity: 0.6; margin-left: 2px; }
+.top-full { display: flex; flex-direction: column; gap: 8px; }
+.top-full-q { font-family: var(--serif); font-style: italic; color: var(--muted); font-size: 14px; }
+.top-full-list { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.top-full-list .lbl { display: inline-flex; align-items: center; gap: 8px; text-align: left; }
+.top-full-list .top-medal { min-width: 24px; height: 20px; padding: 0 6px; font-size: 11px; }
+.topb-back { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 16px; background: rgba(20, 16, 10, 0.45); animation: stFade 0.2s ease both; }
+.topb { width: min(560px, 100%); max-height: 88vh; overflow-y: auto; padding: 22px 22px 18px; background: var(--sheet); color: var(--ink); border: 1px solid var(--rule-soft);
+  box-shadow: 0 30px 60px -20px rgba(20, 16, 10, 0.5); animation: pcWin 0.25s ease both; }
+.topb-head { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 4px 12px; margin-bottom: 16px; }
+.topb-head .lbl { color: var(--muted); grid-column: 1; }
+.topb-head h2 { grid-column: 1; font-family: var(--serif); font-weight: 500; font-size: 34px; line-height: 1; }
+.topb-close { grid-column: 2; grid-row: 1 / span 2; align-self: start; justify-self: end; width: auto; }
+.topb-empty, .topb-hint { font-family: var(--serif); font-style: italic; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.topb-hint { margin-top: 12px; font-size: 14px; }
+.topb-list { list-style: none; display: flex; flex-direction: column; border-top: 1px solid var(--rule-soft); }
+.topb-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule-soft); }
+.topb-rank { width: 34px; flex: none; text-align: center; font-family: var(--serif); font-style: italic; font-size: 30px; line-height: 1; color: var(--muted); }
+.topb-row.r1 .topb-rank { color: #B8862A; font-size: 36px; }
+.topb-row.r2 .topb-rank { color: #8E95A1; }
+.topb-row.r3 .topb-rank { color: #A8683A; }
+.topb-book { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; text-align: left; }
+.topb-cover { flex: none; width: 42px; height: 62px; background: var(--paper); box-shadow: 0 4px 10px -4px rgba(20, 16, 10, 0.5); overflow: hidden; }
+.topb-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.topb-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.topb-txt b { font-family: var(--serif); font-weight: 500; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topb-txt em { font-style: normal; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topb-act { display: flex; gap: 4px; flex: none; }
+.topb-act .box { width: 30px; padding: 0; font-size: 13px; }
+.topb-act .box:disabled { opacity: 0.3; }

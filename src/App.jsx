@@ -4,6 +4,8 @@ import { useLibrary } from './hooks/useLibrary'
 import { useShelves } from './hooks/useShelves'
 import { useSeries } from './hooks/useSeries'
 import { useGames } from './hooks/useGames'
+import { useBookTop, TOP_MAX } from './hooks/useBookTop'
+import TopBooksPanel from './components/TopBooksPanel'
 import TvBackdrop from './components/TvBackdrop'
 import { effectiveShelves, placeBook, moveBook } from './lib/shelfOps'
 import { useBasket } from './hooks/useBasket'
@@ -58,6 +60,10 @@ function Library({ user, onSignOut }) {
   const { shelves, commit: commitShelves, storage } = useShelves(user.id)
   const { series, addSeries, updateSeries, removeSeries, renameCategory } = useSeries(user.id)
   const gamesApi = useGames(user.id)
+  // notre top 5 de livres : de face sur l'étagère d'honneur, en haut de la bibliothèque
+  const bookTop = useBookTop(user.id)
+  const [topPanel, setTopPanel] = useState(false)
+  const topBooks = useMemo(() => { const m = new Map(books.map(b => [b.id, b])); return bookTop.ids.map(id => m.get(id)).filter(Boolean) }, [bookTop.ids, books])
   // la télé du salon : allumée pendant toute la visite (salon, bibliothèque, PC…) ; le salon la
   // pose sur son mur quand on le voit, et elle n'a le son que là
   const tvEl = useRef(null)
@@ -285,6 +291,7 @@ function Library({ user, onSignOut }) {
           shelves={shelves} commitShelves={commitShelves} newShelfSignal={newShelfSignal}
           onOpen={openBook} onAdd={openSearch} locked={overlay} apiRef={bookcaseApi}
           onShelfClick={id => setShelvesOpen({ id })}
+          topBooks={topBooks} onTopPlaque={() => setTopPanel(true)}
           aside={basket.items.length > 0 && !mobile ? (
             <BasketTray
               items={basket.items} shelves={effShelves} books={books} api={bookcaseApi} mobile={mobile}
@@ -382,6 +389,7 @@ function Library({ user, onSignOut }) {
             onClosed={onDetailClosed}
             inLibrary={detail.mode === 'add' && isInLibrary(detail.book.googleId)}
             onSave={async updates => { await updateBook(detail.book.id, updates); setDetail(dt => dt && { ...dt, book: { ...dt.book, ...updates } }) }}
+            top={detail.mode === 'edit' ? { rank: topBooks.findIndex(b => b.id === detail.book.id) + 1, list: topBooks, max: TOP_MAX, add: rep => bookTop.add(detail.book.id, rep), remove: () => bookTop.remove(detail.book.id), arrange: () => setTopPanel(true) } : null}
             onRemove={async () => { await removeBook(detail.book.id); closeDetail() }}
             onAdd={async shelfId => {
               const saved = await addBook(detail.book, ['possede'])
@@ -397,6 +405,8 @@ function Library({ user, onSignOut }) {
           </button>
         </>
       )}
+
+      {topPanel && <TopBooksPanel list={topBooks} max={TOP_MAX} onMove={bookTop.move} onRemove={bookTop.remove} onOpen={b => { setTopPanel(false); openBook(b, null) }} onClose={() => setTopPanel(false)} />}
 
       {shelvesOpen && (
         <MyShelves eff={effShelves} commit={commitShelves} onDeleteBooks={removeBooks} initialId={shelvesOpen.id} onClose={() => setShelvesOpen(null)} />

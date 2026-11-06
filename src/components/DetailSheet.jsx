@@ -14,6 +14,43 @@ function insetFrom(rect) {
   return `inset(${Math.max(0, rect.top)}px ${Math.max(0, W - rect.right)}px ${Math.max(0, H - rect.bottom)}px ${Math.max(0, rect.left)}px round 3px)`
 }
 
+/** Mettre le livre dans notre top 5 (s'il est plein : choisir lequel il remplace), ou l'en retirer. */
+function TopControl({ top }) {
+  const [pick, setPick] = useState(false)
+  if (top.rank > 0) {
+    return (
+      <div className="toggle-row top-row">
+        <span className={'top-medal r' + top.rank}>N° {top.rank}</span>
+        <button type="button" className="lbl toggle" onClick={top.arrange}>Ranger mon top</button>
+        <button type="button" className="lbl toggle" onClick={top.remove}>Retirer du top</button>
+      </div>
+    )
+  }
+  if (top.list.length < top.max) {
+    return (
+      <div className="toggle-row top-row">
+        <button type="button" className="lbl toggle top-add" onClick={() => top.add()}>★ Mettre dans mon top <span>· n° {top.list.length + 1}</span></button>
+      </div>
+    )
+  }
+  return (
+    <div className="top-full">
+      {!pick
+        ? <button type="button" className="lbl toggle top-add" onClick={() => setPick(true)}>★ Mettre dans mon top…</button>
+        : <>
+          <p className="top-full-q">Ton top est complet : à la place de quel livre ?</p>
+          <div className="top-full-list">
+            {top.list.map((b, i) => (
+              <button type="button" key={b.id} className="lbl toggle" onClick={() => { top.add(b.id); setPick(false) }}>
+                <span className={'top-medal r' + (i + 1)}>{i + 1}</span> {b.title}
+              </button>
+            ))}
+          </div>
+        </>}
+    </div>
+  )
+}
+
 function Line({ children, className = '' }) {
   return (
     <div className="detail-mask">
@@ -27,7 +64,7 @@ function Line({ children, className = '' }) {
  * l'encre qui s'étale sur la couverture, chaque ligne de texte qui monte de son masque.
  * mode = 'edit' (livre de la bibliothèque) ou 'add' (résultat de recherche).
  */
-export default function DetailSheet({ book, mode, originRect, open, onClosed, onSave, onRemove, onAdd, inLibrary, shelfOptions = [], defaultShelf = null }) {
+export default function DetailSheet({ book, mode, originRect, open, onClosed, onSave, onRemove, onAdd, inLibrary, shelfOptions = [], defaultShelf = null, top = null }) {
   const d = toDisplay(book)
   const [bg, ink] = spineColors(d)
   const sheetRef = useRef(null)
@@ -182,6 +219,12 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
                     </button>
                   </div>
                 </Line>
+                {top && (
+                  <Line>
+                    <div className="detail-field-label">Mon top {top.max}</div>
+                    <TopControl top={top} />
+                  </Line>
+                )}
                 <Line>
                   <div className="detail-field-label">Note</div>
                   <div className="stars" role="radiogroup" aria-label="Note sur cinq">
