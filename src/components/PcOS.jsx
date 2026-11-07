@@ -1256,7 +1256,7 @@ export default function PcOS({ games, addGame, findGame, updateGame, removeGame,
       return { cur: p, past: n.past.slice(0, d), future: [...n.past.slice(d + 1), n.cur, ...n.future] }
     })
   })
-  useLayer(!!trailer, '/jeux/bande-annonce', () => setTrailer(null))
+  useLayer(!!trailer, '/jeux/bande-annonce', () => setTrailer(null), { modal: true })
   useEffect(() => {
     const k = e => {
       if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'SELECT') return

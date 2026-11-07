@@ -76,7 +76,7 @@ export default function MyShelves({ eff, commit, onClose, initialId, onDeleteBoo
   }
   const closeRef = useRef(close)
   closeRef.current = close
-  useLayer(true, '/bibliotheque/etageres', () => closeRef.current())
+  useLayer(true, '/bibliotheque/etageres', () => closeRef.current(), { modal: true })
 
   const add = () => {
     const res = createShelf(eff, 'Nouvelle étagère')

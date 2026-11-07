@@ -1092,7 +1092,7 @@ body.is-dragging .custom-cursor { display: none; }
 @keyframes salonLine { from { transform: translateY(105%); } to { transform: none; } }
 @keyframes salonFade { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 .salon-bottom {
-  position: absolute; left: 0; right: 0; bottom: 0; padding: 0 20px calc(26px + env(safe-area-inset-bottom));
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 0 20px calc(18px + var(--house-h, env(safe-area-inset-bottom)));
   display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: none;
 }
 .salon-go { pointer-events: auto; height: 38px; padding: 0 18px; gap: 10px; background: rgba(244, 242, 237, 0.7); animation: salonFade 0.7s 0.6s both; }
@@ -1876,9 +1876,9 @@ body.immersive .scene { padding: 0 !important; }
   .stv .stv-tabs .tab:disabled { opacity: 0.35; }
   .stv .stv-tabs .tab-shop { color: var(--stv-accent); }
   .stv .stv-tabs .tab-shop-bubble { background: var(--stv-accent); border-color: rgba(245, 239, 227, 1); }
-  .stv.vhs .stv-screen { padding-bottom: 62px; }
+  .stv.vhs .stv-screen { padding-bottom: var(--house-h, 0px); }
   .stv.vhs .vx-nav { display: none; }
-  .stv-player { bottom: 62px; }
+  .stv-player { bottom: var(--house-h, 0px); }
   .vx-zoom { bottom: 74px; }
 }
 @media (min-width: 768px) { .stv-tabs { display: none !important; } }
@@ -2052,7 +2052,7 @@ body.immersive .scene { padding: 0 !important; }
 @media (max-aspect-ratio: 1/1) {
   .sx-top { flex-wrap: wrap; row-gap: 4px; padding: 12px 14px 6px; }
   .sx-tabs { order: 3; width: 100%; }
-  .sx-right .sx-add, .sx-right .sx-close { display: none; }
+  .sx-right .sx-close { display: none; }
   .sx-hero { height: 72vh; min-height: 420px; }
   .sx-hero-shade { background: linear-gradient(0deg, var(--sx-bg) 6%, rgba(13, 12, 14, 0.55) 45%, rgba(13, 12, 14, 0.1) 75%, rgba(13, 12, 14, 0.6) 100%); }
   .sx-hero-text { left: 16px; right: 16px; width: auto; bottom: 50px; text-align: center; }
@@ -2061,7 +2061,7 @@ body.immersive .scene { padding: 0 !important; }
   .sx-dots { left: 50%; right: auto; translate: -50% 0; bottom: 22px; }
   .sx-modal { padding: 0; }
   .sx-sheet { border-radius: 0; min-height: 100%; }
-  .stv.sx .stv-screen { padding-bottom: 62px; }
+  .stv.sx .stv-screen { padding-bottom: var(--house-h, 0px); }
   .stv.sx .stv-tabs { background: rgba(13, 12, 14, 0.96); border-top-color: var(--sx-line); }
   .stv.sx .stv-tabs .tab { color: var(--sx-muted); }
   .stv.sx .stv-tabs .tab.on { color: var(--sx-fg); }
@@ -2389,14 +2389,14 @@ body.immersive .scene { padding: 0 !important; }
 
 /* assis dans le canapé */
 .salon-stand {
-  position: absolute; z-index: 5; left: 50%; translate: -50% 0; bottom: calc(84px + env(safe-area-inset-bottom));
+  position: absolute; z-index: 5; left: 50%; translate: -50% 0; bottom: calc(46px + var(--house-h, env(safe-area-inset-bottom)));
   height: 40px; padding: 0 18px 0 14px; border-radius: 20px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink);
   display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
   box-shadow: 0 10px 22px -12px rgba(20, 16, 10, 0.5); animation: fadeUp 0.45s both;
 }
 .salon-stand svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .salon.cinema .salon-stand { background: #1C1A17; color: #F1ECE3; border-color: rgba(255, 255, 255, 0.15); }
-@media (min-width: 768px) { .salon-stand { bottom: 150px; } }
+@media (min-width: 768px) { .salon-stand { bottom: calc(80px + var(--house-h, 0px)); } }
 
 /* La note du public (TMDB) */
 .sx-pub-badge { display: inline-block; margin-right: 12px; padding: 2px 8px; border-radius: 4px; background: rgba(232, 176, 75, 0.18); color: var(--sx-gold); font-weight: 800; letter-spacing: 0.02em; }
@@ -4043,7 +4043,7 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
 .kitchen.app-open .kt-top { opacity: 0; pointer-events: none; }
 
 /* le dock du bas : les quatre coins de la cuisine */
-.kt-dock { position: absolute; z-index: 3; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+.kt-dock { position: absolute; z-index: 3; left: 50%; bottom: calc(14px + var(--house-h, env(safe-area-inset-bottom))); transform: translateX(-50%);
   display: flex; gap: 6px; padding: 6px; border-radius: 22px; background: rgba(251, 247, 240, 0.9); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 22px 50px -24px rgba(60, 40, 20, 0.7); animation: ktUp 0.45s cubic-bezier(.2,.9,.25,1) both; }
 .kt-dock button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 112px; height: 74px; border-radius: 16px; color: var(--k-ink); transition: background 0.2s, transform 0.12s; }
@@ -4055,7 +4055,7 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
 .kt-dock em.warn { background: #D0732F; }
 .kt-dock button.main { background: linear-gradient(180deg, #C2643F, #A94E31); color: #FFF7EE; box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 10px 20px -12px rgba(150, 60, 30, 0.9); }
 .kt-dock button.main:hover { background: linear-gradient(180deg, #C86B46, #AF5235); }
-.kt-hint { position: absolute; z-index: 2; left: 0; right: 0; bottom: calc(110px + env(safe-area-inset-bottom)); text-align: center; font: italic 15px var(--serif); color: rgba(35, 32, 28, 0.6); pointer-events: none; }
+.kt-hint { position: absolute; z-index: 2; left: 0; right: 0; bottom: calc(102px + var(--house-h, env(safe-area-inset-bottom))); text-align: center; font: italic 15px var(--serif); color: rgba(35, 32, 28, 0.6); pointer-events: none; }
 @keyframes ktUp { from { opacity: 0; transform: translate(-50%, 16px); } }
 @keyframes ktIn { from { opacity: 0; transform: translateX(24px); } }
 @keyframes ktSheet { from { transform: translateY(100%); } }
@@ -4278,11 +4278,11 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
   .kt-title b { font-size: 24px; }
   .kt-back span { display: none; }
   .kt-back { width: 40px; padding: 0; justify-content: center; }
-  .kt-dock { left: 10px; right: 10px; transform: none; bottom: calc(10px + env(safe-area-inset-bottom)); justify-content: space-between; animation-name: kaFade; }
+  .kt-dock { left: 10px; right: 10px; transform: none; bottom: calc(8px + var(--house-h, env(safe-area-inset-bottom))); justify-content: space-between; animation-name: kaFade; }
   .kt-dock button { flex: 1; width: auto; height: 66px; }
   .kt-dock b { font-size: 9.5px; letter-spacing: 0.05em; }
   .kt-dock em { right: 6px; top: 5px; }
-  .kt-hint { bottom: calc(92px + env(safe-area-inset-bottom)); font-size: 14px; padding: 0 20px; }
+  .kt-hint { bottom: calc(84px + var(--house-h, env(safe-area-inset-bottom))); font-size: 14px; padding: 0 20px; }
   .kt-panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 56%; border-radius: 22px 22px 0 0; animation-name: ktSheet; }
   .kt-panel-head { padding: 18px 18px 10px; }
   .kt-panel-head h2 { font-size: 28px; }
@@ -4330,16 +4330,16 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
 .salon.tv-mode .salon-stage.bg, .salon.going .salon-stage.bg, .salon:has(.kitchen.focused) .salon-stage.bg, .salon:has(.kitchen.app-open) .salon-stage.bg { opacity: 0; }
 .salon:has(.kitchen.focused) .room-pick, .salon:has(.kitchen.app-open) .room-pick { display: none; }
 /* le garage et la chambre (pour l'instant) : ce qui arrivera bientôt */
-.room-soon .rs-card { position: absolute; z-index: 3; right: 22px; bottom: calc(26px + env(safe-area-inset-bottom)); width: min(340px, calc(100% - 44px)); padding: 18px 20px; border-radius: 18px;
+.room-soon .rs-card { position: absolute; z-index: 3; right: 22px; bottom: calc(18px + var(--house-h, env(safe-area-inset-bottom))); width: min(340px, calc(100% - 44px)); padding: 18px 20px; border-radius: 18px;
   background: rgba(251, 247, 240, 0.9); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 1px 0 #fff inset, 0 20px 46px -26px rgba(60, 40, 20, 0.7); pointer-events: auto; animation: ktIn 0.45s cubic-bezier(.2,.9,.25,1) both; }
 .room-soon .rs-card ul { list-style: none; margin-top: 10px; }
 .room-soon .rs-card li { position: relative; padding: 7px 0 7px 18px; font: 400 16px/1.35 var(--serif); color: var(--k-ink); border-top: 1px solid var(--k-line); }
 .room-soon .rs-card li:first-child { border-top: 0; }
 .room-soon .rs-card li::before { content: ''; position: absolute; left: 2px; top: 15px; width: 6px; height: 6px; border-radius: 50%; background: var(--k-terra); }
-.room-soon .rs-hint { bottom: calc(30px + env(safe-area-inset-bottom)); }
+.room-soon .rs-hint { bottom: calc(22px + var(--house-h, env(safe-area-inset-bottom))); }
 @media (max-width: 767px) {
   .room-pick span { font-size: 9px; padding: 4px 9px; letter-spacing: 0.1em; }
-  .room-soon .rs-card { left: 12px; right: 12px; width: auto; bottom: calc(12px + env(safe-area-inset-bottom)); padding: 14px 16px; }
+  .room-soon .rs-card { left: 12px; right: 12px; width: auto; bottom: calc(10px + var(--house-h, env(safe-area-inset-bottom))); padding: 14px 16px; }
   .room-soon .rs-card li { font-size: 15px; padding: 5px 0 5px 16px; }
   .room-soon .rs-card li::before { top: 12px; }
   .room-soon .rs-hint { display: none; }
@@ -4612,3 +4612,67 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
 .cl-arrows .nav-back:hover { background: rgba(255, 255, 255, 0.14); }
 .cl-arrows { align-items: center; }
 .pfx-switch .cl-arrows .nav-back { color: #222; background: rgba(0, 0, 0, 0.06); box-shadow: none; }
+
+/* ---- La barre de la maison : la même partout, toujours en bas ------------------------------- */
+body.house-on { --house-h: 74px; }
+.house-bar { position: fixed; z-index: 95; left: 50%; bottom: 14px; translate: -50% 0; display: grid; grid-template-columns: repeat(5, 92px); padding: 5px; border-radius: 22px;
+  background: rgba(251, 248, 242, 0.84); -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 0 0 1px rgba(35, 32, 28, 0.07), 0 18px 40px -22px rgba(40, 30, 20, 0.55);
+  transition: transform 0.45s cubic-bezier(.3, 1.2, .45, 1), opacity 0.3s, background 0.4s; animation: houseIn 0.55s 0.2s cubic-bezier(.3, 1.2, .45, 1) both; }
+@keyframes houseIn { from { opacity: 0; transform: translateY(20px); } }
+.house-bar.hidden { transform: translateY(140%); opacity: 0; pointer-events: none; }
+.house-thumb { position: absolute; top: 5px; bottom: 5px; left: 5px; width: 92px; border-radius: 17px; background: #23201C;
+  box-shadow: 0 8px 18px -10px rgba(20, 16, 10, 0.8); transform: translateX(calc(var(--i, 0) * 100%)); transition: transform 0.45s cubic-bezier(.3, 1.15, .4, 1), opacity 0.2s; }
+.house-thumb[data-none] { opacity: 0; }
+.house-item { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 7px; height: 44px; border: 0; background: none; cursor: pointer;
+  font: 600 13px var(--sans); color: #6F675C; -webkit-tap-highlight-color: transparent; transition: color 0.3s; }
+.house-item svg { width: 19px; height: 19px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.3s cubic-bezier(.3, 1.6, .5, 1); }
+.house-item:hover { color: #23201C; }
+.house-item:active svg { transform: scale(0.86); }
+.house-item.on { color: #FBF7F0; }
+.house-item:focus-visible { outline: 2px solid var(--cobalt, #1F3FB0); outline-offset: -2px; border-radius: 17px; }
+/* dans les pièces sombres (la télé, le PC), et quand les rideaux sont fermés */
+.house-bar.dark, :root[data-theme="dark"] .house-bar { background: rgba(24, 23, 28, 0.8); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 0 0 1px rgba(255, 255, 255, 0.08), 0 18px 40px -20px rgba(0, 0, 0, 0.8); }
+.house-bar.dark .house-thumb, :root[data-theme="dark"] .house-thumb { background: #F1ECE3; }
+.house-bar.dark .house-item, :root[data-theme="dark"] .house-item { color: rgba(241, 236, 227, 0.62); }
+.house-bar.dark .house-item:hover, :root[data-theme="dark"] .house-item:hover { color: #F1ECE3; }
+.house-bar.dark .house-item.on, :root[data-theme="dark"] .house-item.on { color: #17161A; }
+
+/* les outils de la bibliothèque (téléphone) : une pilule au-dessus de la barre */
+.lib-dock { display: none; }
+
+@media (max-width: 767px) {
+  body.house-on { --house-h: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  .house-bar { left: 0; right: 0; bottom: 0; translate: none; grid-template-columns: repeat(5, minmax(0, 1fr)); height: calc(64px + env(safe-area-inset-bottom, 0px));
+    padding: 0 6px env(safe-area-inset-bottom, 0px); border-radius: 0; background: var(--sheet); border-top: 1px solid var(--rule-soft);
+    box-shadow: 0 -10px 30px -22px rgba(20, 16, 10, 0.45); -webkit-backdrop-filter: none; backdrop-filter: none; animation-name: kaFade; }
+  .house-thumb { display: none; }
+  .house-item { flex-direction: column; gap: 4px; height: 64px; font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .house-item svg { width: 24px; height: 24px; stroke-width: 1.6; }
+  .house-item.on { color: var(--cobalt); }
+  .house-item.on::after { content: ''; position: absolute; top: 0; left: 30%; right: 30%; height: 2px; border-radius: 0 0 2px 2px; background: currentColor; }
+  .house-bar.dark, :root[data-theme="dark"] .house-bar { background: #141317; border-top-color: rgba(255, 255, 255, 0.08); }
+  .house-bar.dark .house-item, :root[data-theme="dark"] .house-item { color: rgba(241, 236, 227, 0.55); }
+  .house-bar.dark .house-item.on, :root[data-theme="dark"] .house-item.on { color: #E8B04B; }
+
+  .lib-dock { display: flex; position: fixed; z-index: 5; left: 50%; translate: -50% 0; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); gap: 2px; padding: 4px; border-radius: 18px;
+    background: var(--sheet); box-shadow: 0 0 0 1px var(--rule-soft), 0 10px 24px -14px rgba(20, 16, 10, 0.55); animation: kaFade 0.4s both; }
+  .lib-dock button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 62px; height: 46px; border-radius: 14px;
+    font: 600 9px var(--sans); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink); -webkit-tap-highlight-color: transparent; }
+  .lib-dock button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .lib-dock button.on { background: rgba(31, 63, 176, 0.1); color: var(--cobalt); }
+  .lib-dock button.main { background: var(--cobalt); color: #fff; }
+  .lib-dock button:active { transform: scale(0.95); }
+  .lib-dock .tab-ico { position: relative; display: inline-flex; }
+  body.immersive .lib-dock { display: none !important; }
+  /* la télé et le PC laissent la place à la barre */
+  .house-on .pcos.cl { --tb: var(--house-h); }
+  .house-on .pcos .pd-task { visibility: hidden; }
+}
+/* téléphone, dans la télé : le retour, le nom et « + » tiennent sur une ligne (les rayons dessous) */
+@media (max-aspect-ratio: 1/1) {
+  .sx-top .nav-back { height: 34px; padding: 0 12px 0 8px; font-size: 13px; }
+  .sx-top .sx-logo span { display: none; }
+  .sx-top .sx-add { width: 34px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
+  .sx-top .sx-add span { font-size: 20px; }
+}

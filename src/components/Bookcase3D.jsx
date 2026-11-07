@@ -380,7 +380,7 @@ export default function Bookcase3D({
     if (!free) return
     return () => { document.body.classList.remove('immersive') }
   }, [free])
-  useLayer(free, '/bibliotheque/tout-voir', () => setFree(false))
+  useLayer(free, '/bibliotheque/tout-voir', () => setFree(false), { modal: true })
   useEffect(() => { if (!size.mobile) setFree(false) }, [size.mobile])
 
   // ---- Rendu --------------------------------------------------------------------------------

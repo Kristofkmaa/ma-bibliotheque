@@ -106,7 +106,7 @@ export default function ReadingTablet({ books, reading, updateBook, from, start,
     if (!el?.animate) { onClose(); return }
     el.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.96) translateY(14px)' }], { duration: 240, easing: 'ease-in', fill: 'forwards' }).finished.then(onClose, onClose)
   }
-  useLayer(true, '/bibliotheque/lectures/' + SEC_PATH[sec], close)
+  useLayer(true, '/bibliotheque/lectures/' + SEC_PATH[sec], close, { modal: true })
   useLayer(!!openId, '/bibliotheque/lectures/livre/' + openId, () => setOpenId(null))
 
   const counts = useMemo(() => Object.fromEntries(SECTIONS.filter(s => s.test).map(s => [s.id, books.filter(s.test).length])), [books])

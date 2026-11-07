@@ -77,7 +77,7 @@ export default function Kitchen({ userId, scene, start, onStarted, onClose }) {
   }
   // la navigation : la cuisine, puis ce qu'on regarde dedans (le frigo, la tablette…)
   useLayer(true, '/cuisine', leave)
-  useLayer(!!view, '/cuisine/' + (view === 'tablette' && app ? TAB_PATH[appTab || app.tab] : VIEW_PATH[view] || ''), app ? closeApp : back)
+  useLayer(!!view, '/cuisine/' + (view === 'tablette' && app ? TAB_PATH[appTab || app.tab] : VIEW_PATH[view] || ''), app ? closeApp : back, { modal: true })
   // arrivée par une adresse de la cuisine
   useEffect(() => {
     if (!start) return

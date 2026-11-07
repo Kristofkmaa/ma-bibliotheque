@@ -29,6 +29,7 @@ import { useReading } from './hooks/useReading'
 import { SHOWS } from './lib/reading'
 import { useLayer, peekStart, takeStart } from './lib/nav'
 import BackButton from './components/BackButton'
+import HouseBar from './components/HouseBar'
 
 const Scanner = lazy(() => import('./components/Scanner'))
 // La bibliothèque en vraie 3D (Three.js) est chargée à part ; sans WebGL, étagère dessinée à plat
@@ -242,9 +243,10 @@ function Library({ user, onSignOut }) {
   const base = salon ? '' : '/bibliotheque'
   useLayer(HAS_WEBGL && !salon, '/bibliotheque', goSalon)
   useLayer(findOpen, '/bibliotheque/chercher', () => setFindOpen(false))
-  useLayer(searchOpen, base + '/ajouter', () => setSearchOpen(false))
-  useLayer(!!detail && detailOpen, detail?.mode === 'add' ? base + '/ajouter/livre' : `${base}/livre/${detail?.book?.id || ''}`, () => setDetailOpen(false))
-  useLayer(scanner, base + '/ajouter/scanner', () => setScanner(false))
+  const M = { modal: true }     // (un panneau qui couvre l'écran : la barre de la maison s'efface)
+  useLayer(searchOpen, base + '/ajouter', () => setSearchOpen(false), M)
+  useLayer(!!detail && detailOpen, detail?.mode === 'add' ? base + '/ajouter/livre' : `${base}/livre/${detail?.book?.id || ''}`, () => setDetailOpen(false), M)
+  useLayer(scanner, base + '/ajouter/scanner', () => setScanner(false), M)
   // arrivée sur une adresse de la bibliothèque : on rouvre ce qu'elle montre
   const startBook = useRef(null)
   useEffect(() => {
@@ -377,28 +379,21 @@ function Library({ user, onSignOut }) {
             </div>
           )}
           {findOpen && <div className="find-backdrop" onPointerDown={() => setFindOpen(false)} />}
-          <nav className="tabbar" aria-label="Menu">
-            {HAS_WEBGL && (
-              <button type="button" className="tab" onClick={() => { setFindOpen(false); setGuide(false); goSalon() }}>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2L12 4l8.5 7.2M6 9.8V20h12V9.8M10 20v-5.5h4V20" /></svg>
-                <span>Salon</span>
-              </button>
-            )}
-            <button type="button" className={'tab' + (findOpen ? ' on' : '')} onClick={() => setFindOpen(o => !o)}>
+          {/* les outils de la bibliothèque, au-dessus de la barre de la maison */}
+          <nav className="lib-dock" aria-label="La bibliothèque">
+            <button type="button" className={findOpen ? 'on' : ''} onClick={() => setFindOpen(o => !o)}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" /><path d="M15 15l5 5" /></svg>
               <span>Chercher</span>
             </button>
-            <button type="button" className="tab tab-shop" onClick={() => { setFindOpen(false); openSearch() }} aria-label="Boutique : ajouter des livres">
-              <span className="tab-shop-bubble">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2L5 8zM9 8V6.5a3 3 0 016 0V8" /><path d="M12 11.5v5M9.5 14h5" /></svg>
-              </span>
-              <span>Boutique</span>
+            <button type="button" className="main" onClick={() => { setFindOpen(false); openSearch() }} aria-label="Ajouter des livres">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              <span>Ajouter</span>
             </button>
-            <button type="button" className={'tab' + (shelvesOpen ? ' on' : '')} onClick={() => { setFindOpen(false); setShelvesOpen({ id: null }) }}>
+            <button type="button" className={shelvesOpen ? 'on' : ''} onClick={() => { setFindOpen(false); setShelvesOpen({ id: null }) }}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16M20 4v16M4 9h16M4 14.5h16M4 20h16M7 9V6M9 9V5.5M12 14.5v-3.5M14.5 14.5v-3" /></svg>
               <span>Étagères</span>
             </button>
-            <button type="button" className={'tab' + (guide ? ' on' : '')} onClick={() => { setFindOpen(false); if (basket.items.length) setGuide(g => !g); else openSearch() }}>
+            <button type="button" className={guide ? 'on' : ''} onClick={() => { setFindOpen(false); if (basket.items.length) setGuide(g => !g); else openSearch() }}>
               <span className="tab-ico">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5h16M5.5 19.5v-4h13v4M6.5 15.5v-4h11v4M8 11.5V8h8v3.5M12 4v4" /></svg>
                 {basket.items.length > 0 && <span className="tab-badge" key={basket.items.length}>{basket.items.length}</span>}
@@ -490,6 +485,8 @@ function Library({ user, onSignOut }) {
       )}
       </div>
 
+      {/* la barre de la maison : la même partout, toujours en bas */}
+      {HAS_WEBGL && <HouseBar />}
       {scanner && <Suspense fallback={null}><Scanner onBookFound={onScanFound} onClose={() => setScanner(false)} /></Suspense>}
     </div>
   )

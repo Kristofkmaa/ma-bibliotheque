@@ -12,7 +12,7 @@ import { resolveShowcase } from '../lib/showcase'
 import PcOS from './PcOS'
 import Kitchen from './Kitchen'
 import { applyTheme } from '../lib/theme'
-import { useLayer, takeStart } from '../lib/nav'
+import { useLayer, takeStart, useNav, takePending } from '../lib/nav'
 
 const store = {
   get: k => { try { return localStorage.getItem(k) } catch { return null } },
@@ -244,10 +244,32 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   useEffect(() => { setWall(!tv && !leaving && !away) }, [tv, leaving, away]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { setWall(false); tvVideo.current?.setAttribute('data-off', '') }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // la barre de la maison : aller dans un module depuis le salon (une fois tout refermé)
+  const nav = useNav()
+  const [navTick, setNavTick] = useState(0)
+  useEffect(() => {
+    const p = nav.pending
+    const s = sceneRef.current
+    if (!p || !s) return
+    // la caméra bouge encore (on sort de la télé, du PC…) : on réessaie un peu plus tard
+    if (turning || going || tv || s.tvZoom || s.fly) { const t = setTimeout(() => setNavTick(n => n + 1), 200); return () => clearTimeout(t) }
+    if (ROOMS.includes(p)) {
+      if (nav.depth > (room === 'salon' ? 0 : 1)) return
+      takePending()
+      if (p !== room) goRoom(p)
+      return
+    }
+    if (room !== 'salon' || nav.depth > 0) return
+    takePending()
+    if (p === 'bibliotheque') go()
+    else if (p === 'films') s.tap('tv')
+    else if (p === 'jeux') s.tap('pc')
+  }, [nav.pending, nav.depth, navTick, turning, going, tv, room]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // les zooms ont leur adresse ; le retour referme le module (avec son animation) ou ressort du zoom
-  useLayer(tv && !!zoomKind, ZOOM_PATH[zoomKind] || '/films', () => (zoomClose.current ? zoomClose.current() : sceneRef.current?.unzoomTv()))
+  useLayer(tv && !!zoomKind, ZOOM_PATH[zoomKind] || '/films', () => (zoomClose.current ? zoomClose.current() : sceneRef.current?.unzoomTv()), { modal: zoomKind === 'cab' })
   const workClose = useRef(null)
-  useLayer(!!openWork, '/vitrine/films', () => (workClose.current ? workClose.current() : setOpenWork(null)))
+  useLayer(!!openWork, '/vitrine/films', () => (workClose.current ? workClose.current() : setOpenWork(null)), { modal: true })
   useEffect(() => { if (!inside) setOpenWork(null) }, [inside])
 
   // les livres, dans l'ordre des étagères ; l'habillage de la première étagère
@@ -363,47 +385,13 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
         <div className="salon-chip lbl" style={{ transform: `translate(${hover.x + 14}px, ${hover.y + 16}px)` }}>{hover.label}</div>
       )}
 
-      {mobile ? (
-        /* téléphone : le menu du bas propose les deux « pièces » du salon */
-        <nav className={'tabbar salon-tabs' + (going || tv ? ' away' : '')} ref={bottomRef} aria-label="Où aller">
-          <p className="salon-tabs-hint">{seated ? 'Glisse pour tourner la tête' : 'Pince pour t’asseoir dans le canapé'}</p>
-          <button type="button" className="tab" onClick={go} disabled={going}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16M20 4v16M4 9h16M4 14.5h16M4 20h16M7 9V6M9 9V5.5M12 14.5v-3.5M14.5 14.5v-3" /></svg>
-            <span>Ma bibliothèque</span>
-          </button>
-          <button type="button" className="tab" onClick={() => sceneRef.current?.tap('tv')} disabled={going}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="1.5" /><path d="M8.5 20h7M10.5 9l4 2-4 2z" /></svg>
-            <span>Films & séries</span>
-          </button>
-          <button type="button" className="tab" onClick={() => sceneRef.current?.tap('pc')} disabled={going}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.5h9a4 4 0 0 1 3.9 4.8l-.8 3.6a2.2 2.2 0 0 1-3.7 1.1L13.8 16h-3.6l-2.1 2a2.2 2.2 0 0 1-3.7-1.1l-.8-3.6A4 4 0 0 1 7.5 8.5zM8 11.2v3M6.5 12.7h3" /><circle cx="15.8" cy="12" r=".6" /><circle cx="17.3" cy="13.8" r=".6" /></svg>
-            <span>Jeux</span>
-          </button>
-          <button type="button" className="tab" onClick={() => goRoom('cuisine')} disabled={going || turning}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v7.5a2 2 0 0 0 2 2M11 3v7.5a2 2 0 0 1-2 2V21M9 3v6M16.5 21V3c-2 1.4-3 4-3 7.5h3" /></svg>
-            <span>Cuisine</span>
-          </button>
-        </nav>
-      ) : (
-        <div className="salon-bottom" ref={bottomRef}>
-          <div className="salon-go-row">
-            <button type="button" className="lbl box cobalt salon-go" onClick={go} disabled={going}>
-              Entrer dans ma bibliothèque <span aria-hidden="true">→</span>
-            </button>
-            <button type="button" className="lbl box salon-go" onClick={() => sceneRef.current?.zoomTv()} disabled={going}>
-              Films & séries <span aria-hidden="true">▶</span>
-            </button>
-            <button type="button" className="lbl box salon-go" onClick={() => sceneRef.current?.tap('pc')} disabled={going}>
-              Le PC · Jeux <span aria-hidden="true">◆</span>
-            </button>
-            <button type="button" className="lbl box salon-go" onClick={() => goRoom('cuisine')} disabled={going || turning}>
-              La cuisine <span aria-hidden="true">✦</span>
-            </button>
-          </div>
-          <p className="salon-hint">{seated ? 'Fais glisser pour tourner la tête · molette en arrière pour te lever' : 'Fais glisser pour regarder autour · molette en avant pour t’asseoir dans le canapé'}</p>
-          {onSignOut && <button type="button" className="lbl salon-out" onClick={onSignOut}>Déconnexion</button>}
-        </div>
-      )}
+      {/* le bas du salon : l'astuce du moment (la barre de la maison est juste dessous) */}
+      <div className="salon-bottom" ref={bottomRef}>
+        <p className="salon-hint">{seated
+          ? (mobile ? 'Glisse pour tourner la tête' : 'Fais glisser pour tourner la tête · molette en arrière pour te lever')
+          : (mobile ? 'Pince pour t’asseoir dans le canapé' : 'Fais glisser pour regarder autour · molette en avant pour t’asseoir dans le canapé')}</p>
+        {onSignOut && !mobile && <button type="button" className="lbl salon-out" onClick={onSignOut}>Déconnexion</button>}
+      </div>
     </div>
   )
 }

@@ -14,7 +14,7 @@ function Cover({ book, src }) {
  * on les retire. On en ajoute depuis la fiche d'un livre (« Mettre dans mon top »).
  */
 export default function TopBooksPanel({ list, max, onMove, onRemove, onOpen, onClose }) {
-  useLayer(true, '/bibliotheque/top', onClose)
+  useLayer(true, '/bibliotheque/top', onClose, { modal: true })
   return (
     <div className="topb-back" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="topb" role="dialog" aria-label="Mon top">

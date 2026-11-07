@@ -702,7 +702,7 @@ export default function SeriesTV({ series, initialId = null, fromRect = null, on
   useEffect(() => { if (!closeRef) return; closeRef.current = close; return () => { if (closeRef.current === close) closeRef.current = null } }, [closeRef, close])
   useLayer(view === 'search' && series.length > 0, base + '/ajouter', () => setView('home'))
   useLayer(!!cur, `${base}/titre/${cur?.id || ''}`, () => setId(null))
-  useLayer(!!playing, `${base}/titre/${playing?.id || ''}/video`, () => setPlaying(null))
+  useLayer(!!playing, `${base}/titre/${playing?.id || ''}/video`, () => setPlaying(null), { modal: true })
 
   const goKind = k => { setKind(k); setId(null); setView('home'); homeRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' }) }
   const added = s => { const row = onAdd(s); setView('home'); if (row) setId(row.id) }
@@ -801,29 +801,6 @@ export default function SeriesTV({ series, initialId = null, fromRect = null, on
               onUpdate={onUpdate} onRemove={() => { onRemove(cur.id); setId(null) }} />
           )}
 
-          {/* téléphone : le menu du bas de la projection */}
-          <nav className="tabbar stv-tabs" aria-label="Menu">
-            <button type="button" className="tab" onClick={close}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2L12 4l8.5 7.2M6 9.8V20h12V9.8M10 20v-5.5h4V20" /></svg>
-              <span>Salon</span>
-            </button>
-            <button type="button" className={'tab' + (view === 'home' && kind === 'all' ? ' on' : '')} onClick={() => goKind('all')}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="11" rx="1.5" /><path d="M7 19h10" /></svg>
-              <span>Notre liste</span>
-            </button>
-            <button type="button" className="tab tab-shop" onClick={() => setView('search')} aria-label="Ajouter un film ou une série">
-              <span className="tab-shop-bubble"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></span>
-              <span>Ajouter</span>
-            </button>
-            <button type="button" className={'tab' + (view === 'home' && kind === 'tv' ? ' on' : '')} onClick={() => goKind('tv')}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="11" rx="1.5" /><path d="M9 3.5l3 2.5 3-2.5M8 20h8" /></svg>
-              <span>Séries</span>
-            </button>
-            <button type="button" className={'tab' + (view === 'home' && kind === 'movie' ? ' on' : '')} onClick={() => goKind('movie')}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1.5" /><path d="M8 4v16M16 4v16M4 8h4M4 12h4M4 16h4M16 8h4M16 12h4M16 16h4" /></svg>
-              <span>Films</span>
-            </button>
-          </nav>
           {playing && vidsOf(playing).length > 0 && <Player show={playing} videos={vidsOf(playing)} onDone={stopVideo} />}
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 
 /**
  * La navigation du site : chaque endroit ouvert (la bibliothèque, la cuisine, la télé, un panneau,
@@ -12,6 +12,9 @@ import { useEffect, useRef } from 'react'
  *   useLayer(ouvert, '/adresse', fermer)
  *   useBack(profondeur, i => '/adresse', revenirA)  (plusieurs pas : le PC, ses pages…)
  * et l'historique suit tout seul : on ne touche jamais à `history` ailleurs.
+ *
+ * La barre de la maison s'en sert aussi : useNav() dit dans quel module on est (et si un panneau
+ * est ouvert par-dessus), goSection('cuisine') y emmène d'où qu'on soit.
  */
 
 const SEARCH = typeof location !== 'undefined' ? location.search : ''
@@ -19,6 +22,12 @@ const stack = []          // les entrées ouvertes, de la plus ancienne à celle
 const hist = []           // les entrées que l'historique du navigateur contient (au-dessus de l'accueil)
 let busy = false, again = false
 let pendingGo = null
+
+// ---- Qui écoute (la barre de la maison) ------------------------------------------------------
+const listeners = new Set()
+let version = 0
+const notify = () => { version++; listeners.forEach(f => f()) }
+const subscribe = f => { listeners.add(f); return () => listeners.delete(f) }
 
 // ---- L'adresse d'arrivée : on la garde, puis on repart de l'accueil (les endroits se rouvrent un par un)
 const clean = p => '/' + String(p || '/').split('/').filter(Boolean).map(decodeURIComponent).join('/')
@@ -69,7 +78,7 @@ async function run() {
       if (shownPath() !== want) history.replaceState({ maru: hist.length }, '', want + SEARCH)
       if (!again) break
     }
-  } finally { busy = false }
+  } finally { busy = false; notify() }
 }
 
 if (typeof window !== 'undefined') {
@@ -122,11 +131,12 @@ export const canGoBack = () => stack.length > 0
  * Plusieurs pas d'un même composant : `depth` entrées, l'entrée i à l'adresse pathOf(i) ;
  * backTo(i) : revenir à la profondeur i (appelé par le retour du navigateur, Échap…).
  */
-export function useBack(depth, pathOf, backTo) {
+export function useBack(depth, pathOf, backTo, opts = {}) {
   const own = useRef(null)
   if (!own.current) own.current = { entries: [], wait: null, waitUntil: 0 }
   const o = own.current
   o.backTo = backTo
+  o.modal = !!opts.modal
   o.depth = depth
   o.pathOf = pathOf
   useEffect(() => { sync(o) })
@@ -140,7 +150,7 @@ export function useBack(depth, pathOf, backTo) {
     o.dead = true
     for (const x of o.entries) { const k = stack.indexOf(x); if (k >= 0) stack.splice(k, 1) }
     o.entries = []
-    schedule()
+    schedule(); notify()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 }
 function sync(o) {
@@ -153,10 +163,43 @@ function sync(o) {
   while (o.entries.length > want) { const x = o.entries.pop(); const k = stack.indexOf(x); if (k >= 0) stack.splice(k, 1); changed = true }
   while (o.entries.length < want) { const x = { owner: o, i: o.entries.length, path: '/' }; o.entries.push(x); stack.push(x); changed = true }
   o.entries.forEach((x, i) => { const p = clean(o.pathOf(i)); if (x.path !== p) { x.path = p; changed = true } })
-  if (changed) schedule()
+  if (changed) { schedule(); notify() }
 }
 
-/** Un endroit ouvert (un pas) : useLayer(ouvert, '/adresse', fermer). */
-export function useLayer(open, path, close) {
-  useBack(open ? 1 : 0, () => path, () => close())
+/**
+ * Un endroit ouvert (un pas) : useLayer(ouvert, '/adresse', fermer).
+ * { modal: true } : un panneau qui couvre l'écran (une fiche, la recherche…) : la barre de la
+ * maison s'efface pendant qu'il est ouvert.
+ */
+export function useLayer(open, path, close, opts) {
+  useBack(open ? 1 : 0, () => path, () => close(), opts)
+}
+
+// ---- La barre de la maison : où l'on est, et y aller d'un toucher ----------------------------
+export const SECTIONS = ['salon', 'bibliotheque', 'films', 'jeux', 'cuisine']
+const ROOMS = ['cuisine', 'garage', 'chambre']
+const SECTION_OF = { bibliotheque: 'bibliotheque', films: 'films', jeux: 'jeux', cuisine: 'cuisine', garage: 'garage', chambre: 'chambre' }
+/** Le module où l'on est : celui de l'endroit le plus bas ouvert ('salon' sans rien d'ouvert). */
+const currentSection = () => (stack.length ? SECTION_OF[stack[0].path.split('/')[1]] || 'salon' : 'salon')
+let pending = null     // le module où l'on va (on referme d'abord ce qui est ouvert)
+
+/**
+ * Aller dans un module d'où qu'on soit : on referme ce qui est ouvert (en revenant au salon, ou
+ * seulement à la pièce si l'on va d'une pièce à l'autre), puis le salon nous y emmène.
+ * Le module où l'on est déjà : on revient à son accueil.
+ */
+export function goSection(id) {
+  const cur = currentSection()
+  const keepRoot = (cur === id && id !== 'salon') || (ROOMS.includes(cur) && ROOMS.includes(id)) ? 1 : 0
+  if (cur !== id && id !== 'salon') { pending = id; notify() }
+  const n = hist.length - keepRoot
+  if (n > 0) history.go(-n)
+}
+/** Le salon prend le module demandé (une seule fois). */
+export function takePending() { const p = pending; pending = null; notify(); return p }
+
+/** Pour la barre de la maison (et le salon) : { section, pending, modal, depth }. */
+export function useNav() {
+  useSyncExternalStore(subscribe, () => version)
+  return { section: currentSection(), pending, modal: stack.some(x => x.owner.modal), depth: stack.length }
 }
