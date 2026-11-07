@@ -79,6 +79,8 @@ export default function LibraryBook({ api, from, start, mobile, incoming, onInco
   const st0 = start || []
   const [chap, setChap] = useState(() => (st0[1] === 'collection' && st0[2] ? 'col:' + st0[2] : (mobile && st0[1] === 'ajouter') ? 'lis' : CHAP_OF[st0[1]] || 'lis'))
   const [addOpen, setAddOpen] = useState(() => mobile && st0[1] === 'ajouter')   // téléphone : la page « Ajouter »
+  // téléphone : l'accueil (toutes les listes en tuiles), ou une liste ouverte
+  const [listOpen, setListOpen] = useState(() => mobile && !!st0[1] && !['livre', 'ajouter'].includes(st0[1]))
   const [openId, setOpenId] = useState(null)       // la fiche d'un de nos livres
   const [addItem, setAddItem] = useState(null)     // la fiche d'un livre trouvé (à ajouter)
   const wantId = useRef(st0[1] === 'livre' ? st0[2] : null)
@@ -121,12 +123,17 @@ export default function LibraryBook({ api, from, start, mobile, incoming, onInco
     open.finished.then(() => { fly.cancel(); open.cancel(); setPhase('open') }, () => {})
     return () => { fly.cancel(); open.cancel() }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const closing = useRef(false)
   const close = () => {
-    if (phase === 'closing') return
+    if (closing.current) return
+    closing.current = true
     setPhase('closing')
+    // (on ferme à coup sûr, même si l'animation ne va pas au bout)
+    let done = false
+    const finish = () => { if (!done) { done = true; onClose() } }
     const book = bookRef.current, cover = coverRef.current, root = rootRef.current
-    if (mobile && root?.animate) { root.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(26px)' }], { duration: 260, easing: 'ease-in', fill: 'both' }).finished.then(onClose, onClose); return }
-    if (!book?.animate) { onClose(); return }
+    if (mobile && root?.animate) { root.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(26px)' }], { duration: 260, easing: 'ease-in', fill: 'both' }).finished.then(finish, finish); setTimeout(finish, 420); return }
+    if (!book?.animate) { finish(); return }
     const b = book.getBoundingClientRect()
     const half = mobile ? 0 : b.width / 4
     const r = from && from.w > 0 ? from : { x: innerWidth / 2 - 40, y: innerHeight * 0.4, w: 80, h: 120 }
@@ -138,7 +145,8 @@ export default function LibraryBook({ api, from, start, mobile, incoming, onInco
       { transform: `translate(${-half}px, 0px) scale(1)`, offset: 0.45 },
       { transform: `translate(${dx - half}px, ${dy}px) scale(${s}) rotate(-6deg)`, offset: 1 },
     ], { duration: 980, easing: 'cubic-bezier(.6, 0, .4, 1)', fill: 'both' })
-    root.animate([{ opacity: 1 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: 980, fill: 'both' }).finished.then(onClose, onClose)
+    root.animate([{ opacity: 1 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: 980, fill: 'both' }).finished.then(finish, finish)
+    setTimeout(finish, 1300)
   }
 
   // ---- Tourner les pages
@@ -146,12 +154,13 @@ export default function LibraryBook({ api, from, start, mobile, incoming, onInco
   const flip = fn => { fn(); setTurn(t => t + 1) }
   const goChap = c => {
     if (mobile && c === 'ajouter') { flip(() => setAddOpen(true)); return }
-    flip(() => { setChap(c); setOpenId(null); setAddItem(null) })
+    flip(() => { setChap(c); setOpenId(null); setAddItem(null); if (mobile) setListOpen(true) })
   }
   const openBook = id => flip(() => { setOpenId(id); setAddItem(null) })
 
   // ---- La navigation (retour du navigateur, du téléphone, Échap, bouton)
-  useLayer(true, '/bibliotheque/' + chapPath(chap), close)
+  useLayer(true, '/bibliotheque' + (mobile ? '' : '/' + chapPath(chap)), close)
+  useLayer(mobile && listOpen, '/bibliotheque/' + chapPath(chap), () => flip(() => setListOpen(false)))
   useLayer(mobile && addOpen, '/bibliotheque/ajouter', () => flip(() => setAddOpen(false)))
   useLayer(!!openId, '/bibliotheque/livre/' + openId, () => flip(() => setOpenId(null)))
   useLayer(!!addItem, '/bibliotheque/ajouter/livre', () => flip(() => setAddItem(null)))
@@ -185,7 +194,7 @@ export default function LibraryBook({ api, from, start, mobile, incoming, onInco
   if (mobile) {
     return createPortal(
       <PhoneShelf chap={chap} ctx={ctx} counts={counts} cols={cols} readThisYear={readThisYear} goal={goal}
-        book={book} addItem={addItem} addOpen={addOpen} turn={turn} rootRef={rootRef} listLabel={listLabel}
+        book={book} addItem={addItem} addOpen={addOpen} listOpen={listOpen} turn={turn} rootRef={rootRef} listLabel={listLabel}
         onOpenMine={id => { setAddItem(null); setOpenId(id) }} />,
       document.body,
     )
@@ -221,57 +230,78 @@ export default function LibraryBook({ api, from, start, mobile, incoming, onInco
 /* -------------------------------------------------------------------------- */
 /* Sur téléphone : pas d'objet livre, une appli simple dans ses couleurs        */
 /* -------------------------------------------------------------------------- */
-function PhoneShelf({ chap, ctx, counts, cols, readThisYear, goal, book, addItem, addOpen, turn, rootRef, listLabel, onOpenMine }) {
+function PhoneShelf({ chap, ctx, counts, cols, readThisYear, goal, book, addItem, addOpen, listOpen, turn, rootRef, listLabel, onOpenMine }) {
   const [newCol, setNewCol] = useState(null)
-  const tabsRef = useRef(null)
-  // l'onglet du chapitre ouvert reste visible dans la rangée
-  useEffect(() => { tabsRef.current?.querySelector('.on')?.scrollIntoView?.({ inline: 'center', block: 'nearest', behavior: 'smooth' }) }, [chap])
-  const TABS = [
-    { id: 'defi', label: 'Défi', n: goal ? `${readThisYear}/${goal}` : readThisYear },
-    ...['lis', 'pile', 'lu', 'wish', 'aime', 'tous', 'ai'].map(id => ({ id, label: id === 'tous' ? 'Tous' : LIST_OF[id].label, n: counts[id] })),
-    { id: 'top', label: 'Top 5', n: ctx.api.topBooks.length },
-    ...cols.map(s => ({ id: 'col:' + s.id, label: s.name, n: s.book_ids.length })),
-  ]
+  const colBusy = useRef(false)     // (Entrée puis la perte du focus : une seule collection)
   const detail = book || addItem
-  const back = book ? listLabel(chap) : addItem ? 'Ajouter' : addOpen ? 'Mes livres' : 'Le salon'
-  const title = book || addItem || addOpen ? '' : 'Mes livres'
+  const home = !detail && !addOpen && !listOpen
+  const back = book ? (listOpen ? listLabel(chap) : 'Mes livres') : addItem ? 'Ajouter' : addOpen || listOpen ? 'Mes livres' : 'Le salon'
+  // une seule page qui défile (en-tête compris) : on remonte en haut à chaque changement
+  useEffect(() => { rootRef.current?.scrollTo?.(0, 0) }, [turn]) // eslint-disable-line react-hooks/exhaustive-deps
   const addCol = e => {
     e.preventDefault()
+    if (colBusy.current) return
+    colBusy.current = true
+    setTimeout(() => { colBusy.current = false }, 300)
     const v = (newCol || '').trim()
     setNewCol(null)
     if (!v) return
     const res = ctx.commit(createShelf(ctx.eff, v))
     if (res.id) ctx.goChap('col:' + res.id)
   }
+  const byId = useMemo(() => new Map(ctx.api.books.map(b => [b.id, b])), [ctx.api.books])
+  const coversOf = id => {
+    if (id.startsWith('col:')) return (cols.find(c => c.id === id.slice(4))?.book_ids || []).map(x => byId.get(x)).filter(Boolean)
+    if (id === 'top') return ctx.api.topBooks
+    return ctx.api.books.filter(LIST_OF[id].test)
+  }
+  const Tile = ({ id, label, n }) => (
+    <button type="button" className="lba-tile" onClick={() => ctx.goChap(id)}>
+      <span className="lba-tile-txt"><b>{label}</b><em>{n}</em></span>
+      <span className="lba-fan" aria-hidden="true">{coversOf(id).slice(0, 3).map(b => <Cover key={b.id} book={b} />)}</span>
+    </button>
+  )
   let content
   if (book) content = <BookSpread book={book} ctx={ctx} back={listLabel(chap)} onBack={() => history.back()} />
   else if (addItem) content = <AddSpread item={addItem} ctx={ctx} onBack={() => history.back()} onOpenMine={onOpenMine} />
   else if (addOpen) content = <AddPage ctx={ctx} />
-  else content = <Chapter key={chap} chap={chap} ctx={ctx} />
+  else if (listOpen) content = <Chapter key={chap} chap={chap} ctx={ctx} />
+  else content = (
+    <div className="lba-home">
+      <h1 className="lba-h">Mes livres</h1>
+      <p className="lb-som-sub">{ctx.api.books.length} livre{ctx.api.books.length > 1 ? 's' : ''} · {readThisYear} lu{readThisYear > 1 ? 's' : ''} en {new Date().getFullYear()}</p>
+      <button type="button" className="lb-defi" onClick={() => ctx.goChap('defi')}>
+        <span className="lb-defi-ring"><Ring value={readThisYear} max={goal || Math.max(readThisYear, 1)} size={52} stroke={5} /><b>{readThisYear}</b></span>
+        <span><i>Mon défi {new Date().getFullYear()}</i><b>{goal ? `${readThisYear} sur ${goal} livres` : 'Fixe-toi un objectif'}</b></span>
+      </button>
+      <h2 className="lb-toc-h">Mes lectures</h2>
+      <div className="lba-tiles">{['lis', 'pile', 'lu', 'wish', 'aime'].map(id => <Tile key={id} id={id} label={LIST_OF[id].label} n={counts[id]} />)}</div>
+      <h2 className="lb-toc-h">Mes livres</h2>
+      <div className="lba-tiles">
+        <Tile id="tous" label="Tous nos livres" n={counts.tous} />
+        <Tile id="ai" label="J’ai" n={counts.ai} />
+        <Tile id="top" label="Mon top 5" n={ctx.api.topBooks.length} />
+      </div>
+      <h2 className="lb-toc-h">Mes collections</h2>
+      <div className="lba-tiles">
+        {cols.map(c => <Tile key={c.id} id={'col:' + c.id} label={c.name} n={c.book_ids.length} />)}
+        {newCol == null
+          ? <button type="button" className="lba-tile new" onClick={() => setNewCol('')}><span className="lba-tile-txt"><b>＋ Nouvelle collection</b></span></button>
+          : <form className="lba-tile new" onSubmit={addCol}><input autoFocus value={newCol} onChange={e => setNewCol(e.target.value)} onBlur={addCol} placeholder="Son nom" aria-label="Nom de la nouvelle collection" maxLength={40} /></form>}
+      </div>
+    </div>
+  )
   return (
     <div className="lb lba" ref={rootRef} role="dialog" aria-label="Mes livres">
       <header className="lba-top">
         <BackButton label={back} />
-        {title && <h1 className="lba-title">{title}</h1>}
-        {!detail && !addOpen && (
+        {home && (
           <button type="button" className="lba-add" onClick={() => ctx.goChap('ajouter')} aria-label="Ajouter un livre">
             <Ico d={<path d="M12 5v14M5 12h14" />} />
           </button>
         )}
       </header>
-      {!detail && !addOpen && (
-        <nav className="lba-tabs" ref={tabsRef} aria-label="Mes listes">
-          {TABS.map(t => (
-            <button type="button" key={t.id} className={chap === t.id ? 'on' : ''} aria-current={chap === t.id ? 'true' : undefined} onClick={() => ctx.goChap(t.id)}>
-              {t.label}<em>{t.n}</em>
-            </button>
-          ))}
-          {newCol == null
-            ? <button type="button" className="new" onClick={() => setNewCol('')}>＋ Collection</button>
-            : <form onSubmit={addCol}><input autoFocus value={newCol} onChange={e => setNewCol(e.target.value)} onBlur={addCol} placeholder="Nom" aria-label="Nom de la nouvelle collection" maxLength={40} /></form>}
-        </nav>
-      )}
-      <main className={'lba-main' + (detail ? ' is-detail' : '')} key={turn}>{content}</main>
+      <main className={'lba-main' + (home ? '' : ' is-detail')} key={turn}>{content}</main>
     </div>
   )
 }
@@ -289,8 +319,12 @@ function Sommaire({ chap, counts, cols, books, ctx, readThisYear, goal, year, on
       </button>
     </li>
   )
+  const busy = useRef(false)      // (Entrée puis la perte du focus : une seule collection)
   const addCol = e => {
     e.preventDefault()
+    if (busy.current) return
+    busy.current = true
+    setTimeout(() => { busy.current = false }, 300)
     const v = name.trim()
     if (!v) { setAdding(false); return }
     const res = ctx.commit(createShelf(ctx.eff, v))
