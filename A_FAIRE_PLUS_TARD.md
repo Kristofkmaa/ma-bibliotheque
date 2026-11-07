@@ -54,6 +54,10 @@ a prévu d'y mettre.
   complet), Philips Hue, Somfy TaHoma (volets), Legrand / Netatmo, SmartThings, Tuya / Smart Life,
   Google Home ou Alexa (via Home Assistant). Le site passe par un relais Vercel qui garde les clés.
 - Sécurité : seulement pour nous (connectés), jamais d'accès ouvert.
+- Ce qu'on a (locataires) : des clims **Daikin** → l'API cloud Daikin Onecta (allumer, éteindre,
+  mode, température, la température de la pièce), si les clims sont reliées à l'appli Onecta.
+  Pour le reste, sans travaux : ampoules connectées, prises connectées, robots SwitchBot
+  (volets, rideaux, boutons) avec leur hub, qui a une API cloud simple.
 
 ## Le carrousel
 
