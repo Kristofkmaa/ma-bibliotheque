@@ -236,8 +236,16 @@ function PhoneShelf({ chap, ctx, counts, cols, readThisYear, goal, book, addItem
   const detail = book || addItem
   const home = !detail && !addOpen && !listOpen
   const back = book ? (listOpen ? listLabel(chap) : 'Mes livres') : addItem ? 'Ajouter' : addOpen || listOpen ? 'Mes livres' : 'Le salon'
-  // une seule page qui défile (en-tête compris) : on remonte en haut à chaque changement
-  useEffect(() => { rootRef.current?.scrollTo?.(0, 0) }, [turn]) // eslint-disable-line react-hooks/exhaustive-deps
+  // une seule page qui défile : on remonte en haut à chaque changement ; l'en-tête reste collé en
+  // haut, et prend son fond (verre dépoli) et le petit titre dès qu'on descend
+  const [bar, setBar] = useState(0)        // 0 : en haut ; 1 : on a un peu défilé ; 2 : le grand titre est passé
+  useEffect(() => { rootRef.current?.scrollTo?.(0, 0); setBar(0) }, [turn]) // eslint-disable-line react-hooks/exhaustive-deps
+  const onScroll = e => {
+    const y = e.currentTarget.scrollTop
+    const v = y > 64 ? 2 : y > 4 ? 1 : 0
+    if (v !== bar) setBar(v)
+  }
+  const small = book ? toDisplay(book).title : addItem ? addItem.title : addOpen ? 'Ajouter un livre' : listOpen ? listLabel(chap) : 'Mes livres'
   const addCol = e => {
     e.preventDefault()
     if (colBusy.current) return
@@ -292,14 +300,17 @@ function PhoneShelf({ chap, ctx, counts, cols, readThisYear, goal, book, addItem
     </div>
   )
   return (
-    <div className="lb lba" ref={rootRef} role="dialog" aria-label="Mes livres">
-      <header className="lba-top">
+    <div className="lb lba" ref={rootRef} role="dialog" aria-label="Mes livres" onScroll={onScroll}>
+      <header className={'lba-top' + (bar ? ' stuck' : '') + (bar > 1 ? ' titled' : '')}>
         <BackButton label={back} />
-        {home && (
-          <button type="button" className="lba-add" onClick={() => ctx.goChap('ajouter')} aria-label="Ajouter un livre">
-            <Ico d={<path d="M12 5v14M5 12h14" />} />
-          </button>
-        )}
+        <span className="lba-small" aria-hidden={bar < 2}>{small}</span>
+        <span className="lba-right">
+          {home && (
+            <button type="button" className="lba-add" onClick={() => ctx.goChap('ajouter')} aria-label="Ajouter un livre">
+              <Ico d={<path d="M12 5v14M5 12h14" />} />
+            </button>
+          )}
+        </span>
       </header>
       <main className={'lba-main' + (home ? '' : ' is-detail')} key={turn}>{content}</main>
     </div>
