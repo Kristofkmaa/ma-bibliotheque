@@ -94,7 +94,7 @@ const ROOMS = ['cuisine', 'garage', 'chambre']
 const ZOOM_PATH = { tv: '/films', cab: '/vitrine', pc: '/jeux' }
 const ZOOM_TAP = { films: 'tv', vitrine: 'cabinet', jeux: 'pc' }
 
-export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, gamesApi, holder, userId, tv: tvBus, showcase, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
+export default function LivingRoom({ onLibrary, books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, gamesApi, holder, userId, tv: tvBus, showcase, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
   // arrivée sur le site par une adresse (« /cuisine/semaine », « /jeux »…) : on y va tout de suite
   const startRef = useRef(undefined)
   if (startRef.current === undefined) startRef.current = takeStart([...ROOMS, ...Object.keys(ZOOM_TAP)])
@@ -140,6 +140,8 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   // entrer : la caméra rejoint la vue exacte de la bibliothèque, le salon s'efface autour
   const go = next => {
     const s = sceneRef.current
+    // la bibliothèque est un livre qui sort de l'étagère (le salon reste derrière)
+    if (cb.current.onLibrary && next !== 'wall') { cb.current.onLibrary(s?.bookcaseRect?.() || null); return }
     if (!s || cb.current.going) return
     cb.current.going = true
     setGoing(true)
@@ -154,6 +156,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
     })
   }
   cb.current.go = go
+  cb.current.onLibrary = onLibrary
   cb.current.onEntered = onEntered
   cb.current.onOpenBook = onOpenBook
   cb.current.onAddBooks = onAddBooks

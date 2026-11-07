@@ -178,7 +178,7 @@ export function useLayer(open, path, close, opts) {
 // ---- La barre de la maison : où l'on est, et y aller d'un toucher ----------------------------
 export const SECTIONS = ['salon', 'bibliotheque', 'films', 'jeux', 'cuisine']
 const ROOMS = ['cuisine', 'garage', 'chambre']
-const SECTION_OF = { bibliotheque: 'bibliotheque', films: 'films', jeux: 'jeux', cuisine: 'cuisine', garage: 'garage', chambre: 'chambre' }
+const SECTION_OF = { bibliotheque: 'bibliotheque', mur: 'bibliotheque', films: 'films', jeux: 'jeux', cuisine: 'cuisine', garage: 'garage', chambre: 'chambre' }
 /** Le module où l'on est : celui de l'endroit le plus bas ouvert ('salon' sans rien d'ouvert). */
 const currentSection = () => (stack.length ? SECTION_OF[stack[0].path.split('/')[1]] || 'salon' : 'salon')
 let pending = null     // le module où l'on va (on referme d'abord ce qui est ouvert)

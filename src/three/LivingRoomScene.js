@@ -1103,6 +1103,23 @@ export class LivingRoomScene {
   }
 
   /** Où se trouve l'image projetée à l'écran (en pixels de la page) : le menu s'ouvre depuis là. */
+  /** Où est l'étagère du salon à l'écran (le livre de la bibliothèque en sort). */
+  bookcaseRect() {
+    if (!this.bookcase) return null
+    this.camera.updateMatrixWorld()
+    const box = new THREE.Box3().setFromObject(this.bookcase)
+    const S = this.renderer.domElement.getBoundingClientRect()
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
+      const v = new THREE.Vector3(x, y, z).project(this.camera)
+      const px = S.left + ((v.x + 1) / 2) * S.width, py = S.top + ((1 - v.y) / 2) * S.height
+      x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py)
+    }
+    // un livre debout au milieu de l'étagère
+    const cx = (x0 + x1) / 2, cy = y0 + (y1 - y0) * 0.38, h = (y1 - y0) * 0.16
+    return { x: cx - h * 0.33, y: cy - h / 2, w: h * 0.66, h }
+  }
+
   screenRect(kind = 'tv') {
     const scr = kind === 'pc' ? this.pcScreen : this.tvScreen
     const W2 = kind === 'pc' ? MON.w / 2 : SCR.w / 2, H2 = kind === 'pc' ? MON.h / 2 : SCR.h / 2

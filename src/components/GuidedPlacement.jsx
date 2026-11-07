@@ -53,7 +53,7 @@ export default function GuidedPlacement({ items, shelves, books, onPlace, onPlac
     const t = setTimeout(() => closeRef.current(), 1400)
     return () => clearTimeout(t)
   }, [items.length, busy])
-  useLayer(true, '/bibliotheque/ranger', () => closeRef.current())
+  useLayer(true, '/mur/ranger', () => closeRef.current())
 
   const place = async shelfId => {
     if (busy || !book) return

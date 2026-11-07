@@ -24,7 +24,7 @@ import { webglAvailable } from './three/webgl'
 import DetailSheet from './components/DetailSheet'
 import SearchPanel from './components/SearchPanel'
 import LoginPage from './components/LoginPage'
-import ReadingTablet, { ReadingDock } from './components/ReadingTablet'
+import LibraryBook from './components/LibraryBook'
 import { useReading } from './hooks/useReading'
 import { SHOWS } from './lib/reading'
 import { useLayer, peekStart, takeStart } from './lib/nav'
@@ -71,7 +71,9 @@ function Library({ user, onSignOut }) {
   const bookTop = useBookTop(user.id)
   const showcase = useShowcase(user.id)   // nos médias préférés, sur le meuble télé du salon
   const reading = useReading(user.id)     // nos dates de lecture et le défi de l'année (la tablette)
-  const [tablet, setTablet] = useState(null)   // la tablette de lecture ouverte : { from }
+  // la bibliothèque, dans un livre qui sort de l'étagère du salon : { from, start }
+  const [bookHud, setBookHud] = useState(null)
+  const [bookIncoming, setBookIncoming] = useState(null)   // un livre scanné, à ajouter depuis le livre
   const [topPanel, setTopPanel] = useState(false)
   const topBooks = useMemo(() => { const m = new Map(books.map(b => [b.id, b])); return bookTop.ids.map(id => m.get(id)).filter(Boolean) }, [bookTop.ids, books])
   // la télé du salon : allumée pendant toute la visite (salon, bibliothèque, PC…) ; le salon la
@@ -118,7 +120,7 @@ function Library({ user, onSignOut }) {
   // salon d'accueil : on y arrive toujours en ouvrant le site ('first'), 'back' quand on y
   // retourne, null dans la bibliothèque
   // (une adresse « /bibliotheque… » à l'arrivée : on entre directement dans la bibliothèque)
-  const [salon, setSalon] = useState(() => (HAS_WEBGL && peekStart()[0] !== 'bibliotheque' ? 'first' : null))
+  const [salon, setSalon] = useState(() => (HAS_WEBGL && peekStart()[0] !== 'mur' ? 'first' : null))
   const basket = useBasket(user.id)
   const mobile = useIsMobile()
   const [flying, setFlying] = useState(() => new Set())
@@ -142,7 +144,7 @@ function Library({ user, onSignOut }) {
     return sortBooks(books, sort)
   }, [books, sort])
 
-  const overlay = !!detail || search || scanner || !!shelvesOpen || !!salon || !!tablet
+  const overlay = !!detail || search || scanner || !!shelvesOpen || !!salon
   const effShelves = useMemo(() => effectiveShelves(shelves, books), [shelves, books])
 
   const openBook = useCallback((book, el) => {
@@ -240,32 +242,20 @@ function Library({ user, onSignOut }) {
 
   // ---- La navigation : chaque endroit ouvert a son adresse, le retour (navigateur, téléphone,
   // Échap, bouton du site) referme celui du dessus
-  const base = salon ? '' : '/bibliotheque'
-  useLayer(HAS_WEBGL && !salon, '/bibliotheque', goSalon)
-  useLayer(findOpen, '/bibliotheque/chercher', () => setFindOpen(false))
+  // (l'ancien mur de livres en 3D : « /mur », jusqu'à ce que l'étagère du salon le remplace)
+  const base = salon ? '' : '/mur'
+  useLayer(HAS_WEBGL && !salon, '/mur', goSalon)
+  useLayer(findOpen, '/mur/chercher', () => setFindOpen(false))
   const M = { modal: true }     // (un panneau qui couvre l'écran : la barre de la maison s'efface)
   useLayer(searchOpen, base + '/ajouter', () => setSearchOpen(false), M)
   useLayer(!!detail && detailOpen, detail?.mode === 'add' ? base + '/ajouter/livre' : `${base}/livre/${detail?.book?.id || ''}`, () => setDetailOpen(false), M)
   useLayer(scanner, base + '/ajouter/scanner', () => setScanner(false), M)
-  // arrivée sur une adresse de la bibliothèque : on rouvre ce qu'elle montre
-  const startBook = useRef(null)
+  // arrivée sur une adresse de la bibliothèque : le livre s'ouvre (sur le bon chapitre)
   useEffect(() => {
     const st = takeStart(['bibliotheque'])
-    if (!st) return
-    const [, a, b] = st
-    if (a === 'etageres') setShelvesOpen({ id: null })
-    else if (a === 'lectures') setTablet({ from: null, start: st.slice(2) })
-    else if (a === 'ajouter') { setSearch(true); setSearchOpen(true) }
-    else if (a === 'top') setTopPanel(true)
-    else if (a === 'livre' && b) startBook.current = b
+    if (st) setBookHud({ from: null, start: st })
+    takeStart(['mur'])
   }, [])
-  useEffect(() => {
-    const id = startBook.current
-    if (!id || !books.length) return
-    startBook.current = null
-    const b = books.find(x => String(x.id) === id)
-    if (b) { setDetail({ book: b, mode: 'edit', rect: null }); setDetailOpen(true) }
-  }, [books])
 
   const openGuide = useCallback(() => {
     if (salon) setSalon(null)
@@ -277,7 +267,10 @@ function Library({ user, onSignOut }) {
     setDetail({ book, mode: 'add', rect: rect || null })
     setDetailOpen(true)
   }, [])
-  const onScanFound = useCallback(book => onPick(book, null), [onPick])
+  const onScanFound = useCallback(book => {
+    if (bookHud) { setScanner(false); setBookIncoming(book) }   // le livre est ouvert : la fiche s'ouvre dedans
+    else onPick(book, null)
+  }, [onPick, bookHud])
 
   // Après un ajout : aller à l'étagère du nouveau livre et le signaler
   const onFocused = useCallback(() => {
@@ -452,11 +445,18 @@ function Library({ user, onSignOut }) {
         </>
       )}
 
-      {/* la tablette de lecture, posée à côté de la bibliothèque */}
-      {!salon && !detail && !search && <ReadingDock books={books} reading={reading} mobile={mobile} onOpen={from => setTablet({ from })} />}
       {/* téléphone : le même bouton retour, en haut à gauche */}
       {mobile && HAS_WEBGL && !salon && !overlay && !findOpen && <BackButton label="Le salon" className="float" />}
-      {tablet && <ReadingTablet books={books} reading={reading} updateBook={updateBook} from={tablet.from} start={tablet.start} mobile={mobile} onShow={id => setFocusId(id)} onClose={() => setTablet(null)} />}
+      {bookHud && (
+        <LibraryBook
+          api={{ books, updateBook, addBook, removeBook, isInLibrary, reading, shelves, commitShelves, topBooks, top: { add: bookTop.add, remove: bookTop.remove, move: bookTop.move, max: TOP_MAX } }}
+          from={bookHud.from} start={bookHud.start} mobile={mobile}
+          incoming={bookIncoming} onIncomingDone={() => setBookIncoming(null)}
+          onScan={() => setScanner(true)}
+          onWall={HAS_WEBGL ? () => { setBookHud(null); setSalon(null) } : null}
+          onClose={() => setBookHud(null)}
+        />
+      )}
 
       {topPanel && <TopBooksPanel list={topBooks} max={TOP_MAX} onMove={bookTop.move} onRemove={bookTop.remove} onOpen={b => { setTopPanel(false); openBook(b, null) }} onClose={() => setTopPanel(false)} />}
 
@@ -471,7 +471,7 @@ function Library({ user, onSignOut }) {
       </div>
       {salon && (
         <Suspense fallback={<div className="salon" />}>
-          <LivingRoom tv={tvBus} showcase={showcase} userId={user.id}
+          <LivingRoom onLibrary={rect => setBookHud(h => h || { from: rect })} tv={tvBus} showcase={showcase} userId={user.id}
             from={salon} books={books} shelves={effShelves} basketItems={basket.items}
             series={series} onAddSeries={addSeries} onUpdateSeries={updateSeries} onRemoveSeries={removeSeries} onRenameCategory={renameCategory}
             gamesApi={gamesApi} holder={user.user_metadata?.full_name || user.user_metadata?.name || ''}
