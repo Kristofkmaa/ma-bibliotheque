@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toDisplay, spineColors } from '../lib/bookUtils'
+import { useLayer } from '../lib/nav'
 
 /** La couverture (sinon la couleur de la tranche du livre). */
 function Cover({ book, src }) {
@@ -13,11 +14,7 @@ function Cover({ book, src }) {
  * on les retire. On en ajoute depuis la fiche d'un livre (« Mettre dans mon top »).
  */
 export default function TopBooksPanel({ list, max, onMove, onRemove, onOpen, onClose }) {
-  useEffect(() => {
-    const k = e => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', k)
-    return () => window.removeEventListener('keydown', k)
-  }, [onClose])
+  useLayer(true, '/bibliotheque/top', onClose)
   return (
     <div className="topb-back" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="topb" role="dialog" aria-label="Mon top">

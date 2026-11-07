@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toDisplay, spineColors } from '../lib/bookUtils'
+import { useLayer } from '../lib/nav'
 import { BOOK_STATES, toggleState, isOwned, isWish, isReading, isRead, isLoved, inPal, readingDays, daysSince, daysFr, dateFr, dateShort, readYear, challenge } from '../lib/reading'
 
 /**
@@ -16,6 +17,8 @@ const SECTIONS = [
   { id: 'aime', label: 'J’aime', icon: 'heart', test: isLoved },
   { id: 'ai', label: 'J’ai', icon: 'chart', test: isOwned },
 ]
+const SEC_PATH = { defi: 'defi', lis: 'je-lis', pal: 'ma-pile', lu: 'lus', wish: 'wishlist', aime: 'aime', ai: 'possedes' }
+const SEC_OF = Object.fromEntries(Object.entries(SEC_PATH).map(([k, v]) => [v, k]))
 const ICON = {
   trophy: <><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 20h6M10 17h4" /></>,
   bookmark: <path d="M7 4h10v16l-5-4-5 4z" />,
@@ -81,9 +84,10 @@ export function ReadingDock({ books, reading, onOpen, mobile }) {
 /* -------------------------------------------------------------------------- */
 /* La tablette ouverte                                                        */
 /* -------------------------------------------------------------------------- */
-export default function ReadingTablet({ books, reading, updateBook, from, mobile, onShow, onClose }) {
-  const [sec, setSec] = useState('defi')
-  const [openId, setOpenId] = useState(null)
+export default function ReadingTablet({ books, reading, updateBook, from, start, mobile, onShow, onClose }) {
+  // (arrivée par une adresse : « /bibliotheque/lectures/ma-pile », « …/livre/42 »)
+  const [sec, setSec] = useState(() => SEC_OF[start?.[0]] || 'defi')
+  const [openId, setOpenId] = useState(() => (start?.[0] === 'livre' && start[1] ? (books.find(b => String(b.id) === start[1])?.id ?? null) : null))
   const [clock, setClock] = useState(() => new Date())
   const ref = useRef(null)
   useEffect(() => { const t = setInterval(() => setClock(new Date()), 20000); return () => clearInterval(t) }, [])
@@ -102,11 +106,8 @@ export default function ReadingTablet({ books, reading, updateBook, from, mobile
     if (!el?.animate) { onClose(); return }
     el.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.96) translateY(14px)' }], { duration: 240, easing: 'ease-in', fill: 'forwards' }).finished.then(onClose, onClose)
   }
-  useEffect(() => {
-    const onKey = e => { if (e.key === 'Escape') { if (openId) setOpenId(null); else close() } }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
+  useLayer(true, '/bibliotheque/lectures/' + SEC_PATH[sec], close)
+  useLayer(!!openId, '/bibliotheque/lectures/livre/' + openId, () => setOpenId(null))
 
   const counts = useMemo(() => Object.fromEntries(SECTIONS.filter(s => s.test).map(s => [s.id, books.filter(s.test).length])), [books])
   const book = openId && books.find(b => b.id === openId)

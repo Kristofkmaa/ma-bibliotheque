@@ -4,6 +4,8 @@ import { AISLES, INGREDIENTS, aisleOf, findIngredients, inPantry } from '../lib/
 import { recipesWith, searchRecipes, randomRecipes, recipeDetail, toEnglish, DISH_TYPES, DIETS, amountFr, timeFr } from '../lib/recipes'
 import { relayUrl } from '../lib/covers'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { useLayer } from '../lib/nav'
+import BackButton from './BackButton'
 import { isoDay, addDays, daysLeft, urgency, leftFr, dayFr, QUICK_DATES, planWeek, slim } from '../lib/pantryDates'
 
 /**
@@ -21,19 +23,24 @@ const byExpiry = (a, b) => (a.expires || '9999').localeCompare(b.expires || '999
 const isUrgent = i => i.expires && daysLeft(i.expires) <= 2
 
 const Close = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-const Back = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
 const CartIcon = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2.2l2.1 10.2a1.5 1.5 0 0 0 1.5 1.2h8.4a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.1" /><circle cx="9.5" cy="19.5" r="1.3" /><circle cx="17" cy="19.5" r="1.3" /></svg>
 const CalIcon = () => <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2.5" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /></svg>
 const Heart = ({ on }) => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" className={on ? 'fill' : ''} /></svg>
 
-export default function Kitchen({ userId, scene, onClose }) {
+// les adresses de la cuisine : « /cuisine/frigo », « /cuisine/semaine », « /cuisine/recette/716429 »…
+const VIEW_PATH = { frigo: 'frigo', placard: 'placards', courses: 'courses', tablette: 'recettes' }
+const TAB_PATH = { semaine: 'semaine', frigo: 'recettes', chercher: 'chercher', miennes: 'mes-recettes' }
+const TAB_OF = Object.fromEntries(Object.entries(TAB_PATH).map(([k, v]) => [v, k]))
+
+export default function Kitchen({ userId, scene, start, onStarted, onClose }) {
   const k = useKitchen(userId)
   const mobile = useIsMobile()
   const sceneRef = useRef(scene)
   const rootRef = useRef(null)
   const [view, setView] = useState(null)       // où la caméra va
   const [arrived, setArrived] = useState(null) // où elle est arrivée (le panneau s'ouvre)
-  const [app, setApp] = useState(null)         // l'appli de recettes : { tab, from }
+  const [app, setApp] = useState(null)         // l'appli de recettes : { tab, from, open }
+  const [appTab, setAppTab] = useState(null)   // son onglet (pour l'adresse)
   const [chip, setChip] = useState(null)
   const cb = useRef({})
   cb.current.tap = kind => go(kind)
@@ -61,18 +68,27 @@ export default function Kitchen({ userId, scene, onClose }) {
   }
   const back = () => go(null)
   const openApp = tab => { setApp({ tab, from: null }); if (view !== 'tablette') { setView('tablette'); sceneRef.current?.focus('tablette') } }
-  const closeApp = () => { setApp(null); go(null) }
+  const closeApp = () => { setApp(null); setAppTab(null); go(null) }
   const leave = () => {
     setArrived(null); setView(null)
     const el = rootRef.current
     if (!el?.animate) { onClose(); return }
     el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: 'ease-in', fill: 'forwards' }).finished.then(onClose, onClose)
   }
+  // la navigation : la cuisine, puis ce qu'on regarde dedans (le frigo, la tablette…)
+  useLayer(true, '/cuisine', leave)
+  useLayer(!!view, '/cuisine/' + (view === 'tablette' && app ? TAB_PATH[appTab || app.tab] : VIEW_PATH[view] || ''), app ? closeApp : back)
+  // arrivée par une adresse de la cuisine
   useEffect(() => {
-    const onKey = e => { if (e.key === 'Escape') { if (app) closeApp(); else if (view) back() } }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
+    if (!start) return
+    const [a, b] = start
+    if (a === 'frigo') go('frigo')
+    else if (a === 'placards') go('placard')
+    else if (a === 'courses') go('courses')
+    else if (TAB_OF[a]) openApp(TAB_OF[a])
+    else if (a === 'recette' && +b > 0) { setApp({ tab: 'frigo', from: null, open: +b }); setView('tablette'); sceneRef.current?.focus('tablette') }
+    onStarted?.()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const count = p => k.pantry.filter(i => (p === 'placard' ? i.place === 'placard' : i.place !== 'placard')).length
   const todo = k.shopping.filter(s => !s.done).length
@@ -82,9 +98,7 @@ export default function Kitchen({ userId, scene, onClose }) {
     <div className={'kitchen' + (view ? ' focused' : '') + (app ? ' app-open' : '')} ref={rootRef}>
 
       <header className="kt-top">
-        <button type="button" className="kt-back" onClick={view && !app ? back : leave}>
-          <Back /><span>{view && !app ? 'La cuisine' : 'Le salon'}</span>
-        </button>
+        <BackButton label={view && !app ? 'La cuisine' : 'Le salon'} />
         <div className="kt-title"><b>La cuisine</b><span>Maruchime</span></div>
         <span className="kt-top-r" />
       </header>
@@ -106,7 +120,7 @@ export default function Kitchen({ userId, scene, onClose }) {
         <PantryPanel key={arrived} place={arrived} k={k} onClose={back} onRecipes={() => openApp('frigo')} onWeek={() => openApp('semaine')} onOther={() => go(arrived === 'frigo' ? 'placard' : 'frigo')} />
       )}
       {arrived === 'courses' && <ShoppingPanel k={k} onClose={back} />}
-      {app && <RecipeApp k={k} start={app} onClose={closeApp} onOpenPlace={p => { setApp(null); go(p) }} onShow={(t, img) => sceneRef.current?.setTablet(t, img ? relayUrl(img) : null)} />}
+      {app && <RecipeApp k={k} start={app} onTab={setAppTab} onClose={closeApp} onOpenPlace={p => { setApp(null); go(p) }} onShow={(t, img) => sceneRef.current?.setTablet(t, img ? relayUrl(img) : null)} />}
     </div>
   )
 }
@@ -278,9 +292,11 @@ function ShoppingPanel({ k, onClose }) {
 /* -------------------------------------------------------------------------- */
 /* L'appli de recettes (la tablette)                                          */
 /* -------------------------------------------------------------------------- */
-function RecipeApp({ k, start, onClose, onOpenPlace, onShow }) {
+function RecipeApp({ k, start, onTab, onOpenPlace, onShow }) {
   const [tab, setTab] = useState(start.tab || 'frigo')
-  const [open, setOpen] = useState(null)          // id de la recette ouverte
+  const [open, setOpen] = useState(start.open || null)          // id de la recette ouverte
+  useEffect(() => { onTab?.(tab) }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+  useLayer(!!open, '/cuisine/recette/' + open, () => setOpen(null))
   const ref = useRef(null)
   useEffect(() => {
     const el = ref.current, r = start.from
@@ -295,12 +311,12 @@ function RecipeApp({ k, start, onClose, onOpenPlace, onShow }) {
   return (
     <div className="kt-app" ref={ref} role="dialog" aria-label="Les recettes">
       <header className="ka-top">
-        <div className="ka-brand"><span>🍲</span><b>Recettes</b></div>
+        <BackButton label="La cuisine" />
         <nav className="ka-tabs" style={{ '--i': TABS.findIndex(t => t[0] === tab), '--n': TABS.length }} aria-label="Les recettes">
           <span className="ka-thumb" aria-hidden="true" />
           {TABS.map(([id, label]) => <button type="button" key={id} className={tab === id ? 'on' : ''} onClick={() => { setTab(id); setOpen(null) }}>{label}</button>)}
         </nav>
-        <button type="button" className="ka-close" onClick={onClose} aria-label="Ranger la tablette"><Close /></button>
+        <div className="ka-brand"><span>🍲</span><b>Recettes</b></div>
       </header>
       <main className="ka-main">
         {tab === 'semaine' && <WeekPlan k={k} onOpen={setOpen} onOpenPlace={onOpenPlace} />}
@@ -308,7 +324,7 @@ function RecipeApp({ k, start, onClose, onOpenPlace, onShow }) {
         {tab === 'chercher' && <Search onOpen={setOpen} />}
         {tab === 'miennes' && <Mine k={k} onOpen={setOpen} />}
       </main>
-      {open && <RecipePage id={open} k={k} onBack={() => setOpen(null)} onShow={onShow} onCourses={() => onOpenPlace('courses')} />}
+      {open && <RecipePage id={open} k={k} onShow={onShow} onCourses={() => onOpenPlace('courses')} />}
     </div>
   )
 }
@@ -572,7 +588,7 @@ function Mine({ k, onOpen }) {
   )
 }
 
-function RecipePage({ id, k, onBack, onShow, onCourses }) {
+function RecipePage({ id, k, onShow, onCourses }) {
   const st = useAsync(() => recipeDetail(id), [id])
   const [people, setPeople] = useState(null)
   const [doneSteps, setDoneSteps] = useState(() => new Set())
@@ -600,7 +616,7 @@ function RecipePage({ id, k, onBack, onShow, onCourses }) {
 
   return (
     <div className="ka-page">
-      <button type="button" className="ka-pback" onClick={onBack}><Back /><span>Recettes</span></button>
+      <BackButton label="Recettes" className="ka-pback" />
       {st.error ? <KeyMissing err={st.error} /> : !r ? <div className="ka-page-load"><span /></div> : (
         <>
           <div className="ka-hero">

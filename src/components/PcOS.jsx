@@ -3,6 +3,8 @@ import { useIsMobile } from '../hooks/useIsMobile'
 import { loadImage } from '../lib/tmdb'
 import { relayUrl } from '../lib/covers'
 import { searchCatalog, featuredCatalog, catalogGame, catalogSource, STATUSES, statusLabel, PLATFORM_GROUPS, PC_STORES, storeLabel, pfLabel, pfFamily, onPlatform, playOptions, platformFor } from '../lib/games'
+import { useBack, useLayer } from '../lib/nav'
+import BackButton from './BackButton'
 // une note toujours entre 0 et 5 étoiles (une valeur hors échelle ne doit jamais casser l'affichage)
 const st5 = n => Math.max(0, Math.min(5, Math.round(+n || 0)))
 
@@ -1147,7 +1149,18 @@ const ROOT = { stim: { v: 'store' }, games: { v: 'list' }, custom: { v: 'main' }
 const Fwd = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 const entryKey = e => (e.item ? e.v + ':' + e.item.key : JSON.stringify(e))
 
-export default function PcOS({ games, addGame, findGame, updateGame, removeGame, setFavorite, reorderTop, wallpaper, setWallpaper, setup, setSetup, holder, fromRect, onClose }) {
+/** L'adresse d'une page du PC (pour le retour du navigateur et les favoris). */
+const TAB_PATH = { games: '/jeux', stim: '/jeux/ajouter', custom: '/jeux/personnaliser' }
+const TAB_NAME = { games: 'Mes jeux', stim: 'Ajouter', custom: 'Personnaliser' }
+function pcPath(st) {
+  if (!st) return '/jeux'
+  const e = st.e || {}
+  if (e.v === 'game') return st.tab === 'games' ? `/jeux/jeu/${e.id}` : '/jeux/ajouter/jeu'
+  if (e.v === 'search') return '/jeux/ajouter/recherche'
+  return TAB_PATH[st.tab] || '/jeux'
+}
+
+export default function PcOS({ games, addGame, findGame, updateGame, removeGame, setFavorite, reorderTop, wallpaper, setWallpaper, setup, setSetup, holder, fromRect, onClose, closeRef }) {
   const mobile = useIsMobile()
   const rootRef = useRef(null)
   const [closing, setClosing] = useState(false)
@@ -1229,11 +1242,25 @@ export default function PcOS({ games, addGame, findGame, updateGame, removeGame,
     setPhase('shut')
     setTimeout(close, 900)
   }
+  // le retour du site (navigateur, téléphone, Échap, bouton) : chaque page du PC est un pas ; tout
+  // en bas, on éteint et on revient au salon
+  const shutRef = useRef(shutDown)
+  shutRef.current = shutDown
+  useEffect(() => { if (!closeRef) return; const f = () => shutRef.current(); closeRef.current = f; return () => { if (closeRef.current === f) closeRef.current = null } }, [closeRef])
+  useBack(nav.past.length, i => pcPath([...nav.past, nav.cur][i + 1]), d => {
+    setDir('back')
+    setNav(n => {
+      if (n.past.length <= d) return n
+      const p = n.past[d]
+      setLast(l => ({ ...l, [p.tab]: p.e }))
+      return { cur: p, past: n.past.slice(0, d), future: [...n.past.slice(d + 1), n.cur, ...n.future] }
+    })
+  })
+  useLayer(!!trailer, '/jeux/bande-annonce', () => setTrailer(null))
   useEffect(() => {
     const k = e => {
       if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'SELECT') return
-      if (e.key === 'Escape') { if (!back()) shutDown() }
-      else if (e.altKey && e.key === 'ArrowLeft') back()
+      if (e.altKey && e.key === 'ArrowLeft') back()
       else if (e.altKey && e.key === 'ArrowRight') forward()
     }
     window.addEventListener('keydown', k)
@@ -1290,8 +1317,8 @@ export default function PcOS({ games, addGame, findGame, updateGame, removeGame,
       )}
       <header className="cl-top">
         <div className="cl-arrows">
-          <button type="button" onClick={back} disabled={!nav.past.length && !trailer} aria-label="Retour" title="Retour"><Back /></button>
-          <button type="button" onClick={forward} disabled={!nav.future.length} aria-label="Suivant" title="Suivant"><Fwd /></button>
+          <BackButton tone="dark" label={nav.past.length ? TAB_NAME[nav.past[nav.past.length - 1].tab] : 'Le salon'} />
+          {nav.future.length > 0 && <button type="button" onClick={forward} aria-label="Suivant" title="Suivant"><Fwd /></button>}
         </div>
         <nav className={'cl-dual' + (tab === 'custom' ? ' none' : '')} style={{ '--i': tab === 'stim' ? 1 : 0 }} aria-label="Maruchime OS">
           <span className="cl-dual-thumb" aria-hidden="true" />

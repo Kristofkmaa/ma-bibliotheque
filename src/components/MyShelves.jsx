@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { MATERIALS, WALLS, DOOR_STYLES, resolveSkin, skinVars } from '../lib/skins'
 import { LOOSE, createShelf, renameShelf, setShelfSkin, applySkinToAll, moveShelf, deleteShelf, deleteShelfMoving } from '../lib/shelfOps'
+import { useLayer } from '../lib/nav'
 
 const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`
 
@@ -75,11 +76,7 @@ export default function MyShelves({ eff, commit, onClose, initialId, onDeleteBoo
   }
   const closeRef = useRef(close)
   closeRef.current = close
-  useEffect(() => {
-    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); closeRef.current() } }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [])
+  useLayer(true, '/bibliotheque/etageres', () => closeRef.current())
 
   const add = () => {
     const res = createShelf(eff, 'Nouvelle étagère')

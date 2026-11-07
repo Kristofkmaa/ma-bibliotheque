@@ -9,6 +9,7 @@ import {
 import { BookcaseScene, worldLayout, RH, PT } from '../three/BookcaseScene'
 import Caption from './Caption'
 import ShelfEditor from './ShelfEditor'
+import { useLayer } from '../lib/nav'
 
 const CLOSE_MS = 700
 const PH_BOOK = { id: PH, placeholder: true }
@@ -377,10 +378,9 @@ export default function Bookcase3D({
     document.body.classList.toggle('immersive', free)
     sceneRef.current?.setFree(free)
     if (!free) return
-    const onKey = e => { if (e.key === 'Escape') setFree(false) }
-    window.addEventListener('keydown', onKey)
-    return () => { window.removeEventListener('keydown', onKey); document.body.classList.remove('immersive') }
+    return () => { document.body.classList.remove('immersive') }
   }, [free])
+  useLayer(free, '/bibliotheque/tout-voir', () => setFree(false))
   useEffect(() => { if (!size.mobile) setFree(false) }, [size.mobile])
 
   // ---- Rendu --------------------------------------------------------------------------------

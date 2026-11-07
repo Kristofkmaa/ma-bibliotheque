@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { useLayer } from '../lib/nav'
+import BackButton from './BackButton'
 
 /**
  * Une pièce qu'on peut déjà visiter (le garage, la chambre), mais dont les outils viendront plus
@@ -17,7 +19,6 @@ const ROOMS = {
     hint: { mobile: 'Glisse pour tourner la chambre', desk: 'Fais glisser pour tourner la chambre' },
   },
 }
-const Back = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
 
 export default function RoomSoon({ id, scene, onClose }) {
   const R = ROOMS[id]
@@ -35,16 +36,12 @@ export default function RoomSoon({ id, scene, onClose }) {
     if (!el?.animate) { onClose(); return }
     el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, easing: 'ease-in', fill: 'forwards' }).finished.then(onClose, onClose)
   }
-  useEffect(() => {
-    const onKey = e => { if (e.key === 'Escape') leave() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
+  useLayer(true, '/' + id, leave)
   if (!R) return null
   return (
     <div className="kitchen room-soon" ref={rootRef}>
       <header className="kt-top">
-        <button type="button" className="kt-back" onClick={leave}><Back /><span>Le salon</span></button>
+        <BackButton label="Le salon" />
         <div className="kt-title"><b>{R.title}</b><span>Maruchime</span></div>
         <span className="kt-top-r" />
       </header>

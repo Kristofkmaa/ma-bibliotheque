@@ -4587,3 +4587,28 @@ html, body { transition: background-color 0.6s ease, color 0.6s ease; }
   .kw-acts { flex-direction: column; }
   .kt-hurry { flex-wrap: wrap; }
 }
+
+/* Le bouton retour du site : la même pilule partout, en haut à gauche, qui dit où elle mène */
+.nav-back { display: inline-flex; align-items: center; justify-self: start; gap: 6px; flex: none; height: 40px; max-width: 46vw; padding: 0 16px 0 10px; border: 0; border-radius: 20px; cursor: pointer;
+  font: 600 14px/1 var(--sans); letter-spacing: 0; text-transform: none; white-space: nowrap;
+  color: #23201C; background: rgba(251, 247, 240, 0.88); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 0 0 1px rgba(35, 32, 28, 0.06), 0 8px 22px -14px rgba(60, 40, 20, 0.6);
+  transition: transform 0.12s, background 0.2s; }
+.nav-back span { overflow: hidden; text-overflow: ellipsis; }
+.nav-back:hover { background: rgba(255, 252, 246, 0.98); }
+.nav-back:active { transform: scale(0.96); }
+.nav-back:focus-visible { outline: 2px solid var(--cobalt, #1F3FB0); outline-offset: 2px; }
+.nav-back svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.2s; }
+.nav-back:hover svg { transform: translateX(-2px); }
+.nav-back.dark { color: #F4F1EC; background: rgba(28, 26, 32, 0.62); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 0 0 1px rgba(255, 255, 255, 0.1), 0 10px 24px -14px rgba(0, 0, 0, 0.8); }
+.nav-back.dark:hover { background: rgba(44, 41, 50, 0.78); }
+/* posé sur la page (téléphone, bibliothèque…), toujours au même endroit */
+.immersive .nav-back.float { display: none; }
+.ka-top .ka-brand { justify-self: end; }
+.ka-top .ka-brand b { font-size: 22px; }
+.nav-back.float { position: fixed; z-index: 60; top: calc(12px + env(safe-area-inset-top, 0px)); left: 14px; }
+/* (dans la barre du PC, les flèches rondes ne s'appliquent pas au bouton retour) */
+.cl-arrows .nav-back { width: auto; height: 38px; display: inline-flex; border-radius: 19px; padding: 0 14px 0 9px; color: #F4F1EC; }
+.cl-arrows .nav-back:hover { background: rgba(255, 255, 255, 0.14); }
+.cl-arrows { align-items: center; }
+.pfx-switch .cl-arrows .nav-back { color: #222; background: rgba(0, 0, 0, 0.06); box-shadow: none; }

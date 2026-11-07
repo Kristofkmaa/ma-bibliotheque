@@ -3,6 +3,7 @@ import { suggestShelf } from '../lib/suggestShelf'
 import { resolveSkin } from '../lib/skins'
 import { relayUrl } from '../lib/covers'
 import { spineColors } from '../lib/bookUtils'
+import { useLayer } from '../lib/nav'
 
 const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`
 
@@ -52,11 +53,7 @@ export default function GuidedPlacement({ items, shelves, books, onPlace, onPlac
     const t = setTimeout(() => closeRef.current(), 1400)
     return () => clearTimeout(t)
   }, [items.length, busy])
-  useEffect(() => {
-    const onKey = e => { if (e.key === 'Escape') closeRef.current() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  useLayer(true, '/bibliotheque/ranger', () => closeRef.current())
 
   const place = async shelfId => {
     if (busy || !book) return

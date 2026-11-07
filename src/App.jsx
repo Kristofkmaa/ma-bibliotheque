@@ -27,6 +27,8 @@ import LoginPage from './components/LoginPage'
 import ReadingTablet, { ReadingDock } from './components/ReadingTablet'
 import { useReading } from './hooks/useReading'
 import { SHOWS } from './lib/reading'
+import { useLayer, peekStart, takeStart } from './lib/nav'
+import BackButton from './components/BackButton'
 
 const Scanner = lazy(() => import('./components/Scanner'))
 // La bibliothèque en vraie 3D (Three.js) est chargée à part ; sans WebGL, étagère dessinée à plat
@@ -114,7 +116,8 @@ function Library({ user, onSignOut }) {
   const [guide, setGuide] = useState(false)     // livres du panier sortis en bas de l'écran, prêts à ranger
   // salon d'accueil : on y arrive toujours en ouvrant le site ('first'), 'back' quand on y
   // retourne, null dans la bibliothèque
-  const [salon, setSalon] = useState(() => (HAS_WEBGL ? 'first' : null))
+  // (une adresse « /bibliotheque… » à l'arrivée : on entre directement dans la bibliothèque)
+  const [salon, setSalon] = useState(() => (HAS_WEBGL && peekStart()[0] !== 'bibliotheque' ? 'first' : null))
   const basket = useBasket(user.id)
   const mobile = useIsMobile()
   const [flying, setFlying] = useState(() => new Set())
@@ -234,6 +237,34 @@ function Library({ user, onSignOut }) {
     requestAnimationFrame(wait)
   }, [])
 
+  // ---- La navigation : chaque endroit ouvert a son adresse, le retour (navigateur, téléphone,
+  // Échap, bouton du site) referme celui du dessus
+  const base = salon ? '' : '/bibliotheque'
+  useLayer(HAS_WEBGL && !salon, '/bibliotheque', goSalon)
+  useLayer(findOpen, '/bibliotheque/chercher', () => setFindOpen(false))
+  useLayer(searchOpen, base + '/ajouter', () => setSearchOpen(false))
+  useLayer(!!detail && detailOpen, detail?.mode === 'add' ? base + '/ajouter/livre' : `${base}/livre/${detail?.book?.id || ''}`, () => setDetailOpen(false))
+  useLayer(scanner, base + '/ajouter/scanner', () => setScanner(false))
+  // arrivée sur une adresse de la bibliothèque : on rouvre ce qu'elle montre
+  const startBook = useRef(null)
+  useEffect(() => {
+    const st = takeStart(['bibliotheque'])
+    if (!st) return
+    const [, a, b] = st
+    if (a === 'etageres') setShelvesOpen({ id: null })
+    else if (a === 'lectures') setTablet({ from: null, start: st.slice(2) })
+    else if (a === 'ajouter') { setSearch(true); setSearchOpen(true) }
+    else if (a === 'top') setTopPanel(true)
+    else if (a === 'livre' && b) startBook.current = b
+  }, [])
+  useEffect(() => {
+    const id = startBook.current
+    if (!id || !books.length) return
+    startBook.current = null
+    const b = books.find(x => String(x.id) === id)
+    if (b) { setDetail({ book: b, mode: 'edit', rect: null }); setDetailOpen(true) }
+  }, [books])
+
   const openGuide = useCallback(() => {
     if (salon) setSalon(null)
     setGuide(true)
@@ -253,17 +284,6 @@ function Library({ user, onSignOut }) {
     setTimeout(() => setHighlightId(null), 2800)
   }, [focusId])
 
-  useEffect(() => {
-    const onKey = e => {
-      if (e.key !== 'Escape') return
-      if (scanner) setScanner(false)
-      else if (detailOpen) closeDetail()
-      else if (searchOpen) closeSearch()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [scanner, detailOpen, searchOpen, closeDetail, closeSearch])
-
   const emptyText = 'Le premier rayon attend son livre'
   const SHOW_PILL = showTest && (
     <button type="button" className="show-pill lbl" onClick={() => setShow('all')} aria-label={`${showLine} — tout montrer`}>
@@ -275,16 +295,11 @@ function Library({ user, onSignOut }) {
     <div className="scene">
       <header className="top-bar">
         <div className="top-left">
-          <button type="button" className="lbl box add-btn" onClick={() => openSearch()}>+ <span className="add-long">Ajouter un livre</span><span className="add-short">Ajouter</span></button>
+          {HAS_WEBGL && <BackButton label="Le salon" />}
         </div>
         <Logo />
         <div className="top-right">
-          {HAS_WEBGL && (
-            <button type="button" className="lbl box salon-btn" onClick={e => { e.currentTarget.blur(); goSalon() }} aria-label="Retour au salon">
-              <svg width="13" height="12" viewBox="0 0 13 12" aria-hidden="true"><path d="M1 6L6.5 1.2 12 6M2.6 4.8V11h7.8V4.8" stroke="currentColor" fill="none" strokeWidth="1.1" /></svg>
-              <span className="salon-btn-l">Salon</span>
-            </button>
-          )}
+          <button type="button" className="lbl box add-btn" onClick={() => openSearch()}>+ <span className="add-long">Ajouter un livre</span><span className="add-short">Ajouter</span></button>
         </div>
       </header>
 
@@ -444,7 +459,9 @@ function Library({ user, onSignOut }) {
 
       {/* la tablette de lecture, posée à côté de la bibliothèque */}
       {!salon && !detail && !search && <ReadingDock books={books} reading={reading} mobile={mobile} onOpen={from => setTablet({ from })} />}
-      {tablet && <ReadingTablet books={books} reading={reading} updateBook={updateBook} from={tablet.from} mobile={mobile} onShow={id => setFocusId(id)} onClose={() => setTablet(null)} />}
+      {/* téléphone : le même bouton retour, en haut à gauche */}
+      {mobile && HAS_WEBGL && !salon && !overlay && !findOpen && <BackButton label="Le salon" className="float" />}
+      {tablet && <ReadingTablet books={books} reading={reading} updateBook={updateBook} from={tablet.from} start={tablet.start} mobile={mobile} onShow={id => setFocusId(id)} onClose={() => setTablet(null)} />}
 
       {topPanel && <TopBooksPanel list={topBooks} max={TOP_MAX} onMove={bookTop.move} onRemove={bookTop.remove} onOpen={b => { setTopPanel(false); openBook(b, null) }} onClose={() => setTopPanel(false)} />}
 

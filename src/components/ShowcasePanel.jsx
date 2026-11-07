@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 /** Une image qui disparaît si elle ne se charge pas (on voit alors le titre dessous). */
 function Img({ src }) {
@@ -19,11 +19,6 @@ const FORMAT = { book: 'Livre', bluray: 'Blu-ray', game: 'Jeu', switch: 'Jeu' }
 export default function ShowcasePanel({ shown, api, books, series, games, onClose }) {
   const [kind, setKind] = useState(() => (books.length ? 'book' : series.length ? 'work' : 'game'))
   const [q, setQ] = useState('')
-  useEffect(() => {
-    const k = e => { if (e.key === 'Escape' && e.target?.tagName !== 'INPUT') onClose() }
-    window.addEventListener('keydown', k)
-    return () => window.removeEventListener('keydown', k)
-  }, [onClose])
   const full = shown.length >= SHOWCASE_MAX
   const on = useMemo(() => new Set(api.items.map(x => x.kind + ':' + x.id)), [api.items])
   const pool = useMemo(() => {

@@ -12,6 +12,7 @@ import { resolveShowcase } from '../lib/showcase'
 import PcOS from './PcOS'
 import Kitchen from './Kitchen'
 import { applyTheme } from '../lib/theme'
+import { useLayer, takeStart } from '../lib/nav'
 
 const store = {
   get: k => { try { return localStorage.getItem(k) } catch { return null } },
@@ -88,8 +89,20 @@ function greeting(hour) {
  * l'image projetée passe nos films et séries (on la touche : on entre dedans).
  */
 const ROOM_NAMES = { salon: 'Le salon', cuisine: 'La cuisine', garage: 'Le garage', chambre: 'La chambre' }
+const ROOMS = ['cuisine', 'garage', 'chambre']
+// les zooms du salon et leur adresse : la télé (nos films), le meuble télé (la vitrine), le PC
+const ZOOM_PATH = { tv: '/films', cab: '/vitrine', pc: '/jeux' }
+const ZOOM_TAP = { films: 'tv', vitrine: 'cabinet', jeux: 'pc' }
 
 export default function LivingRoom({ books, shelves, basketItems, series, onAddSeries, onUpdateSeries, onRemoveSeries, onRenameCategory, gamesApi, holder, userId, tv: tvBus, showcase, from, onEntered, onOpenBook, onAddBooks, getLibrary, onSignOut }) {
+  // arrivée sur le site par une adresse (« /cuisine/semaine », « /jeux »…) : on y va tout de suite
+  const startRef = useRef(undefined)
+  if (startRef.current === undefined) startRef.current = takeStart([...ROOMS, ...Object.keys(ZOOM_TAP)])
+  const start = startRef.current
+  const front0 = ROOMS.includes(start?.[0]) ? start[0] : 'salon'
+  const kitchenStart = useRef(start?.[0] === 'cuisine' ? start.slice(1) : null)
+  const zoomClose = useRef(null)   // la fermeture animée du module ouvert dans un zoom (la télé, le PC…)
+  const [zoomKind, setZoomKind] = useState(null)
   const rootRef = useRef(null)
   const hostRef = useRef(null)
   const topRef = useRef(null)
@@ -153,7 +166,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       onHover: setHover,
       onEnter: () => cb.current.go(),
       // panier : s'il reste des livres, on entre et on les range ; sinon on en cherche
-      onTvZoom: on => { setTv(on); if (on) { store.set(BUBBLE_KEY, 'off'); setBubbleOff(true) } },
+      onTvZoom: on => { setTv(on); setZoomKind(on ? sceneRef.current?.tvZoom?.kind || 'tv' : null); if (on) { store.set(BUBBLE_KEY, 'off'); setBubbleOff(true) } },
       onTvInside: setInside,
       onCinema: setCinema,
       onSeat: setSeated,
@@ -185,8 +198,11 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       { id: 'cuisine', scene: k, host: kitchenHostRef.current, az0: KITCHEN_VIEW.az, el0: KITCHEN_VIEW.el },
       { id: 'garage', scene: gar, host: garageHostRef.current, az0: GARAGE_VIEW.az, el0: GARAGE_VIEW.el },
       { id: 'chambre', scene: bed, host: bedroomHostRef.current, az0: BEDROOM_VIEW.az, el0: BEDROOM_VIEW.el },
-    ], 'salon')
+    ], front0)
     carouselRef.current = car
+    // une adresse de zoom (« /films », « /jeux », « /vitrine ») : on y va depuis le salon
+    const zt = ZOOM_TAP[start?.[0]]
+    const tz = zt ? setTimeout(() => s.tap(zt), 650) : 0
     setSpots(car.spots())
     const onResize = () => { car.resize(); setSpots(car.spots()) }
     window.addEventListener('resize', onResize)
@@ -196,7 +212,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
       rootRef.current?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease-in-out' })
       t = setTimeout(() => setGoing(false), 1100)
     }
-    return () => { clearTimeout(t); window.removeEventListener('resize', onResize); car.dispose(); k.dispose(); gar.dispose(); bed.dispose(); s.dispose(); sceneRef.current = null; kitchenRef.current = null }
+    return () => { clearTimeout(t); clearTimeout(tz); window.removeEventListener('resize', onResize); car.dispose(); k.dispose(); gar.dispose(); bed.dispose(); s.dispose(); sceneRef.current = null; kitchenRef.current = null }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { sceneRef.current?.setTvBubble(!bubbleOff) }, [bubbleOff])
@@ -217,7 +233,7 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   // le remonte dès qu'on revient (pendant l'animation du retour)
   const [leaving, setLeaving] = useState(false)
   // la pièce de devant sur le carrousel ('salon' ou 'cuisine'), et le tour en cours
-  const [room, setRoom] = useState('salon')
+  const [room, setRoom] = useState(front0)
   const [turning, setTurning] = useState(false)
   const goRoom = id => {
     if (turning || id === room || !carouselRef.current) return
@@ -228,13 +244,10 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
   useEffect(() => { setWall(!tv && !leaving && !away) }, [tv, leaving, away]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { setWall(false); tvVideo.current?.setAttribute('data-off', '') }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Échap pendant le zoom : on ressort (une fois dans la télé, c'est le module qui s'en charge)
-  useEffect(() => {
-    if (!tv || inside === 'tv' || inside === 'pc' || openWork) return
-    const onKey = e => { if (e.key === 'Escape') sceneRef.current?.unzoomTv() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [tv, inside, openWork])
+  // les zooms ont leur adresse ; le retour referme le module (avec son animation) ou ressort du zoom
+  useLayer(tv && !!zoomKind, ZOOM_PATH[zoomKind] || '/films', () => (zoomClose.current ? zoomClose.current() : sceneRef.current?.unzoomTv()))
+  const workClose = useRef(null)
+  useLayer(!!openWork, '/vitrine/films', () => (workClose.current ? workClose.current() : setOpenWork(null)))
   useEffect(() => { if (!inside) setOpenWork(null) }, [inside])
 
   // les livres, dans l'ordre des étagères ; l'habillage de la première étagère
@@ -314,26 +327,26 @@ export default function LivingRoom({ books, shelves, basketItems, series, onAddS
 
       {/* on a zoomé à bloc sur la télé : nos séries, il ne reste que le contour de l'écran */}
       {inside === 'tv' && (
-        <SeriesTV series={series || []} fromRect={sceneRef.current?.screenRect?.()} onAdd={onAddSeries} onUpdate={onUpdateSeries} onRemove={onRemoveSeries} onRenameCategory={onRenameCategory}
+        <SeriesTV base="/films" closeRef={zoomClose} series={series || []} fromRect={sceneRef.current?.screenRect?.()} onAdd={onAddSeries} onUpdate={onUpdateSeries} onRemove={onRemoveSeries} onRenameCategory={onRenameCategory}
           onClose={() => sceneRef.current?.unzoomTv()} />
       )}
 
       {/* devant le meuble télé : la vitrine de nos films et séries */}
       {inside === 'cab' && !openWork && showcase && (
-        <ShowcasePanel shown={shownMedia} api={showcase} books={books} series={series || []} games={gamesApi?.games || []} onClose={() => sceneRef.current?.unzoomTv()} />
+        <ShowcasePanel closeRef={zoomClose} shown={shownMedia} api={showcase} books={books} series={series || []} games={gamesApi?.games || []} onClose={() => sceneRef.current?.unzoomTv()} />
       )}
       {inside === 'cab' && openWork && (
-        <SeriesTV series={series || []} initialId={openWork === 'list' ? null : openWork} onAdd={onAddSeries} onUpdate={onUpdateSeries} onRemove={onRemoveSeries} onRenameCategory={onRenameCategory}
+        <SeriesTV base="/vitrine/films" closeRef={workClose} series={series || []} initialId={openWork === 'list' ? null : openWork} onAdd={onAddSeries} onUpdate={onUpdateSeries} onRemove={onRemoveSeries} onRenameCategory={onRenameCategory}
           onClose={() => setOpenWork(null)} />
       )}
 
       {/* devant le PC du bureau gamer : son écran s'agrandit, on est sur le bureau de Maruchime OS */}
       {inside === 'pc' && gamesApi && (
-        <PcOS {...gamesApi} holder={holder} fromRect={sceneRef.current?.screenRect?.('pc')} onClose={() => sceneRef.current?.unzoomTv()} />
+        <PcOS {...gamesApi} closeRef={zoomClose} holder={holder} fromRect={sceneRef.current?.screenRect?.('pc')} onClose={() => sceneRef.current?.unzoomTv()} />
       )}
 
       {/* la cuisine : une autre pièce, ouverte par-dessus le salon */}
-      {room === 'cuisine' && !turning && kitchenRef.current && <Kitchen userId={userId} scene={kitchenRef.current} onClose={() => goRoom('salon')} />}
+      {room === 'cuisine' && !turning && kitchenRef.current && <Kitchen userId={userId} scene={kitchenRef.current} start={kitchenStart.current} onStarted={() => { kitchenStart.current = null }} onClose={() => goRoom('salon')} />}
       {(room === 'garage' || room === 'chambre') && !turning && roomScenes.current[room] && <RoomSoon id={room} scene={roomScenes.current[room]} onClose={() => goRoom('salon')} />}
 
       <div className="salon-top" ref={topRef}>

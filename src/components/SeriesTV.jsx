@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import BluRayShelf, { canWebGL } from './BluRayShelf'
 import { tmdbImg, searchSeries, seriesDetails, seriesVideos, seriesImages, year, isMovie, workKey, runtimeLabel, publicRating, fmtVote, fmtVotes, seriesProviders, providerUrl } from '../lib/tmdb'
+import { useLayer } from '../lib/nav'
+import BackButton from './BackButton'
 // une note toujours entre 0 et 5 étoiles (une valeur hors échelle ne doit jamais casser l'affichage)
 const st5 = n => Math.max(0, Math.min(5, Math.round(+n || 0)))
 
@@ -573,7 +575,7 @@ function CategoryPicker({ value, all, onChange }) {
  * à notre façon (fond sombre, la grande affiche, des rangées par catégorie, la fiche) ; et la
  * recherche pour en ajouter.
  */
-export default function SeriesTV({ series, initialId = null, fromRect = null, onAdd, onUpdate, onRemove, onRenameCategory, onClose }) {
+export default function SeriesTV({ series, initialId = null, fromRect = null, onAdd, onUpdate, onRemove, onRenameCategory, onClose, base = '/films', closeRef }) {
   const [kind, setKind] = useState('all')     // notre liste (tout), séries ou films
   const [sort, setSortState] = useState(() => { try { return localStorage.getItem('levana.series.tri') || 'cat' } catch { return 'cat' } })
   const setSort = v => { setSortState(v); try { localStorage.setItem('levana.series.tri', v) } catch { /* ignore */ } }
@@ -696,17 +698,11 @@ export default function SeriesTV({ series, initialId = null, fromRect = null, on
     } else setTimeout(onClose, 320)
   }, [closing, onClose, rectInset])
 
-  useEffect(() => {
-    const k = e => {
-      if (e.target?.tagName === 'INPUT' || e.key !== 'Escape') return
-      if (playing) setPlaying(null)
-      else if (cur) setId(null)
-      else if (view === 'search' && series.length) setView('home')
-      else close()
-    }
-    window.addEventListener('keydown', k)
-    return () => window.removeEventListener('keydown', k)
-  }, [playing, cur, view, series.length, close])
+  // le retour (navigateur, téléphone, Échap, bouton) : la vidéo, puis la fiche, puis « Ajouter »
+  useEffect(() => { if (!closeRef) return; closeRef.current = close; return () => { if (closeRef.current === close) closeRef.current = null } }, [closeRef, close])
+  useLayer(view === 'search' && series.length > 0, base + '/ajouter', () => setView('home'))
+  useLayer(!!cur, `${base}/titre/${cur?.id || ''}`, () => setId(null))
+  useLayer(!!playing, `${base}/titre/${playing?.id || ''}/video`, () => setPlaying(null))
 
   const goKind = k => { setKind(k); setId(null); setView('home'); homeRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' }) }
   const added = s => { const row = onAdd(s); setView('home'); if (row) setId(row.id) }
@@ -720,13 +716,13 @@ export default function SeriesTV({ series, initialId = null, fromRect = null, on
       <div className="stv-bezel">
         <div className={'stv-screen sx-screen sx-v-' + view} onScroll={e => { e.currentTarget.scrollTop = 0 }}>
           <header className={'sx-top' + (scrolled || view !== 'home' ? ' solid' : '')}>
+            <BackButton tone="dark" label={view === 'search' && series.length ? 'Notre liste' : base.startsWith('/vitrine') ? 'La vitrine' : 'Le salon'} />
             <p className="sx-logo">Maruchime<span>films & séries</span></p>
             <nav className="sx-tabs" aria-label="Rayons">
               {tabs.map(([k, l]) => <button key={k} type="button" className={view === 'home' && kind === k ? 'on' : ''} onClick={() => goKind(k)}>{l}</button>)}
             </nav>
             <div className="sx-right">
               <button type="button" className={'sx-add' + (view === 'search' ? ' on' : '')} onClick={() => setView('search')}><span aria-hidden="true">+</span> Ajouter</button>
-              <button type="button" className="sx-close" onClick={close} aria-label="Revenir au salon">×</button>
             </div>
           </header>
 
