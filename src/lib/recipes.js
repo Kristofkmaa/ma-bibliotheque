@@ -17,7 +17,7 @@ function get(params) {
 }
 
 /** Avec ce qu'on a : la liste des noms anglais de nos réserves. rank 'missing' (rien ou peu à acheter) ou 'used'. */
-export const recipesWith = (have, rank = 'missing') => get({ have: [...new Set(have)].sort().join(','), rank })
+export const recipesWith = (have, rank = 'missing', n) => get({ have: [...new Set(have)].sort().join(','), rank, ...(n ? { n: String(n) } : {}) })
 export const searchRecipes = (q, { type = '', diet = '' } = {}) => get({ q: q.trim(), ...(type ? { type } : {}), ...(diet ? { diet } : {}) })
 export const randomRecipes = (type = '') => get({ random: '1', ...(type ? { type } : {}) })
 export const recipeDetail = id => get({ id: String(id) })

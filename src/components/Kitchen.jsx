@@ -4,6 +4,7 @@ import { AISLES, INGREDIENTS, aisleOf, findIngredients, inPantry } from '../lib/
 import { recipesWith, searchRecipes, randomRecipes, recipeDetail, toEnglish, DISH_TYPES, DIETS, amountFr, timeFr } from '../lib/recipes'
 import { relayUrl } from '../lib/covers'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { isoDay, addDays, daysLeft, urgency, leftFr, dayFr, QUICK_DATES, planWeek, slim } from '../lib/pantryDates'
 
 /**
  * La cuisine : une pièce en 3D (le frigo, les placards, la tablette, la liste de courses sur le
@@ -16,10 +17,13 @@ const CLASSICS = {
   placard: ['Pâtes', 'Riz', 'Farine', 'Sucre', 'Huile d’olive', 'Sel', 'Poivre', 'Oignons', 'Ail', 'Pommes de terre', 'Tomates pelées', 'Bouillon', 'Lentilles', 'Thon en boîte', 'Chocolat noir', 'Levure chimique'],
 }
 const byFr = new Map(INGREDIENTS.map(i => [i.fr, i]))
+const byExpiry = (a, b) => (a.expires || '9999').localeCompare(b.expires || '9999')
+const isUrgent = i => i.expires && daysLeft(i.expires) <= 2
 
 const Close = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
 const Back = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
 const CartIcon = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2.2l2.1 10.2a1.5 1.5 0 0 0 1.5 1.2h8.4a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.1" /><circle cx="9.5" cy="19.5" r="1.3" /><circle cx="17" cy="19.5" r="1.3" /></svg>
+const CalIcon = () => <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2.5" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /></svg>
 const Heart = ({ on }) => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" className={on ? 'fill' : ''} /></svg>
 
 export default function Kitchen({ userId, scene, onClose }) {
@@ -72,6 +76,7 @@ export default function Kitchen({ userId, scene, onClose }) {
 
   const count = p => k.pantry.filter(i => (p === 'placard' ? i.place === 'placard' : i.place !== 'placard')).length
   const todo = k.shopping.filter(s => !s.done).length
+  const hurry = k.pantry.filter(isUrgent).length
 
   return (
     <div className={'kitchen' + (view ? ' focused' : '') + (app ? ' app-open' : '')} ref={rootRef}>
@@ -88,16 +93,17 @@ export default function Kitchen({ userId, scene, onClose }) {
 
       {!view && (
         <nav className="kt-dock" aria-label="La cuisine">
-          <button type="button" onClick={() => go('frigo')}><span className="kt-ico">🧊</span><b>Le frigo</b><em>{count('frigo')}</em></button>
+          <button type="button" onClick={() => go('frigo')}><span className="kt-ico">🧊</span><b>Le frigo</b>{hurry > 0 ? <em className="warn" title="À finir vite">{hurry}</em> : <em>{count('frigo')}</em>}</button>
           <button type="button" onClick={() => go('placard')}><span className="kt-ico">🫙</span><b>Les placards</b><em>{count('placard')}</em></button>
           <button type="button" className="main" onClick={() => go('tablette')}><span className="kt-ico">📖</span><b>Les recettes</b></button>
+          <button type="button" onClick={() => openApp('semaine')}><span className="kt-ico">📅</span><b>La semaine</b>{k.week?.days?.length > 0 && <em>{k.week.days.filter(d => !d.done).length}</em>}</button>
           <button type="button" onClick={() => go('courses')}><span className="kt-ico">📝</span><b>Les courses</b>{todo > 0 && <em>{todo}</em>}</button>
         </nav>
       )}
       {!view && <p className="kt-hint">{mobile ? 'Glisse pour tourner la cuisine · touche le frigo ou les placards' : 'Fais glisser pour tourner la cuisine · clique sur le frigo, les placards ou la tablette'}</p>}
 
       {(arrived === 'frigo' || arrived === 'placard') && (
-        <PantryPanel key={arrived} place={arrived} k={k} onClose={back} onRecipes={() => openApp('frigo')} onOther={() => go(arrived === 'frigo' ? 'placard' : 'frigo')} />
+        <PantryPanel key={arrived} place={arrived} k={k} onClose={back} onRecipes={() => openApp('frigo')} onWeek={() => openApp('semaine')} onOther={() => go(arrived === 'frigo' ? 'placard' : 'frigo')} />
       )}
       {arrived === 'courses' && <ShoppingPanel k={k} onClose={back} />}
       {app && <RecipeApp k={k} start={app} onClose={closeApp} onOpenPlace={p => { setApp(null); go(p) }} onShow={(t, img) => sceneRef.current?.setTablet(t, img ? relayUrl(img) : null)} />}
@@ -108,19 +114,22 @@ export default function Kitchen({ userId, scene, onClose }) {
 /* -------------------------------------------------------------------------- */
 /* Le frigo et les placards : ce qu'on a, rangé par rayon                     */
 /* -------------------------------------------------------------------------- */
-function PantryPanel({ place, k, onClose, onRecipes, onOther }) {
+function PantryPanel({ place, k, onClose, onRecipes, onWeek, onOther }) {
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
+  const [dateFor, setDateFor] = useState(null)   // l'article dont on règle la date
   const inputRef = useRef(null)
   const here = k.pantry.filter(i => (place === 'placard' ? i.place === 'placard' : i.place !== 'placard'))
   const has = fr => here.some(i => i.fr === fr)
   const sugg = q.trim() ? findIngredients(q, 7) : []
   const exact = sugg.find(s => s.fr.toLowerCase() === q.trim().toLowerCase())
   const classics = CLASSICS[place].filter(f => !has(f)).map(f => byFr.get(f)).filter(Boolean).slice(0, 10)
-  const groups = AISLES.map(a => ({ a, list: here.filter(i => i.aisle === a.id) })).filter(g => g.list.length)
+  const groups = AISLES.map(a => ({ a, list: here.filter(i => i.aisle === a.id).sort(byExpiry) })).filter(g => g.list.length)
+  const hurry = here.filter(isUrgent).sort(byExpiry)
   const other = place === 'frigo' ? 'placard' : 'frigo'
 
-  const add = it => { k.addItem(it, place); setQ(''); inputRef.current?.focus() }
+  // au frigo, ce qu'on range se périme : on propose tout de suite sa date (un geste, ou rien)
+  const add = it => { const item = k.addItem(it, place); setQ(''); if (place === 'frigo') setDateFor(item.id); inputRef.current?.focus() }
   const addCustom = async () => {
     const fr = q.trim()
     if (!fr) return
@@ -157,6 +166,12 @@ function PantryPanel({ place, k, onClose, onRecipes, onOther }) {
       )}
 
       <div className="kt-panel-body">
+        {hurry.length > 0 && !q.trim() && (
+          <div className="kt-hurry">
+            <p><b>À finir vite</b> {hurry.map(i => `${i.fr.toLowerCase()} (${leftFr(i.expires)})`).join(', ')}</p>
+            <button type="button" onClick={onWeek}>Prévoir les repas →</button>
+          </div>
+        )}
         {!q.trim() && classics.length > 0 && (
           <div className="kt-classics">
             <h3>Les classiques <em>un toucher pour ranger</em></h3>
@@ -170,11 +185,18 @@ function PantryPanel({ place, k, onClose, onRecipes, onOther }) {
             <h3>{a.label}</h3>
             <ul>
               {list.map(i => (
-                <li key={i.id}>
-                  <span className="kt-emo">{i.emoji}</span>
-                  <span className="kt-name">{i.fr}</span>
-                  <button type="button" className="kt-mini" onClick={() => k.moveItem(i.id, other)} title={other === 'frigo' ? 'Mettre au frigo' : 'Mettre dans les placards'}>{other === 'frigo' ? '→ frigo' : '→ placard'}</button>
-                  <button type="button" className="kt-del" onClick={() => k.removeItem(i.id)} aria-label={`Retirer ${i.fr}`}><Close /></button>
+                <li key={i.id} className={dateFor === i.id ? 'editing' : ''}>
+                  <div className="kt-row">
+                    <span className="kt-emo">{i.emoji}</span>
+                    <span className="kt-name">{i.fr}</span>
+                    <button type="button" className="kt-mini" onClick={() => k.moveItem(i.id, other)} title={other === 'frigo' ? 'Mettre au frigo' : 'Mettre dans les placards'}>{other === 'frigo' ? '→ frigo' : '→ placard'}</button>
+                    <button type="button" className={'kt-date' + (i.expires ? ' u-' + urgency(daysLeft(i.expires)) : ' none')} onClick={() => setDateFor(f => (f === i.id ? null : i.id))}
+                      aria-expanded={dateFor === i.id} aria-label={i.expires ? `À consommer ${leftFr(i.expires)} : changer la date` : `Date de péremption de ${i.fr}`}>
+                      {i.expires ? leftFr(i.expires) : <><CalIcon />date</>}
+                    </button>
+                    <button type="button" className="kt-del" onClick={() => k.removeItem(i.id)} aria-label={`Retirer ${i.fr}`}><Close /></button>
+                  </div>
+                  {dateFor === i.id && <DateEdit item={i} k={k} onDone={() => setDateFor(null)} />}
                 </li>
               ))}
             </ul>
@@ -188,6 +210,29 @@ function PantryPanel({ place, k, onClose, onRecipes, onOther }) {
         <button type="button" className="kt-cta" onClick={onRecipes} disabled={!k.pantry.length}>Que cuisiner avec ça ?</button>
       </footer>
     </section>
+  )
+}
+
+/** La date de péremption d'un article : un raccourci, ou le calendrier. */
+function DateEdit({ item, k, onDone }) {
+  const today = isoDay()
+  const ref = useRef(null)
+  useEffect(() => { ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }) }, [])
+  const set = v => { k.setExpiry(item.id, v); onDone() }
+  return (
+    <div className="kt-dateedit" ref={ref}>
+      <span className="kt-dateedit-l">À consommer avant</span>
+      <div className="kt-chips">
+        {QUICK_DATES.map(([l, n]) => {
+          const v = addDays(today, n)
+          return <button type="button" key={l} className={'kt-chip' + (item.expires === v ? ' on' : '')} onClick={() => set(v)}>{l}</button>
+        })}
+        <label className="kt-chip kt-cal"><CalIcon /><span>{item.expires ? new Date(item.expires + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : 'Autre date'}</span>
+          <input type="date" value={item.expires || ''} min={addDays(today, -30)} onChange={e => e.target.value && set(e.target.value)} aria-label="Choisir la date" />
+        </label>
+        {item.expires && <button type="button" className="kt-chip ghost" onClick={() => set(null)}>Sans date</button>}
+      </div>
+    </div>
   )
 }
 
@@ -246,18 +291,19 @@ function RecipeApp({ k, start, onClose, onOpenPlace, onShow }) {
       { transform: 'none', borderRadius: '0px', opacity: 1 },
     ], { duration: 520, easing: 'cubic-bezier(0.2, 0.9, 0.25, 1)' })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  const TABS = [['frigo', 'Avec mon frigo'], ['chercher', 'Chercher'], ['miennes', 'Mes recettes']]
+  const TABS = [['semaine', 'Ma semaine'], ['frigo', 'Mon frigo'], ['chercher', 'Chercher'], ['miennes', 'Mes recettes']]
   return (
     <div className="kt-app" ref={ref} role="dialog" aria-label="Les recettes">
       <header className="ka-top">
         <div className="ka-brand"><span>🍲</span><b>Recettes</b></div>
-        <nav className="ka-tabs" style={{ '--i': TABS.findIndex(t => t[0] === tab) }} aria-label="Les recettes">
+        <nav className="ka-tabs" style={{ '--i': TABS.findIndex(t => t[0] === tab), '--n': TABS.length }} aria-label="Les recettes">
           <span className="ka-thumb" aria-hidden="true" />
           {TABS.map(([id, label]) => <button type="button" key={id} className={tab === id ? 'on' : ''} onClick={() => { setTab(id); setOpen(null) }}>{label}</button>)}
         </nav>
         <button type="button" className="ka-close" onClick={onClose} aria-label="Ranger la tablette"><Close /></button>
       </header>
       <main className="ka-main">
+        {tab === 'semaine' && <WeekPlan k={k} onOpen={setOpen} onOpenPlace={onOpenPlace} />}
         {tab === 'frigo' && <WithPantry k={k} onOpen={setOpen} onOpenPlace={onOpenPlace} />}
         {tab === 'chercher' && <Search onOpen={setOpen} />}
         {tab === 'miennes' && <Mine k={k} onOpen={setOpen} />}
@@ -307,6 +353,140 @@ function Card({ r, onOpen, fav }) {
         </p>
       ) : <p className="ka-use">{[timeFr(r.time), r.servings ? `${r.servings} pers.` : ''].filter(Boolean).join(' · ')}</p>}
     </button>
+  )
+}
+
+/**
+ * Ma semaine : des recettes pour les jours qui viennent, qui finissent d'abord ce qui périme.
+ * On demande deux listes au livre de recettes (avec tout ce qu'on a, et avec ce qui presse),
+ * puis on choisit et on pose une recette par jour, la plus pressée en premier.
+ */
+function WeekPlan({ k, onOpen, onOpenPlace }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const [count, setCount] = useState(k.week?.count || 7)
+  const [toast, setToast] = useState(null)
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t) }, [toast])
+  const today = isoDay()
+  const week = k.week
+  const live = week?.days?.length && daysLeft(addDays(week.start, week.days.length - 1), today) >= 0
+  const match = en => inPantry(en, k.pantry)
+  const soon = k.pantry.filter(i => i.expires && daysLeft(i.expires) <= 6).sort(byExpiry)
+  // les ingrédients de la recette, revus avec tout ce qu'on a (pas seulement ce qu'on a demandé)
+  const recheck = r => {
+    const all = [...(r.used || []), ...(r.missed || [])]
+    return { ...r, used: all.filter(x => match(x.en)), missed: all.filter(x => !match(x.en)) }
+  }
+
+  const build = async n => {
+    setBusy(true); setErr(null)
+    try {
+      const have = [...new Set(k.pantry.map(i => i.en).filter(Boolean))]
+      const hurry = [...new Set(soon.map(i => i.en))].slice(0, 10)
+      const [a, b] = await Promise.all([recipesWith(have, 'missing', 36), hurry.length ? recipesWith(hurry, 'used', 36) : { results: [] }])
+      const seen = new Set()
+      const pool = [...b.results, ...a.results].filter(r => !seen.has(r.id) && seen.add(r.id)).map(recheck)
+      const days = planWeek(pool, match, { count: n, start: today })
+      k.setWeek({ start: today, count: n, days, pool: pool.map(slim), skipped: [] })
+    } catch (e) { setErr(e) } finally { setBusy(false) }
+  }
+  const swap = i => {
+    const ids = week.days.map(d => d.recipe.id)
+    const skipped = [...(week.skipped || []), week.days[i].recipe.id]
+    const taken = week.days.filter((d, j) => j !== i).flatMap(d => d.recipe.used.map(u => match(u.en)?.id).filter(Boolean))
+    const [next] = planWeek((week.pool || []).map(recheck), match, { count: 1, start: week.days[i].date, skip: [...ids, ...skipped], taken })
+    if (!next) { setToast('Plus d’autre idée : refais la semaine'); return }
+    k.setWeek({ ...week, skipped, days: week.days.map((d, j) => (j === i ? { ...next, date: d.date } : d)) })
+  }
+  const missing = live ? week.days.filter(d => !d.done).flatMap(d => recheck(d.recipe).missed.filter(m => !k.inShopping(m.fr)).map(m => ({ ...m, from: d.recipe.title }))) : []
+  const missingUnique = [...new Map(missing.map(m => [m.fr.toLowerCase(), m])).values()]
+  const covered = live ? new Set(week.days.flatMap(d => recheck(d.recipe).used.map(u => match(u.en)?.id))) : new Set()
+  const soonLive = soon.filter(i => daysLeft(i.expires) >= 0)     // (ce qui est déjà périmé ne se prévoit plus)
+  const notPlanned = soonLive.filter(i => !covered.has(i.id))
+
+  if (!k.pantry.length) {
+    return (
+      <div className="ka-state">
+        <p className="ka-state-emo">📅</p>
+        <h3>D’abord, le frigo</h3>
+        <p>Range ce que tu as (avec les dates de péremption) : la semaine finira d’abord ce qui presse.</p>
+        <div className="ka-state-row"><button type="button" className="kt-cta" onClick={() => onOpenPlace('frigo')}>Ouvrir le frigo</button></div>
+      </div>
+    )
+  }
+  if (!live) {
+    return (
+      <div className="kw-start">
+        <p className="kt-kicker">Ma semaine</p>
+        <h2>Les repas des jours qui viennent</h2>
+        <p className="kw-lead">On choisit des recettes avec ce que tu as, en finissant d’abord ce qui périme bientôt.</p>
+        {soon.length > 0 ? (
+          <ul className="kw-soon">
+            {soon.map(i => <li key={i.id} className={'u-' + urgency(daysLeft(i.expires))}><span>{i.emoji}</span>{i.fr}<em>{leftFr(i.expires)}</em></li>)}
+          </ul>
+        ) : (
+          <p className="kw-tip">Astuce : mets les dates de péremption dans le frigo (le petit 📅 à côté de chaque aliment), la semaine s’en servira.</p>
+        )}
+        <div className="kw-count" role="group" aria-label="Combien de repas">
+          {[3, 5, 7].map(n => <button type="button" key={n} className={'kt-chip' + (count === n ? ' on' : '')} onClick={() => setCount(n)}>{n} repas</button>)}
+        </div>
+        <button type="button" className="kt-cta kw-go" onClick={() => build(count)} disabled={busy}>{busy ? 'On cherche…' : 'Préparer ma semaine'}</button>
+        {err && <KeyMissing err={err} />}
+      </div>
+    )
+  }
+  return (
+    <div className="kw">
+      <div className="ka-intro kw-head">
+        <h2>Ma semaine</h2>
+        <p>{week.days.length} repas · {soonLive.length ? `${soonLive.length - notPlanned.length} des ${soonLive.length} aliments qui périment bientôt sont prévus` : 'rien ne périme dans les jours qui viennent'}</p>
+        {notPlanned.length > 0 && <p className="kw-left">Pas encore prévu : {notPlanned.map(i => `${i.fr.toLowerCase()} (${leftFr(i.expires)})`).join(', ')}</p>}
+      </div>
+      <ol className="kw-days">
+        {week.days.map((d, i) => {
+          const r = recheck(d.recipe)
+          const items = r.used.map(u => ({ u, it: match(u.en) })).filter(x => x.it)
+          const dated = items.filter(x => x.it.expires).sort((a, b) => byExpiry(a.it, b.it))
+          const late = dated.filter(x => daysLeft(x.it.expires, d.date) < 0)
+          const past = daysLeft(d.date, today) < 0
+          return (
+            <li key={d.date} className={'kw-day' + (d.done ? ' done' : '') + (past && !d.done ? ' past' : '')}>
+              <div className="kw-when"><b>{dayFr(d.date, today)}</b><span>{new Date(d.date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span></div>
+              <button type="button" className="kw-recipe" onClick={() => onOpen(r.id)}>
+                <span className="kw-img">{r.image && <img src={r.image} alt="" loading="lazy" />}</span>
+                <span className="kw-txt">
+                  <b>{r.title}</b>
+                  <span className="kw-uses">
+                    {dated.slice(0, 3).map(({ it }) => <i key={it.id} className={'u-' + urgency(daysLeft(it.expires))}>{it.fr.toLowerCase()} · {leftFr(it.expires)}</i>)}
+                    {items.length > dated.length && <i className="plain">{dated.length ? '+ ' : ''}{items.length - dated.length} de chez toi</i>}
+                    {r.missed.length > 0 && <i className="miss">il manque {r.missed.length}</i>}
+                  </span>
+                  {late.length > 0 && <span className="kw-late">⚠ {late.map(x => x.it.fr.toLowerCase()).join(', ')} {late.length > 1 ? 'seront périmés' : 'sera périmé'} ce jour-là</span>}
+                </span>
+              </button>
+              <div className="kw-acts">
+                <button type="button" className={'kw-check' + (d.done ? ' on' : '')} onClick={() => k.setDay(i, { done: !d.done })} aria-pressed={d.done} aria-label={d.done ? 'Pas encore fait' : 'Fait'}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                </button>
+                {!d.done && <button type="button" className="kw-swap" onClick={() => swap(i)} aria-label="Une autre recette ce jour-là" title="Une autre idée">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a8 8 0 0 1 14-3l2 2M20 15a8 8 0 0 1-14 3l-2-2M20 4v4h-4M4 20v-4h4" /></svg>
+                </button>}
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+      <div className="kw-foot">
+        {missingUnique.length > 0 ? (
+          <button type="button" className="ka-cart" onClick={() => { k.addShopping(missingUnique.map(m => ({ fr: m.fr, en: m.en, from: m.from }))); setToast(`${missingUnique.length} ajouté${missingUnique.length > 1 ? 's' : ''} à la liste de courses`) }}>
+            <CartIcon /><span><b>Ajouter les {missingUnique.length} manquants de la semaine aux courses</b><em>{missingUnique.slice(0, 5).map(m => m.fr.toLowerCase()).join(', ')}{missingUnique.length > 5 ? '…' : ''}</em></span>
+          </button>
+        ) : <p className="kw-ok">✓ Tout ce qu’il faut est là (ou sur la liste de courses)</p>}
+        <button type="button" className="kt-ghost" onClick={() => build(week.count || 7)} disabled={busy}>{busy ? 'On cherche…' : '↻ Refaire la semaine'}</button>
+      </div>
+      {err && <KeyMissing err={err} />}
+      {toast && <div className="ka-toast" role="status">{toast}</div>}
+    </div>
   )
 }
 

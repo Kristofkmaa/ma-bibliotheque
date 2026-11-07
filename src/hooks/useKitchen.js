@@ -4,7 +4,7 @@ import { uid } from '../lib/shelfOps'
 import { ingredientByFr, aisleOf, norm } from '../lib/ingredients'
 
 const KEY = id => `levana.cuisine.${id}`
-const EMPTY = { pantry: [], favorites: [], cooked: [], shopping: [] }
+const EMPTY = { pantry: [], favorites: [], cooked: [], shopping: [], week: null }
 const lsGet = k => { try { return { ...EMPTY, ...(JSON.parse(localStorage.getItem(k)) || {}) } } catch { return { ...EMPTY } } }
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* ignore */ } }
 const same = (a, b) => norm(a) === norm(b)
@@ -13,9 +13,10 @@ const same = (a, b) => norm(a) === norm(b)
  * La cuisine : ce qu'il y a dans le frigo et les placards, nos recettes préférées, celles déjà
  * cuisinées, et la liste de courses. Une ligne par personne dans la table Supabase `user_kitchen`
  * (colonne `data` en jsonb) ; tant qu'elle n'existe pas (ou en mode démo), gardé dans ce navigateur.
- *   pantry   : [{ id, fr, en, alt, emoji, aisle, place: 'frigo' | 'placard', added_at }]
+ *   pantry   : [{ id, fr, en, alt, emoji, aisle, place: 'frigo' | 'placard', added_at, expires }]
  *   favorites: [{ id, title, image, time }]   cooked: [{ id, title, image, at }]
  *   shopping : [{ id, fr, en, emoji, aisle, place, qty, from: [titres des recettes], done }]
+ *   week     : { start, count, days: [{ date, recipe, done }], pool } (la semaine de recettes)
  */
 export function useKitchen(userId) {
   const [data, setData] = useState(EMPTY)
@@ -56,6 +57,12 @@ export function useKitchen(userId) {
   const removeItem = useCallback(id => save(d => ({ pantry: d.pantry.filter(p => p.id !== id) })), [save])
   const removeItems = useCallback(ids => { const s = new Set(ids); save(d => ({ pantry: d.pantry.filter(p => !s.has(p.id)) })) }, [save])
   const moveItem = useCallback((id, place) => save(d => ({ pantry: d.pantry.map(p => (p.id === id ? { ...p, place } : p)) })), [save])
+  /** La date de péremption d'un article (« AAAA-MM-JJ »), ou null pour l'enlever. */
+  const setExpiry = useCallback((id, expires) => save(d => ({ pantry: d.pantry.map(p => (p.id === id ? { ...p, expires: expires || null } : p)) })), [save])
+
+  /** La semaine de recettes : { start, count, days: [{ date, recipe, done }], pool: [...] }. */
+  const setWeek = useCallback(week => save(() => ({ week })), [save])
+  const setDay = useCallback((i, patch) => save(d => (d.week ? { week: { ...d.week, days: d.week.days.map((x, j) => (j === i ? { ...x, ...patch } : x)) } } : {})), [save])
 
   const isFavorite = useCallback(id => ref.current.favorites.some(f => f.id === id), [])
   const toggleFavorite = useCallback(r => save(d => (d.favorites.some(f => f.id === r.id)
@@ -102,5 +109,5 @@ export function useKitchen(userId) {
     return { pantry, shopping: d.shopping.filter(s => !s.done) }
   }), [save])
 
-  return { ...data, addItem, removeItem, removeItems, moveItem, isFavorite, toggleFavorite, markCooked, addShopping, toggleShopping, removeShopping, inShopping, unShopping, storeShopping }
+  return { ...data, addItem, removeItem, removeItems, moveItem, setExpiry, setWeek, setDay, isFavorite, toggleFavorite, markCooked, addShopping, toggleShopping, removeShopping, inShopping, unShopping, storeShopping }
 }
