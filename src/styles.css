@@ -4956,3 +4956,50 @@ body.house-on { --house-h: 74px; }
   .lb h1 { font-size: 24px; }
 }
 @supports (height: 100dvh) { @media (max-height: 520px) and (orientation: landscape) { .lb .lb-book { height: calc(100dvh - 14px - var(--house-h, 0px)); } } }
+
+/* ---- Sur téléphone : mes livres en appli (dans les couleurs du livre) -------------------- */
+.lb.lba { display: flex; flex-direction: column; align-items: stretch; justify-items: stretch; padding: 0 0 var(--house-h, 0px); perspective: none;
+  background-color: var(--lb-paper);
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="matrix" values="0 0 0 0 0.45 0 0 0 0 0.38 0 0 0 0 0.28 0 0 0 0.08 0"/></filter><rect width="100%" height="100%" filter="url(%23g)"/></svg>'); }
+.lba-top { display: flex; align-items: center; gap: 10px; flex: none; padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 8px; }
+.lba-top .nav-back { background: rgba(255, 255, 255, 0.7); box-shadow: inset 0 0 0 1px var(--lb-line); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.lba-title { flex: 1; min-width: 0; margin: 0 !important; font: italic 400 24px/1 var(--serif) !important; text-align: right; color: var(--lb-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lba-add { flex: none; width: 42px; height: 42px; margin-left: auto; border-radius: 50%; display: grid; place-items: center; background: var(--lb-blue) !important; color: #fff !important;
+  box-shadow: 0 10px 20px -12px rgba(31, 63, 176, 0.9); transition: transform 0.12s; }
+.lba-title + .lba-add { margin-left: 0; }
+.lba-add:active { transform: scale(0.92); }
+.lba-add svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.lba-tabs { display: flex; gap: 7px; flex: none; overflow-x: auto; padding: 4px 14px 12px; scrollbar-width: none; border-bottom: 1px solid var(--lb-line); scroll-padding: 0 14px; }
+.lba-tabs::-webkit-scrollbar { display: none; }
+.lba-tabs > button, .lba-tabs input { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 18px; white-space: nowrap;
+  background: rgba(255, 255, 255, 0.6) !important; box-shadow: inset 0 0 0 1px var(--lb-line); font: 600 13.5px var(--sans) !important; color: var(--lb-ink) !important; transition: background 0.2s, color 0.2s; }
+.lba-tabs > button em { font-style: normal; font-weight: 600; font-size: 11.5px; opacity: 0.55; font-variant-numeric: tabular-nums; }
+.lba-tabs > button.on { background: var(--lb-ink) !important; color: var(--lb-paper) !important; box-shadow: none; }
+.lba-tabs > button.on em { opacity: 0.7; }
+.lba-tabs > button.new { color: var(--lb-mute) !important; font-style: italic !important; background: transparent !important; }
+.lba-tabs input { width: 150px; border: 0; outline: none; box-shadow: inset 0 0 0 1.5px var(--lb-blue); }
+.lba-main { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 18px 18px 30px; animation: lbaIn 0.32s cubic-bezier(.2, .9, .3, 1) both; }
+.lba-main.is-detail { animation-name: lbaPush; }
+@keyframes lbaIn { from { opacity: 0; transform: translateY(8px); } }
+@keyframes lbaPush { from { opacity: 0; transform: translateX(28px); } }
+.lba .lb-chap-head h1 { font-size: 30px; }
+.lba .lb-crumb { display: none; }
+.lba .lb-tools { flex-wrap: wrap; }
+.lba .lb-search { flex-basis: 100%; }
+.lba .lb-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 12px; }
+.lba .lb-grid.small { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.lba .lb-defi-hero { flex-direction: column; align-items: flex-start; gap: 14px; }
+.lba .lb-addsearch input { font-size: 20px; }
+/* la fiche d'un livre : la couverture et le titre côte à côte, puis tout le reste */
+.lba-fiche { display: flex; flex-direction: column; }
+.lba-hero { display: flex; align-items: flex-end; gap: 16px; }
+.lba-hero .lb-cover.big { width: 38%; flex: none; }
+.lba-hero > div { min-width: 0; padding-bottom: 4px; }
+.lba-hero .lb-title { font-size: 26px !important; line-height: 1.05; }
+.lba .lb-states { gap: 5px; }
+.lba .lb-state { padding: 8px 2px 6px; }
+.lba .lb-state em { font-size: 10px; letter-spacing: 0; }
+.lba .lb-side { width: 100%; align-items: stretch; margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--lb-line); }
+.lba .lb-side .lb-chip { align-self: flex-start; }
+.lba .lb-side .lb-remove { align-self: flex-start; }
+.lba .lb-addacts { margin-top: 18px; }

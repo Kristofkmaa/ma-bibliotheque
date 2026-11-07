@@ -77,8 +77,8 @@ export default function LibraryBook({ api, from, start, mobile, incoming, onInco
   const { books, reading, shelves, commitShelves } = api
   // arrivée par une adresse : « /bibliotheque/ma-pile », « /bibliotheque/livre/42 »…
   const st0 = start || []
-  const [chap, setChap] = useState(() => (st0[1] === 'collection' && st0[2] ? 'col:' + st0[2] : CHAP_OF[st0[1]] || 'lis'))
-  const [pageOpen, setPageOpen] = useState(() => !!st0[1] && st0[1] !== 'livre')     // téléphone : le chapitre (sinon le sommaire)
+  const [chap, setChap] = useState(() => (st0[1] === 'collection' && st0[2] ? 'col:' + st0[2] : (mobile && st0[1] === 'ajouter') ? 'lis' : CHAP_OF[st0[1]] || 'lis'))
+  const [addOpen, setAddOpen] = useState(() => mobile && st0[1] === 'ajouter')   // téléphone : la page « Ajouter »
   const [openId, setOpenId] = useState(null)       // la fiche d'un de nos livres
   const [addItem, setAddItem] = useState(null)     // la fiche d'un livre trouvé (à ajouter)
   const wantId = useRef(st0[1] === 'livre' ? st0[2] : null)
@@ -96,6 +96,11 @@ export default function LibraryBook({ api, from, start, mobile, incoming, onInco
   const [phase, setPhase] = useState('opening')
   useEffect(() => {
     const book = bookRef.current, cover = coverRef.current, root = rootRef.current
+    // téléphone : une appli, qui monte depuis le bas
+    if (mobile && root?.animate) {
+      root.animate([{ opacity: 0, transform: 'translateY(26px)' }, { opacity: 1, transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.2, .9, .3, 1)' }).finished.then(() => setPhase('open'), () => setPhase('open'))
+      return
+    }
     if (!book?.animate) { setPhase('open'); return }
     const b = book.getBoundingClientRect()
     // fermé, le livre ne montre que sa couverture (la moitié droite de la double page)
@@ -120,6 +125,7 @@ export default function LibraryBook({ api, from, start, mobile, incoming, onInco
     if (phase === 'closing') return
     setPhase('closing')
     const book = bookRef.current, cover = coverRef.current, root = rootRef.current
+    if (mobile && root?.animate) { root.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(26px)' }], { duration: 260, easing: 'ease-in', fill: 'both' }).finished.then(onClose, onClose); return }
     if (!book?.animate) { onClose(); return }
     const b = book.getBoundingClientRect()
     const half = mobile ? 0 : b.width / 4
@@ -138,12 +144,15 @@ export default function LibraryBook({ api, from, start, mobile, incoming, onInco
   // ---- Tourner les pages
   const [turn, setTurn] = useState(0)
   const flip = fn => { fn(); setTurn(t => t + 1) }
-  const goChap = c => flip(() => { setChap(c); setOpenId(null); setAddItem(null); setPageOpen(true) })
+  const goChap = c => {
+    if (mobile && c === 'ajouter') { flip(() => setAddOpen(true)); return }
+    flip(() => { setChap(c); setOpenId(null); setAddItem(null) })
+  }
   const openBook = id => flip(() => { setOpenId(id); setAddItem(null) })
 
   // ---- La navigation (retour du navigateur, du téléphone, Échap, bouton)
-  useLayer(true, '/bibliotheque' + (mobile ? '' : '/' + chapPath(chap)), close)
-  useLayer(mobile && pageOpen, '/bibliotheque/' + chapPath(chap), () => flip(() => setPageOpen(false)))
+  useLayer(true, '/bibliotheque/' + chapPath(chap), close)
+  useLayer(mobile && addOpen, '/bibliotheque/ajouter', () => flip(() => setAddOpen(false)))
   useLayer(!!openId, '/bibliotheque/livre/' + openId, () => flip(() => setOpenId(null)))
   useLayer(!!addItem, '/bibliotheque/ajouter/livre', () => flip(() => setAddItem(null)))
 
@@ -173,22 +182,21 @@ export default function LibraryBook({ api, from, start, mobile, incoming, onInco
   else if (addItem) spread = <AddSpread item={addItem} ctx={ctx} onBack={() => history.back()} onOpenMine={id => { setAddItem(null); setOpenId(id) }} />
   else { left = sommaire; right = chapter }
 
+  if (mobile) {
+    return createPortal(
+      <PhoneShelf chap={chap} ctx={ctx} counts={counts} cols={cols} readThisYear={readThisYear} goal={goal}
+        book={book} addItem={addItem} addOpen={addOpen} turn={turn} rootRef={rootRef} listLabel={listLabel}
+        onOpenMine={id => { setAddItem(null); setOpenId(id) }} />,
+      document.body,
+    )
+  }
   return createPortal(
     <div className={'lb' + (mobile ? ' mobile' : '') + ' ph-' + phase} ref={rootRef} role="dialog" aria-label="Ma bibliothèque">
       <div className="lb-back" onPointerDown={e => { if (e.target === e.currentTarget) history.back() }} />
       <BackButton label="Le salon" className="float lb-salon" />
       <div className="lb-book" ref={bookRef}>
         <div className="lb-spine" aria-hidden="true" />
-        {mobile ? (
-          <div className="lb-page lb-single">
-            <div className="lb-pagein" key={turn}>
-              {spread || (pageOpen ? <>
-                <button type="button" className="lb-crumb" onClick={() => history.back()}><Ico d={<path d="M15 5l-7 7 7 7" />} />Sommaire</button>
-                {chapter}
-              </> : sommaire)}
-            </div>
-          </div>
-        ) : spread ? (
+        {spread ? (
           <div className="lb-pages lb-spread" key={'s' + turn}>{spread}</div>
         ) : (
           <div className="lb-pages">
@@ -207,6 +215,64 @@ export default function LibraryBook({ api, from, start, mobile, incoming, onInco
       </div>
     </div>,
     document.body,
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sur téléphone : pas d'objet livre, une appli simple dans ses couleurs        */
+/* -------------------------------------------------------------------------- */
+function PhoneShelf({ chap, ctx, counts, cols, readThisYear, goal, book, addItem, addOpen, turn, rootRef, listLabel, onOpenMine }) {
+  const [newCol, setNewCol] = useState(null)
+  const tabsRef = useRef(null)
+  // l'onglet du chapitre ouvert reste visible dans la rangée
+  useEffect(() => { tabsRef.current?.querySelector('.on')?.scrollIntoView?.({ inline: 'center', block: 'nearest', behavior: 'smooth' }) }, [chap])
+  const TABS = [
+    { id: 'defi', label: 'Défi', n: goal ? `${readThisYear}/${goal}` : readThisYear },
+    ...['lis', 'pile', 'lu', 'wish', 'aime', 'tous', 'ai'].map(id => ({ id, label: id === 'tous' ? 'Tous' : LIST_OF[id].label, n: counts[id] })),
+    { id: 'top', label: 'Top 5', n: ctx.api.topBooks.length },
+    ...cols.map(s => ({ id: 'col:' + s.id, label: s.name, n: s.book_ids.length })),
+  ]
+  const detail = book || addItem
+  const back = book ? listLabel(chap) : addItem ? 'Ajouter' : addOpen ? 'Mes livres' : 'Le salon'
+  const title = book || addItem || addOpen ? '' : 'Mes livres'
+  const addCol = e => {
+    e.preventDefault()
+    const v = (newCol || '').trim()
+    setNewCol(null)
+    if (!v) return
+    const res = ctx.commit(createShelf(ctx.eff, v))
+    if (res.id) ctx.goChap('col:' + res.id)
+  }
+  let content
+  if (book) content = <BookSpread book={book} ctx={ctx} back={listLabel(chap)} onBack={() => history.back()} />
+  else if (addItem) content = <AddSpread item={addItem} ctx={ctx} onBack={() => history.back()} onOpenMine={onOpenMine} />
+  else if (addOpen) content = <AddPage ctx={ctx} />
+  else content = <Chapter key={chap} chap={chap} ctx={ctx} />
+  return (
+    <div className="lb lba" ref={rootRef} role="dialog" aria-label="Mes livres">
+      <header className="lba-top">
+        <BackButton label={back} />
+        {title && <h1 className="lba-title">{title}</h1>}
+        {!detail && !addOpen && (
+          <button type="button" className="lba-add" onClick={() => ctx.goChap('ajouter')} aria-label="Ajouter un livre">
+            <Ico d={<path d="M12 5v14M5 12h14" />} />
+          </button>
+        )}
+      </header>
+      {!detail && !addOpen && (
+        <nav className="lba-tabs" ref={tabsRef} aria-label="Mes listes">
+          {TABS.map(t => (
+            <button type="button" key={t.id} className={chap === t.id ? 'on' : ''} aria-current={chap === t.id ? 'true' : undefined} onClick={() => ctx.goChap(t.id)}>
+              {t.label}<em>{t.n}</em>
+            </button>
+          ))}
+          {newCol == null
+            ? <button type="button" className="new" onClick={() => setNewCol('')}>＋ Collection</button>
+            : <form onSubmit={addCol}><input autoFocus value={newCol} onChange={e => setNewCol(e.target.value)} onBlur={addCol} placeholder="Nom" aria-label="Nom de la nouvelle collection" maxLength={40} /></form>}
+        </nav>
+      )}
+      <main className={'lba-main' + (detail ? ' is-detail' : '')} key={turn}>{content}</main>
+    </div>
   )
 }
 
@@ -562,16 +628,15 @@ function AddSpread({ item, ctx, onBack, onOpenMine }) {
       }
     } catch (e) { setMsg('Erreur : ' + (e.message || e)); setBusy(false) }
   }
-  return (
+  const head = (
     <>
-      <div className="lb-page lb-left"><div className="lb-pagein lb-fiche-l">
-        <button type="button" className="lb-crumb" onClick={onBack}><Ico d={<path d="M15 5l-7 7 7 7" />} />Ajouter</button>
-        <Cover book={item} sharp className="big" />
-      </div></div>
-      <div className="lb-page lb-right"><div className="lb-pagein lb-fiche-r">
         <p className="lb-kicker">{d.authors.join(', ')}</p>
         <h1 className="lb-title">{d.title}</h1>
         <p className="lb-meta">{[d.year, d.pageCount ? `${d.pageCount} pages` : '', d.categories[0]].filter(Boolean).join(' · ')}</p>
+    </>
+  )
+  const rest = (
+    <>
         {mine || isInLibrary(item.googleId) ? (
           <div className="lb-addacts"><p>Déjà dans ta bibliothèque.</p>{mine && <button type="button" className="lb-btn main" onClick={() => onOpenMine(mine.id)}>Ouvrir sa fiche</button>}</div>
         ) : (
@@ -593,6 +658,25 @@ function AddSpread({ item, ctx, onBack, onOpenMine }) {
         )}
         {msg && <p className="lb-err">{msg}</p>}
         <Resume text={d.description} />
+    </>
+  )
+  if (ctx.mobile) {
+    return (
+      <div className="lba-fiche">
+        <div className="lba-hero"><Cover book={item} sharp className="big" /><div>{head}</div></div>
+        {rest}
+      </div>
+    )
+  }
+  return (
+    <>
+      <div className="lb-page lb-left"><div className="lb-pagein lb-fiche-l">
+        <button type="button" className="lb-crumb" onClick={onBack}><Ico d={<path d="M15 5l-7 7 7 7" />} />Ajouter</button>
+        <Cover book={item} sharp className="big" />
+      </div></div>
+      <div className="lb-page lb-right"><div className="lb-pagein lb-fiche-r">
+        {head}
+        {rest}
       </div></div>
     </>
   )
@@ -631,30 +715,31 @@ function BookSpread({ book, ctx, back, onBack }) {
     if (!confirmDel) { setConfirmDel(true); return }
     try { await removeBook(book.id); onBack() } catch (e) { setErr('Erreur : ' + (e.message || e)) }
   }
-  return (
+  const side = (
+    <div className="lb-side">
+      <button type="button" className={'lb-chip' + (rank ? ' on' : '')} onClick={() => (rank ? top.remove(book.id) : top.add(book.id, topBooks.length >= top.max ? topBooks[topBooks.length - 1].id : undefined))}>
+        ★ {rank ? `N° ${rank} de mon top` : topBooks.length >= top.max ? `Remplacer le n° ${top.max} de mon top` : 'Mettre dans mon top'}
+      </button>
+      {ctx.cols.length > 0 && (
+        <label className="lb-field"><span>Collection</span>
+          <select value={col?.id || ''} onChange={e => ctx.commit(moveBook(ctx.eff, book.id, e.target.value || LOOSE, Infinity))}>
+            <option value="">Aucune</option>
+            {ctx.cols.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </label>
+      )}
+      <button type="button" className={'lb-remove' + (confirmDel ? ' danger' : '')} onClick={remove}>{confirmDel ? 'Retirer ce livre de la bibliothèque ?' : 'Retirer de la bibliothèque'}</button>
+    </div>
+  )
+  const head = (
     <>
-      <div className="lb-page lb-left"><div className="lb-pagein lb-fiche-l">
-        <button type="button" className="lb-crumb" onClick={onBack}><Ico d={<path d="M15 5l-7 7 7 7" />} />{back || 'Retour'}</button>
-        <Cover book={book} sharp className="big" />
-        <div className="lb-side">
-          <button type="button" className={'lb-chip' + (rank ? ' on' : '')} onClick={() => (rank ? top.remove(book.id) : top.add(book.id, topBooks.length >= top.max ? topBooks[topBooks.length - 1].id : undefined))}>
-            ★ {rank ? `N° ${rank} de mon top` : topBooks.length >= top.max ? `Remplacer le n° ${top.max} de mon top` : 'Mettre dans mon top'}
-          </button>
-          {ctx.cols.length > 0 && (
-            <label className="lb-field"><span>Collection</span>
-              <select value={col?.id || ''} onChange={e => ctx.commit(moveBook(ctx.eff, book.id, e.target.value || LOOSE, Infinity))}>
-                <option value="">Aucune</option>
-                {ctx.cols.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </label>
-          )}
-          <button type="button" className={'lb-remove' + (confirmDel ? ' danger' : '')} onClick={remove}>{confirmDel ? 'Retirer ce livre de la bibliothèque ?' : 'Retirer de la bibliothèque'}</button>
-        </div>
-      </div></div>
-      <div className="lb-page lb-right"><div className="lb-pagein lb-fiche-r">
         <p className="lb-kicker">{d.authors.join(', ')}</p>
         <h1 className="lb-title">{d.title}</h1>
         <p className="lb-meta">{[d.year, d.pageCount ? `${d.pageCount} pages` : '', d.categories[0]].filter(Boolean).join(' · ')}</p>
+    </>
+  )
+  const body = (
+    <>
         <div className="lb-states" role="group" aria-label="Mes statuts">
           {BOOK_STATES.map(s => (
             <button type="button" key={s.id} className={'lb-state s-' + s.id + (st.has(s.id) ? ' on' : '')} aria-pressed={st.has(s.id)} onClick={() => toggle(s.id)}>
@@ -695,6 +780,28 @@ function BookSpread({ book, ctx, back, onBack }) {
         </label>
         <Resume text={d.description} />
         {d.isbn && <p className="lb-isbn">ISBN {d.isbn}</p>}
+    </>
+  )
+  // téléphone : une seule colonne (la couverture et le titre côte à côte, puis tout le reste)
+  if (ctx.mobile) {
+    return (
+      <div className="lba-fiche">
+        <div className="lba-hero"><Cover book={book} sharp className="big" /><div>{head}</div></div>
+        {body}
+        {side}
+      </div>
+    )
+  }
+  return (
+    <>
+      <div className="lb-page lb-left"><div className="lb-pagein lb-fiche-l">
+        <button type="button" className="lb-crumb" onClick={onBack}><Ico d={<path d="M15 5l-7 7 7 7" />} />{back || 'Retour'}</button>
+        <Cover book={book} sharp className="big" />
+        {side}
+      </div></div>
+      <div className="lb-page lb-right"><div className="lb-pagein lb-fiche-r">
+        {head}
+        {body}
       </div></div>
     </>
   )
