@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toDisplay, spineColors } from '../lib/bookUtils'
 import { useLayer } from '../lib/nav'
+import { useSharpCover } from '../hooks/useSharpCover'
 import { BOOK_STATES, toggleState, isOwned, isWish, isReading, isRead, isLoved, inPal, readingDays, daysSince, daysFr, dateFr, dateShort, readYear, challenge } from '../lib/reading'
 
 /**
@@ -38,9 +39,12 @@ function Cover({ book, w = 64 }) {
   const d = toDisplay(book)
   const [bg, ink] = spineColors(d)
   const [bad, setBad] = useState(false)
+  // (la grande couverture de la page d'un livre : en grand format, pas la vignette)
+  const sharp = useSharpCover(w >= 100 ? book : null, 600)
+  const src = (w >= 100 && sharp) || d.cover
   return (
     <span className="rt-cover" style={{ width: w, background: bg, color: ink }}>
-      {d.cover && !bad ? <img src={d.cover} alt="" loading="lazy" onError={() => setBad(true)} /> : <em>{d.title}</em>}
+      {d.cover && !bad ? <img src={src} alt="" loading="lazy" onError={() => setBad(true)} /> : <em>{d.title}</em>}
     </span>
   )
 }

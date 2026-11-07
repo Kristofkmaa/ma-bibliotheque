@@ -12,10 +12,26 @@ export const relayUrl = src => `/api/cover?url=${encodeURIComponent(src)}`
  * Version grand format d'une couverture Google Books (les vignettes « zoom=1 » ne font que
  * ~128 px de large : floues en 3D). Si Google l'ignore, on retombe sur la vignette.
  */
-export function hiResCover(src) {
+export function hiResCover(src, w = 600) {
   if (!src || !/books\.google(usercontent)?\.com/.test(src) || /[?&]fife=/.test(src)) return null
   if (!/\/books\/content|\/books\/publisher/.test(src)) return null
-  return src + (src.includes('?') ? '&' : '?') + 'fife=w600-h900'
+  return src + (src.includes('?') ? '&' : '?') + `fife=w${w}-h${Math.round(w * 1.5)}`
+}
+
+/**
+ * Pour une couverture affichée en grand (la fiche d'un livre, la tablette) : les versions nettes à
+ * essayer, de la meilleure à la vignette. Google Books en grand format (largeur w), sinon
+ * Open Library en grand (« -L ») ; la vignette d'origine en dernier recours.
+ */
+export function sharpCoverUrls(b, w = 900) {
+  const raw = rawCover(b)
+  const out = []
+  const hi = hiResCover(raw, w)
+  if (hi) out.push(hi)
+  if (/covers\.openlibrary\.org/.test(raw) && /-[SM]\.jpg/.test(raw)) out.push(raw.replace(/-[SM]\.jpg/, '-L.jpg'))
+  if (b?.isbn) out.push(`https://covers.openlibrary.org/b/isbn/${b.isbn}-L.jpg?default=false`)
+  if (raw) out.push(raw)
+  return [...new Set(out)]
 }
 
 export function coverKey(b) {

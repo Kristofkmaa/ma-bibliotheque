@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { toDisplay, spineColors } from '../lib/bookUtils'
 import { toggleState } from '../lib/reading'
+import { useSharpCover } from '../hooks/useSharpCover'
 
 const EASE = 'cubic-bezier(.2, .8, .2, 1)'
 const EASE_SHEET = 'cubic-bezier(.76, 0, .18, 1)'
@@ -97,6 +98,7 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [imgError, setImgError] = useState(false)
+  const coverSrc = useSharpCover(book, 900)    // la couverture en grand format (pas la vignette floue)
   const [inkDone, setInkDone] = useState(false)
   const openedOnce = useRef(false)
 
@@ -295,7 +297,7 @@ export default function DetailSheet({ book, mode, originRect, open, onClosed, on
               <g clipPath="url(#poster-clip)" mask={inkDone ? undefined : 'url(#ink-mask)'}>
                 <rect x="0" y="0" width="600" height="900" fill={bg} />
                 {d.cover && !imgError ? (
-                  <image href={d.cover} x="0" y="0" width="600" height="900" preserveAspectRatio="xMidYMid slice" onError={() => setImgError(true)} />
+                  <image href={coverSrc || d.cover} x="0" y="0" width="600" height="900" preserveAspectRatio="xMidYMid slice" onError={() => setImgError(true)} />
                 ) : (
                   <g fill={ink} textAnchor="middle" fontFamily="Newsreader, Georgia, serif">
                     <text x="300" y="120" fontSize="20" letterSpacing="6" fontFamily="Inter Tight, sans-serif" fontWeight="600">BIBLIOTHÈQUE MARUCHIME</text>
