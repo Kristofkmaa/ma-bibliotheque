@@ -33,6 +33,28 @@ a prévu d'y mettre.
 - Dans la maquette : la penderie et les étagères montrent nos vrais vêtements (couleurs), on touche
   le dressing pour l'ouvrir ; le miroir propose la tenue du jour.
 
+## La bibliothèque — des suggestions de livres
+
+- Un chapitre « Pour toi » dans le livre : des idées de livres d'après ceux qu'on a aimés
+  (J'aime, 4-5 étoiles, le top 5), jamais un livre qu'on a déjà.
+- Chaque idée : la couverture, « parce que tu as aimé … », et deux boutons : Wishlist / Pas pour moi
+  (les refusées ne reviennent plus).
+- Les idées viendraient d'une IA (Claude, par un relais Vercel avec sa clé, comme Spoonacular),
+  puis on retrouve chaque livre sur Google Books pour sa couverture et sa fiche ; sans clé, des
+  idées plus simples : mêmes auteurs, mêmes genres (Google Books).
+- Renouvelées une fois par semaine (gardées en mémoire, pour que ça ne coûte presque rien).
+
+## La domotique — les lumières, les volets…
+
+- Piloter la vraie maison depuis le site : éteindre les lumières, fermer les volets, par pièce
+  ou tout d'un coup (« Bonne nuit »).
+- Dans les maquettes : la lampe du salon allume la vraie lampe, les rideaux ferment les vrais
+  volets ; chaque pièce du carrousel montre ses lumières.
+- Ça dépend du matériel de la maison (à demander) : Home Assistant (le plus simple et le plus
+  complet), Philips Hue, Somfy TaHoma (volets), Legrand / Netatmo, SmartThings, Tuya / Smart Life,
+  Google Home ou Alexa (via Home Assistant). Le site passe par un relais Vercel qui garde les clés.
+- Sécurité : seulement pour nous (connectés), jamais d'accès ouvert.
+
 ## Le carrousel
 
 - Ajouter d'autres pièces : il suffit d'une nouvelle scène (voir `src/three/RoomScene.js`, une
