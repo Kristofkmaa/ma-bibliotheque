@@ -4914,12 +4914,11 @@ body.house-on { --house-h: 74px; }
 
 /* téléphone : une page à la fois */
 @media (max-width: 767px) {
-  .lb { padding: calc(62px + env(safe-area-inset-top, 0px)) 16px calc(var(--house-h, 0px) + 14px); --lb-avail: calc(100vh - 76px - env(safe-area-inset-top, 0px) - var(--house-h, 0px)); }
-  @supports (height: 100dvh) { .lb { --lb-avail: calc(100dvh - 76px - env(safe-area-inset-top, 0px) - var(--house-h, 0px)); } }
-  /* un vrai livre, aux proportions d'un livre : le salon reste visible autour */
-  .lb-book { width: min(100%, 360px, calc(var(--lb-avail) * 0.9 / 1.48)); height: auto; aspect-ratio: 1 / 1.48; max-height: var(--lb-avail);
-    padding: 7px 8px 7px 12px; border-radius: 7px 11px 11px 7px; }
-  .lb-single > .lb-pagein { padding: 22px 18px 26px; }
+  /* plein écran : une page de papier entre le haut de l'écran et la barre de la maison */
+  .lb { padding: 0 0 var(--house-h, 0px); }
+  .lb-back { background: rgba(30, 24, 18, 0.5); }
+  .lb-book { width: 100%; height: calc(100vh - var(--house-h, 0px)); padding: 0; border-radius: 0; background: var(--lb-paper); box-shadow: none; }
+  @supports (height: 100dvh) { .lb-book { height: calc(100dvh - var(--house-h, 0px)); } }
   .lb h1 { font-size: 28px; }
   .lb-som-head h1 { font-size: 30px; }
   .lb-toc { font-size: 17.5px; padding: 5px 0; }
@@ -4928,10 +4927,12 @@ body.house-on { --house-h: 74px; }
   .lb.ph-opening .lb-book, .lb.ph-closing .lb-book { animation: none; }
   .lb-spine, .lb-leaf { display: none; }
   .lb-coverboard { left: 0; width: 100%; }
-  .lb-cb-inside { border-radius: 12px; }
-  .lb-ribbon { right: 12px; width: 12px; height: 54px; }
-  .lb-single { border-radius: 4px 6px 6px 4px; box-shadow: inset 14px 0 18px -14px rgba(70, 48, 20, 0.4), 1px 0 0 #E4DAC5, 2px 0 0 #D4C8AF, 3px 0 0 #E9E0CC; }
-  .lb-single > .lb-pagein { padding: 26px 20px 30px; animation: lbIn 0.4s cubic-bezier(.2, .8, .3, 1) both; }
+  .lb-ribbon { top: 0; right: 18px; width: 13px; height: 64px; }
+  .lb-cb-front, .lb-cb-inside { border-radius: 0; }
+  .lb-single { border-radius: 0; box-shadow: inset 12px 0 16px -14px rgba(70, 48, 20, 0.35); }
+  /* (le bouton « Le salon » flotte en haut à gauche, sur le papier) */
+  .lb-single > .lb-pagein { padding: calc(66px + env(safe-area-inset-top, 0px)) 20px 30px; animation: lbIn 0.4s cubic-bezier(.2, .8, .3, 1) both; }
+  .lb .lb-salon { box-shadow: 0 0 0 1px rgba(80, 60, 30, 0.12), 0 6px 16px -10px rgba(40, 25, 8, 0.5); }
   .lb-single .lb-page { height: auto; overflow: visible; background: none; box-shadow: none; border-radius: 0; }
   .lb-single .lb-page .lb-pagein { height: auto; overflow: visible; padding: 0; animation: none; }
   .lb-single .lb-fiche-r { margin-top: 26px; }
